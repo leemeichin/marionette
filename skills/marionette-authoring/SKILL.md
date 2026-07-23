@@ -112,8 +112,28 @@ transcribe tickets into DSL by hand — fetch and scaffold
   `# jira:site:`) in the preamble so ids resolve to URLs. The executor
   reads refs before starting a phase — a phase whose work depends on
   context that exists somewhere but isn't reffed is a draft defect: the
-  plan is asking the executor to guess. If the notes imply external context
-  but don't name it, ask the user for the link rather than omitting it.
+  plan is asking the executor to guess. Don't expect the user to supply
+  ticket ids: when the notes imply external context without naming it,
+  discover it with your own tools (search the tracker the preamble scopes,
+  the repo, the docs), or leave the phase unlinked and note that
+  `marionette sync` will emit `ensure-issue` ops the executor can apply —
+  ask the user only when discovery comes up empty.
+- **Standing services are a pattern, not a smell.** Open-ended maintenance
+  ("investigate and fix bugs as they arrive") is an evidence-gated sticky
+  `~loop~` over an external queue, an `@human` retirement door, and a
+  `# wake:` tag naming what re-activates the phase so executors park
+  instead of polling:
+
+  ```
+  === triage ===
+  Investigate and fix the next bug from the queue.
+  # wake: github issues labeled "bug" pushed to acme/shop
+  + [Queue has work — bug fixed or rejected] ~loop~ -> triage
+  * [Service retired] @human -> END
+  ```
+
+  The loop is unbounded by design; the bound is the evidence claim on the
+  loop edge (only taken when work exists) plus the human door.
 - **Every phase needs an exit** — a choice or a divert. Terminal outcomes
   divert to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this

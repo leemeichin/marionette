@@ -92,6 +92,19 @@ containing only """.
 """
 ```
 
+A third plain key, `# wake:`, declares what re-activates a standing
+(service) phase — a loop over an external queue — so executors and
+schedulers can park instead of polling. It passes through as ordinary
+metadata: the walker never schedules; the executing platform owns waking.
+
+```
+=== triage ===
+Investigate and fix the next bug from the queue.
+# wake: github issues labeled "bug" pushed to acme/shop
++ [Queue has work — bug fixed or rejected] ~loop~ -> triage
+* [Service retired] @human -> END
+```
+
 Any metadata key accepts the fenced form (`# key: """` … `"""`); short
 values keep the one-line form. An unterminated fence is a parse error
 (`MAR001`).
