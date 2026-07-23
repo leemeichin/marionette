@@ -405,3 +405,42 @@ th { background: var(--bg-elev); }
 .pg-log { font-size: 0.875rem; padding-left: 1.4rem; }
 .pg-log li { margin-bottom: var(--s1); }
 .pg-why { color: var(--fg-dim); }
+
+/* ---- playground tutorial ---- */
+
+.pg-tutorial {
+  background: var(--bg-elev);
+  border: 1px solid var(--bg-code);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: var(--s2) var(--s3);
+  margin-bottom: var(--s3);
+}
+.pg-tutorial[hidden] { display: none; }
+
+.pg-tut-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 0.8125rem;
+  color: var(--fg-faint);
+}
+.pg-tut-nav { margin-left: auto; display: flex; gap: var(--s1); }
+.pg-tut-nav button {
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 0.15rem 0.7rem;
+  background: var(--bg-code);
+  color: var(--fg);
+  border: 1px solid var(--fg-faint);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.pg-tut-nav button:hover:not(:disabled) { border-color: var(--accent); }
+.pg-tut-nav button:disabled { color: var(--fg-faint); cursor: default; }
+
+.pg-tut-title { margin: var(--s1) 0; font-size: 1.25rem; }
+.pg-tut-title::before { content: none; }
+.pg-tut-text { margin: 0 0 var(--s1); max-width: 80ch; }
+.pg-tut-goal { margin: 0; color: var(--fg-dim); }
+.pg-tut-status { color: var(--green); font-weight: 700; }

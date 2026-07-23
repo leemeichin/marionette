@@ -1,5 +1,6 @@
 <h1>playground</h1>
-<p class="lede">Write a plan, and your browser compiles it with the
+<p class="lede">A guided tutorial and a sandbox in one. Write a plan, and
+your browser compiles it with the
 <em>real</em> Marionette compiler (the same TypeScript that runs in the
 CLI, hash and all) and walks it with the <em>real</em> walker. No agent is
 attached here — the part an agent would play is yours to press — but every
@@ -9,6 +10,21 @@ rule is live: gates evaluate, once-only choices exhaust, and
 <noscript><p><strong>The playground needs JavaScript</strong> — it runs the
 compiler in your browser. The <a href="/walkthrough">walkthrough</a> shows
 the same flow as captured terminal sessions.</p></noscript>
+
+<section class="pg-tutorial" data-tutorial hidden>
+  <div class="pg-tut-bar">
+    <span class="pg-tut-where" data-tut-where></span>
+    <span class="pg-tut-nav">
+      <button type="button" data-tut-prev>← prev</button>
+      <button type="button" data-tut-next disabled>next →</button>
+      <button type="button" data-tut-toggle>free play</button>
+    </span>
+  </div>
+  <h2 class="pg-tut-title" data-tut-title></h2>
+  <p class="pg-tut-text" data-tut-text></p>
+  <p class="pg-tut-goal"><strong>Goal:</strong> <span data-tut-goal></span>
+    <span class="pg-tut-status" data-tut-status role="status"></span></p>
+</section>
 
 <div class="pg" data-playground>
   <section class="pg-editor">

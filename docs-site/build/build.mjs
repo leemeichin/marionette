@@ -18,7 +18,7 @@ export const PAGES = [
   { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI and skills, write and validate your first plan.' },
   { slug: 'syntax', nav: 'syntax', title: 'Syntax reference — Marionette', desc: 'The .mar language: phases, choices, gates, loops, human checkpoints, variables, metadata.' },
   { slug: 'walkthrough', slugAliases: [], nav: 'walkthrough', title: 'Walkthrough — Marionette', desc: 'An end-to-end session: author a plan, fix compile errors, walk it with an agent, gate it as a human. Every frame is real CLI output.' },
-  { slug: 'playground', nav: 'playground', title: 'Playground — Marionette', desc: 'Write a .mar plan, compile it in your browser with the real compiler, and step through the graph with the real walker.' },
+  { slug: 'playground', nav: 'playground', title: 'Playground — Marionette', desc: 'Guided tutorial + sandbox: write .mar plans, compile them in your browser with the real compiler, and walk them with the real walker.' },
   { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'How agents ingest and traverse a plan: state, briefs, escalation, drift and rebind, delivery metadata.' },
   { slug: 'examples', nav: 'examples', title: 'Examples & use-cases — Marionette', desc: 'Worked plans: product iteration loops, replatforms, and Marionette planning its own development.' },
   { slug: 'reference', nav: 'reference', title: 'CLI reference — Marionette', desc: 'Commands, exit codes, and the full compiler diagnostic table (MAR001–MAR019).' },
