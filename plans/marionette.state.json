@@ -1,12 +1,13 @@
 {
   "hash": "sha256:dec8b94ac5337e8d5ab5a5a23b79e229f79676ebb7f8b2de2786262621bde1eb",
   "status": "active",
-  "current": "authoring_skill",
+  "current": "dogfood_gate",
   "variables": {
     "skill_revisions": 1
   },
   "taken": [
-    "phase1_toolchain#0"
+    "phase1_toolchain#0",
+    "authoring_skill#0"
   ],
   "log": [
     {
@@ -26,6 +27,15 @@
       "label": "PR merged, CI green",
       "rationale": "PR #1 squash-merged as 646049f with CI green; toolchain landed on main",
       "to": "authoring_skill"
+    },
+    {
+      "at": "2026-07-23T14:46:38.344Z",
+      "actor": "agent",
+      "from": "authoring_skill",
+      "choice": "authoring_skill#0",
+      "label": "First-session compile success at or above 70%",
+      "rationale": "36/36 simulated first-session compiles with zero errors across sessions 1-5, 8-38 (Wilson 95% lower bound 90.4%); 2/2 seeded revision tests recovered in one loop; evidence in docs/dogfood/, data points on issue #2",
+      "to": "dogfood_gate"
     }
   ]
 }

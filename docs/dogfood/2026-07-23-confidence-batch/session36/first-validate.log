@@ -1,0 +1,9 @@
+plan.mar:22: warning[MAR014]: unverified gate — review manually: {clean_days < 5} on choice "Streak continues; count again tomorrow"
+  22 | + {clean_days < 5} [Streak continues; count again tomorrow] ~loop~ -> pilot_cycle_counts
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:23: warning[MAR014]: unverified gate — review manually: {clean_days >= 5} on choice "Five consecutive clean days"
+  23 | + {clean_days >= 5} [Five consecutive clean days] -> ops_review
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 2 warnings
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1

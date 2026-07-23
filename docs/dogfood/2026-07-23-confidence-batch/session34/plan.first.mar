@@ -1,0 +1,65 @@
+# project: patient-scheduling-rollout
+// New patient-scheduling system rollout across four clinics:
+// pilot at the smallest clinic, then the remaining three one at a time.
+
+VAR clinics_live = 0
+
+-> pilot_training
+
+=== pilot_training ===
+Train the front-desk staff at the smallest clinic on the new scheduling system.
+Done when the pilot clinic's front desk can run the new system unaided.
+* [Front-desk staff trained] -> pilot_run
+
+=== pilot_run ===
+Run the new system at the pilot clinic for two weeks with the old system as fallback.
+Every scheduling incident is logged for the clinical safety officer's review.
++ [Two-week parallel run complete] -> pilot_safety_review
+
+=== pilot_safety_review ===
+The clinical safety officer reviews every scheduling incident from the pilot run
+before the pilot can be called done. Extending the pilot is her prerogative,
+as often as she needs.
++ [Extend the pilot, run again] @human ~loop~ -> pilot_run
++ [All incidents reviewed, pilot is done] @human -> manager_signoff
+
+=== clinic_training ===
+Train the front-desk staff at the next remaining clinic, same pattern as the pilot.
++ [Front-desk staff trained] -> clinic_run
+
+=== clinic_run ===
+Run the new system at this clinic for one week with the old system as fallback.
+Any patient-safety incident anywhere pauses the whole rollout.
++ [Patient-safety incident reported] -> rollout_pause
++ [One-week parallel run complete] -> clinic_safety_review
+
+=== rollout_pause ===
+The whole rollout is paused while the clinical safety officer investigates the
+patient-safety incident. Nothing proceeds until she clears it.
++ [Safety officer clears the incident, resume] @human ~loop~ -> clinic_run
+
+=== clinic_safety_review ===
+The clinical safety officer reviews this clinic's scheduling incidents before
+the clinic can be called ready.
++ [Extend this clinic's parallel run] @human ~loop~ -> clinic_run
++ [Incidents reviewed, clinic is ready] @human -> manager_signoff
+
+=== manager_signoff ===
+This clinic's practice manager signs off before the clinic goes fully live
+and the old-system fallback is removed.
++ [Practice manager signs off, go fully live] @human -> go_live
+
+=== go_live ===
+The clinic is fully live on the new scheduling system and the fallback is removed.
+~ clinics_live += 1
++ {clinics_live < 4} [Start the next clinic] ~loop~ -> clinic_training
+* {clinics_live >= 4} [All four clinics live] -> archive_period
+
+=== archive_period ===
+The old system goes read-only and IT keeps a 90-day archive so records
+requests can still be served.
+* [90-day retention window complete] -> decommission
+
+=== decommission ===
+Decommission the old scheduling system entirely.
+-> END

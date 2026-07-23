@@ -1,0 +1,15 @@
+plan.mar:51: warning[MAR014]: unverified gate — review manually: cannot statically verify loop exit {hit_streak >= 2}
+  51 | + {hit_streak >= 2} [Two consecutive months at target] -> incorporate
+  help: the compiler only verifies constant gates and monotonic counters; confirm this exit can occur
+plan.mar:52: warning[MAR014]: unverified gate — review manually: {hit_streak < 2} on choice "Keep operating, one more month"
+  52 | + {hit_streak < 2} [Keep operating, one more month] ~loop~ -> revenue_operation
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:58: warning[MAR014]: unverified gate — review manually: {miss_streak < 3} on choice "Keep pushing with the current mix"
+  58 | + {miss_streak < 3} [Keep pushing with the current mix] ~loop~ -> revenue_operation
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:59: warning[MAR014]: unverified gate — review manually: {miss_streak >= 3} on choice "Missed three months running, change the mix"
+  59 | + {miss_streak >= 3} [Missed three months running, change the mix] @human ~loop~ -> choose_mix
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 4 warnings
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1

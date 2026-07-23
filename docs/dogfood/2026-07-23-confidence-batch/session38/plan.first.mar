@@ -1,0 +1,87 @@
+# project: client_rebrand
+// Approvers everywhere: client brand director, client CEO, agency creative director.
+// Any one of them can veto at any sign-off and send the stage back into revision.
+VAR concept_rounds = 0
+VAR ceo_revocations = 0
+
+-> discovery
+
+=== discovery ===
+Discovery and brand strategy: research, stakeholder interviews, positioning and the strategy platform.
+Done when the strategy deck is ready to present to all three approvers.
++ [Strategy ready to present] -> strategy_signoff
+
+=== strategy_signoff ===
+Brand director, client CEO and our creative director review the brand strategy.
+Any single veto sends it back into revision.
++ [All three approve the strategy] @human -> naming
++ [Any approver vetoes — revise strategy] @human ~loop~ -> discovery
+
+=== naming ===
+Generate and refine the name shortlist from the approved strategy.
+Done when a shortlist is ready for legal review.
++ [Shortlist ready for legal] -> trademark_check
+
+=== trademark_check ===
+Legal trademark check on every shortlisted name; a failed check knocks that name out of the shortlist.
++ [At least one name cleared legal] -> naming_signoff
++ [Whole shortlist failed — redo naming] ~loop~ -> naming
+
+=== naming_signoff ===
+Three-way sign-off on the surviving name(s); pick the final name.
++ [All three approve the name] @human -> visual_identity
++ [Any approver vetoes — back to naming] @human ~loop~ -> naming
++ {ceo_revocations < 1} [CEO revokes an earlier approval] @human -> approval_revoked
+
+=== visual_identity ===
+Develop visual identity concepts around the approved name and strategy.
+Up to three internal concept rounds before we present to the approvers.
+~ concept_rounds += 1
++ {concept_rounds < 3} [Run another concept round] ~loop~ -> visual_identity
++ [Present concepts to approvers] -> visual_signoff
+
+=== visual_signoff ===
+Three-way review of the presented visual identity direction.
++ [All three approve the visual identity] @human -> guidelines
++ [Any approver vetoes — rework the concepts] @human ~loop~ -> visual_identity
++ {ceo_revocations < 1} [CEO revokes an earlier approval] @human -> approval_revoked
+
+=== guidelines ===
+Produce the full brand guidelines: logo system, colour, type, voice, usage rules.
++ [Guidelines drafted] -> guidelines_signoff
++ [Conference deadline at risk] @human -> descope_call
+
+=== guidelines_signoff ===
+Three-way sign-off on the full brand guidelines.
++ [All three approve the guidelines] @human -> rollout_assets
++ [Any approver vetoes — revise guidelines] @human ~loop~ -> guidelines
++ {ceo_revocations < 1} [CEO revokes an earlier approval] @human -> approval_revoked
+
+=== rollout_assets ===
+Produce the rollout assets for the conference launch: templates, collateral, digital and event materials.
++ [Rollout package ready] -> final_signoff
++ [Conference deadline at risk] @human -> descope_call
+
+=== final_signoff ===
+Final three-way sign-off on the rollout package ahead of the annual conference.
++ [All three approve — go for launch] @human -> launch
++ [Any approver vetoes — rework the assets] @human ~loop~ -> rollout_assets
++ {ceo_revocations < 1} [CEO revokes an earlier approval] @human -> approval_revoked
+
+=== approval_revoked ===
+The client CEO has revoked a previously granted approval — assumed to happen at most once.
+A human routes the work back to whichever stage the revoked approval belonged to.
+~ ceo_revocations += 1
++ [Reopen brand strategy] @human ~loop~ -> discovery
++ [Reopen naming] @human ~loop~ -> naming
++ [Reopen visual identity] @human ~loop~ -> visual_identity
++ [Reopen brand guidelines] @human ~loop~ -> guidelines
+
+=== descope_call ===
+The conference launch date is at risk. The brand director chooses what gets descoped to protect the date.
++ [Descope agreed — continue with reduced scope] @human ~loop~ -> rollout_assets
++ [No descope needed — resume guidelines as planned] @human ~loop~ -> guidelines
+
+=== launch ===
+The rebrand launches at the client's annual conference.
+-> END
