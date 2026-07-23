@@ -53,5 +53,13 @@ export function highlightMarLine(line) {
 }
 
 export function highlightMar(source) {
-  return source.replace(/\n$/, '').split('\n').map(highlightMarLine).join('\n');
+  let inFence = false;
+  return source.replace(/\n$/, '').split('\n').map((line) => {
+    if (inFence) {
+      if (line.trim() === '"""') { inFence = false; return `<span class="mar-meta">${escapeHtml(line)}</span>`; }
+      return `<span class="mar-meta">${escapeHtml(line)}</span>`;
+    }
+    if (/^\s*#\s*.+?:\s+"""\s*$/.test(line)) { inFence = true; return `<span class="mar-meta">${escapeHtml(line)}</span>`; }
+    return highlightMarLine(line);
+  }).join('\n');
 }

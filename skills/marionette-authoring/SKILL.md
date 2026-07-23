@@ -119,6 +119,12 @@ Below, `marionette` means whichever form resolved.
   (constants, monotonic counters). Dynamic-fact gates (e.g.
   `{metrics_green}` set by a mutation) are fine but will be listed as
   "unverified — review manually"; mention them to the user.
+- **Anchor the intent.** Open the preamble with `# summary:` (one-line
+  executive abstract) and the user's ask verbatim in a fenced block —
+  `# prompt: """` … `"""` is a container for markdown, so keep their
+  paragraphs intact. The plan must not operate in a vacuum: reviewers see
+  these first in `summarize`, and executors receive them in the brief as
+  `plan.intent`.
 - **Metadata rides on tags.** `# project: <name>` in the preamble;
   `# github:issue: <n>` on a node to link it to a tracker item. Namespaced
   keys only for extensions.

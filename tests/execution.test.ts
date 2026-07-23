@@ -191,3 +191,17 @@ test('rebind: refuses when the current phase no longer exists', async () => {
     (e: unknown) => e instanceof WalkError && e.code === 'migration-blocked',
   );
 });
+
+test('brief: plan.intent carries # summary: and accumulated # prompt: lines', async () => {
+  const { trajectory } = await compile(
+    '# summary: Ship the importer.\n# prompt: build the importer\n# prompt: retry twice, then fall back\n=== a ===\nAlpha.\n* [Ship] -> END\n');
+  const state = initState(trajectory!);
+  const brief = buildBrief(trajectory!, state, { file: 'plan.mar' });
+  assert.equal(brief.plan.intent.summary, 'Ship the importer.');
+  assert.equal(brief.plan.intent.prompt, 'build the importer\nretry twice, then fall back');
+  assert.match(renderBrief(brief), /intent: Ship the importer\./);
+  const bare = await compile('=== a ===\nAlpha.\n* [Ship] -> END\n');
+  const bareBrief = buildBrief(bare.trajectory!, initState(bare.trajectory!), { file: 'plan.mar' });
+  assert.equal(bareBrief.plan.intent.summary, null);
+  assert.equal(bareBrief.plan.intent.prompt, null);
+});
