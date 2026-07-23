@@ -26,9 +26,9 @@ Secrets flow through 1Password:
 
 - GitHub repo secret `OP_SERVICE_ACCOUNT_TOKEN` — a 1Password service
   account token with read access to the vault below.
-- 1Password vault `marionette`, item `cloudflare`, fields `api-token`
-  (Cloudflare API token with Workers Scripts:Edit) and `account-id`.
-  Different vault/item names? Edit the `op://` refs in the workflow.
+- 1Password vault `marionette`: items named after the env vars
+  (`CLOUDFLARE_API_TOKEN` — needs Workers Scripts:Edit — and
+  `CLOUDFLARE_ACCOUNT_ID`), values in the `credential` field.
 
 **Manually:** with a Cloudflare account and `wrangler` logged in:
 

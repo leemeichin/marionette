@@ -33,8 +33,8 @@ jobs:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          CLOUDFLARE_API_TOKEN: op://marionette/cloudflare/api-token
-          CLOUDFLARE_ACCOUNT_ID: op://marionette/cloudflare/account-id
+          CLOUDFLARE_API_TOKEN: op://marionette/CLOUDFLARE_API_TOKEN/credential
+          CLOUDFLARE_ACCOUNT_ID: op://marionette/CLOUDFLARE_ACCOUNT_ID/credential
       - name: Deploy to Cloudflare
         run: npx wrangler@4 deploy
         working-directory: docs-site
