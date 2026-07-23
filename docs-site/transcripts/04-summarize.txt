@@ -1,17 +1,26 @@
 # Plan summary: checkout.mar
 
+**Intent:** Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.
+
+> Checkout conversion has been flat for two quarters. Rebuild the flow
+> behind a flag and iterate on cohort evidence — five attempts max. I take
+> the ship call, and if it never converts we go back to research rather
+> than grinding out attempt six.
+
 Starts at **build_checkout**. 3 phases, 2 decision points (phases with 2+ choices), 5 choices overall.
 
 - **Human checkpoints:** "Cohort converts" (at build_checkout); "Not converging — rethink" (at build_checkout); "New direction agreed" (at rethink); "Park the revamp" (at rethink)
 - **Declared loops:** build_checkout → build_checkout ("Conversion flat — iterate"); rethink → build_checkout ("New direction agreed")
 - **Gates:** 2 gated choices, of which 0 unverified (review manually)
 - **Variables:** attempts: number = 0
-- **Contract hash:** `sha256:86c1623dd475…`
+- **Contract hash:** `sha256:24d32e0b2820…`
 
 ## Walkthrough
 
 ### build_checkout (start)
 Rebuild the checkout flow behind a feature flag.
+Ship one measurable change per attempt to the flag cohort and read the
+conversion funnel after a full week; an attempt is done when its data is in.
 - on entry: `attempts += 1`
 - **Cohort converts** → rollout (**requires a human decision**)
 - **Conversion flat — iterate** → build_checkout (only if `attempts < 5`; loops back; repeatable)
@@ -19,11 +28,15 @@ Rebuild the checkout flow behind a feature flag.
 
 ### rethink
 Five iterations without lift: take the flow back to research.
+Run the checkout usability study and write up why the five attempts failed;
+that write-up is the input to whichever door is taken next.
 - **New direction agreed** → build_checkout (**requires a human decision**; loops back; repeatable)
 - **Park the revamp** → END (**requires a human decision**)
 
 ### rollout
 Ramp the flag to 100% and retire the old flow.
+Watch error rates and conversion during the ramp; done means the old flow is
+deleted, not merely dark.
 - otherwise → END
 
 ## Compiler report

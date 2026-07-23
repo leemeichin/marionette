@@ -1,6 +1,8 @@
-initialised checkout.state.json bound to sha256:86c1623dd475…
+initialised checkout.state.json bound to sha256:24d32e0b2820…
 current: [1mbuild_checkout[22m
-[2mRebuild the checkout flow behind a feature flag.[22m
+[2mRebuild the checkout flow behind a feature flag.
+Ship one measurable change per attempt to the flag cohort and read the
+conversion funnel after a full week; an attempt is done when its data is in.[22m
 variables: attempts=1
 choices:
   [0] Cohort converts [35m@human[39m -> rollout

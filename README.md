@@ -23,10 +23,19 @@ checkpoints (`@human`).
 
 ```
 # project: checkout-revamp
+# summary: Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.
+# prompt: """
+Checkout conversion has been flat for two quarters. Rebuild the flow
+behind a flag and iterate on cohort evidence — five attempts max. I take
+the ship call, and if it never converts we go back to research rather
+than grinding out attempt six.
+"""
 VAR attempts = 0
 
 === build_checkout ===
 Rebuild the checkout flow behind a feature flag.
+Ship one measurable change per attempt to the flag cohort and read the
+conversion funnel after a full week; an attempt is done when its data is in.
 ~ attempts += 1
 * [Cohort converts] @human -> rollout
 + {attempts < 5} [Conversion flat — iterate] ~loop~ -> build_checkout
@@ -34,11 +43,15 @@ Rebuild the checkout flow behind a feature flag.
 
 === rethink ===
 Five iterations without lift: take the flow back to research.
+Run the checkout usability study and write up why the five attempts failed;
+that write-up is the input to whichever door is taken next.
 + [New direction agreed] @human ~loop~ -> build_checkout
 * [Park the revamp] @human -> END
 
 === rollout ===
 Ramp the flag to 100% and retire the old flow.
+Watch error rates and conversion during the ramp; done means the old flow is
+deleted, not merely dark.
 -> END
 ```
 
@@ -55,11 +68,11 @@ all build failures, each with a line number and a fix:
 
 ```console
 $ marionette validate checkout.mar
-checkout.mar:10: error[MAR006]: phase "rollout" is a dead end: no choices and no divert
-  10 | === rollout ===
+checkout.mar:19: error[MAR006]: phase "rollout" is a dead end: no choices and no divert
+  19 | === rollout ===
   help: add a choice or divert (e.g. "-> END") so every path has an exit
-checkout.mar:8: error[MAR008]: undeclared cycle: build_checkout -> build_checkout
-  8 | + [Conversion flat — iterate] -> build_checkout
+checkout.mar:17: error[MAR008]: undeclared cycle: build_checkout -> build_checkout
+  17 | + [Conversion flat — iterate] -> build_checkout
   help: cycles must be intentional: mark the returning choice with ~loop~
 ✗ checkout.mar: 2 errors, 0 warnings
 ```
@@ -73,9 +86,11 @@ rationale:
 
 ```console
 $ marionette state init checkout.mar
-initialised checkout.state.json bound to sha256:86c1623dd475…
+initialised checkout.state.json bound to sha256:24d32e0b2820…
 current: build_checkout
 Rebuild the checkout flow behind a feature flag.
+Ship one measurable change per attempt to the flag cohort and read the
+conversion funnel after a full week; an attempt is done when its data is in.
 variables: attempts=1
 choices:
   [0] Cohort converts @human -> rollout
@@ -99,11 +114,14 @@ rationale:
 $ marionette state choose checkout.mar 1 --actor agent --rationale "conversion flat; iterating on the payment step"
 current: build_checkout
 Rebuild the checkout flow behind a feature flag.
-variables: attempts=2
+Ship one measurable change per attempt to the flag cohort and read the
+conversion funnel after a full week; an attempt is done when its data is in.
 …
 $ marionette state choose checkout.mar 0 --actor lee --rationale "cohort shows +9% completion; ship it"
 current: rollout
 Ramp the flag to 100% and retire the old flow.
+Watch error rates and conversion during the ramp; done means the old flow is
+deleted, not merely dark.
 variables: attempts=2
 no choices; divert available -> END (marionette state advance)
 ```

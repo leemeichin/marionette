@@ -1,8 +1,15 @@
-[1mwork packet — checkout-revamp[22m[2m (sha256:86c1623dd475…)[22m
+[1mwork packet — checkout-revamp[22m[2m (sha256:24d32e0b2820…)[22m
 status: [35mawaiting human decision ✋[39m   progress: 1/3 phases, 5 steps
+intent: Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.
+[2mprompt: Checkout conversion has been flat for two quarters. Rebuild the flow
+        behind a flag and iterate on cohort evidence — five attempts max. I take
+        the ship call, and if it never converts we go back to research rather
+        than grinding out attempt six.[22m
 
 [1m=== build_checkout ===[22m
 Rebuild the checkout flow behind a feature flag.
+Ship one measurable change per attempt to the flag cohort and read the
+conversion funnel after a full week; an attempt is done when its data is in.
 [2mdelivery: none · report per-phase[22m
 variables: attempts=5
 

@@ -1,8 +1,17 @@
 # project: checkout-revamp
+# summary: Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.
+# prompt: """
+Checkout conversion has been flat for two quarters. Rebuild the flow
+behind a flag and iterate on cohort evidence — five attempts max. I take
+the ship call, and if it never converts we go back to research rather
+than grinding out attempt six.
+"""
 VAR attempts = 0
 
 === build_checkout ===
 Rebuild the checkout flow behind a feature flag.
+Ship one measurable change per attempt to the flag cohort and read the
+conversion funnel after a full week; an attempt is done when its data is in.
 ~ attempts += 1
 * [Cohort converts] @human -> rollout
 + {attempts < 5} [Conversion flat — iterate] ~loop~ -> build_checkout
@@ -10,13 +19,19 @@ Rebuild the checkout flow behind a feature flag.
 
 === rethink ===
 Five iterations without lift: take the flow back to research.
+Run the checkout usability study and write up why the five attempts failed;
+that write-up is the input to whichever door is taken next.
 + [New direction agreed] @human ~loop~ -> build_checkout
 * [Park the revamp] @human -> END
 
 === rollout ===
 Ramp the flag to 100% and retire the old flow.
+Watch error rates and conversion during the ramp; done means the old flow is
+deleted, not merely dark.
 -> postmortem
 
 === postmortem ===
 Write up what moved conversion and what did not.
+Turn the five attempts into a short internal note so the next team starts
+from evidence rather than folklore.
 -> END
