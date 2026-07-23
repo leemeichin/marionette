@@ -12,6 +12,8 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { Diagnostic, PlanState, Trajectory } from './types.js';
 import { compile, formatDiagnostics } from './compile.js';
+import { parsePlan } from './parser.js';
+import { emitFacts } from './facts.js';
 import { renderMermaid } from './render.js';
 import { summarize } from './summarize.js';
 import { nearest } from './suggest.js';
@@ -68,6 +70,7 @@ const USAGE = `marionette — compiled project trajectories for AI agents
 Usage:
   marionette compile   <plan.mar> [-o out.trajectory.json]   Compile to trajectory JSON
   marionette validate  <plan.mar> [--strict]                 Check only; print diagnostics
+  marionette facts     <plan.mar> [-o out.pl]                 Prolog fact base (see spec/rules/)
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
@@ -263,6 +266,21 @@ export async function run(argv: string[]): Promise<number> {
           process.stderr.write(err.dim('  (--strict treats warnings as failures; zero errors is the authoring bar)\n'));
           return 1;
         }
+        return 0;
+      }
+
+      case 'facts': {
+        const { positional, flags } = parseArgs(rest);
+        const file = positional[0];
+        if (!file) throw new UsageError('facts: missing <plan.mar>');
+        const text = readTextFile(file);
+        const parsed = parsePlan(text);
+        const errors = parsed.diagnostics.filter((d) => d.severity === 'error');
+        if (errors.length > 0) {
+          process.stderr.write(formatDiagnostics(errors, file, { source: text, style: err }) + '\n');
+          return 1;
+        }
+        output(flags, null, emitFacts(parsed));
         return 0;
       }
 

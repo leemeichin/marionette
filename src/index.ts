@@ -1,6 +1,7 @@
 export * from './types.js';
 export { parseExpr, evalExpr, varsIn, tryConstEval, ExprError } from './expr.js';
 export { parsePlan, type ParsedPlan } from './parser.js';
+export { emitFacts, exprTerm } from './facts.js';
 export { compile, trajectoryHash, formatDiagnostics, type CompileResult } from './compile.js';
 export { validatePlan } from './validate.js';
 export { analyzeGate, monotonicDirection, type GateVerdict, type GateStatus } from './gates.js';
