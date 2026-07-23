@@ -37,7 +37,8 @@ $ npm test
 
 - `docs/PRD.md` — product requirements document
 - `docs/DSL.md` — DSL v0 language reference
-- `docs/decisions/` — architecture decision records (ADR-0001: Ink reuse → influence-only)
+- `docs/decisions/` — ADRs (0001: Ink influence-only; 0002: TypeScript now, contract-first portability)
+- `.claude/skills/marionette-authoring/` — the P0.5 authoring skill: NL notes → validated `.mar`
 - `docs/PARKING.md` — out-of-scope ideas parking lot
 - `spec/` — the trajectory JSON schema (the contract between authoring and execution)
 - `src/` — compiler, validators, gate analysis, renderer, summarizer, state engine, CLI
@@ -46,9 +47,13 @@ $ npm test
 
 ## Status
 
-Phase 1 in progress. Done: OQ1 spike (ADR-0001, influence-only), trajectory
-JSON schema v0, DSL v0 compiler with structural validation (P0.1–P0.4),
-Mermaid render + summaries (P0.6), hash-bound state with drift detection
-(P0.7), CI-ready CLI (P0.8), and a minimal reference walker so dogfooding can
-start now. Next: the NL → draft-script authoring skill (P0.5), then Phase 2
-(agent ingestion — see `plans/marionette.mar`).
+Phase 1 feature-complete: trajectory JSON schema v0 (P0.1), DSL v0 compiler
+with structural validation and gate checking (P0.2–P0.4), the authoring
+skill (P0.5), Mermaid render + summaries (P0.6), hash-bound state with drift
+detection (P0.7), CI-ready CLI (P0.8), plus a minimal reference walker.
+Dogfooding is live: `plans/marionette.mar` tracks this project, its nodes
+map to GitHub issues via `# github:issue:` tags, and CI re-validates the
+plan and checks state drift on every push. The remaining Phase 1 exit
+criterion is the P0.5 success metric (first-session compile success ≥70%),
+which needs real authoring sessions to measure — then the `dogfood_gate`
+`@human` checkpoint decides entry into Phase 2 (see issues #2–#4).
