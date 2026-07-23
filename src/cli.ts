@@ -16,16 +16,17 @@ import { renderMermaid } from './render.js';
 import { summarize } from './summarize.js';
 import { nearest } from './suggest.js';
 import { styleFor } from './term.js';
+import { buildBrief, renderBrief } from './brief.js';
 import {
   DriftError, WalkError, advance, bindState, frontier, initState, parseState,
-  serializeState, takeChoice,
+  rebindState, serializeState, takeChoice,
 } from './state.js';
 
 const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
-const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'state', 'help', 'version'];
-const STATE_SUBCOMMANDS = ['init', 'show', 'choose', 'advance'];
+const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'state', 'help', 'version'];
+const STATE_SUBCOMMANDS = ['init', 'show', 'choose', 'advance', 'rebind'];
 
 function readTextFile(file: string, what = 'plan'): string {
   try {
@@ -53,15 +54,18 @@ Usage:
   marionette validate  <plan.mar> [--strict]                 Check only; print diagnostics
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
+  marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
   marionette state init    <plan.mar|.json> [--state f] [--force]
   marionette state show    <plan.mar|.json> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
+  marionette state rebind  <plan.mar|.json> [--state f]         Migrate state onto an edited plan
 
 Options:
   -o, --out <file>    Output file ('-' for stdout; default varies by command)
   --state <file>      State file (default: <plan>.state.json)
   --strict            Treat warnings as errors (exit 1)
+  --json              Emit the machine-readable form (brief)
   --lr                Render left-to-right instead of top-down
   --force             Overwrite an existing state file on init
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
@@ -257,6 +261,27 @@ export function run(argv: string[]): number {
         return diagnostics.some((d) => d.severity === 'error') ? 1 : 0;
       }
 
+      case 'brief': {
+        const { positional, flags } = parseArgs(rest);
+        const file = positional[0];
+        if (!file) throw new UsageError('brief: missing <plan.mar|.json>');
+        const { trajectory, ok, diagnostics, source } = readSource(file);
+        if (!ok) {
+          process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
+          process.stderr.write('refusing to brief on a plan that does not validate\n');
+          return 1;
+        }
+        const sf = stateFileFor(file, flags);
+        const state = loadState(trajectory, sf);
+        const brief = buildBrief(trajectory, state, { file });
+        if (flags['json']) {
+          output(flags, null, JSON.stringify(brief, null, 2) + '\n');
+        } else {
+          output(flags, null, renderBrief(brief, out));
+        }
+        return 0;
+      }
+
       case 'state': {
         const [sub, ...stateRest] = rest;
         const { positional, flags } = parseArgs(stateRest);
@@ -277,6 +302,31 @@ export function run(argv: string[]): number {
           const state = initState(trajectory);
           writeFileSync(sf, serializeState(state));
           process.stderr.write(`initialised ${sf} bound to ${trajectory.hash.slice(0, 19)}…\n`);
+          printFrontier(trajectory, state);
+          return 0;
+        }
+
+        if (sub === 'rebind') {
+          if (!existsSync(sf)) {
+            throw new UsageError(`no state file at ${sf}; run "marionette state init" first`);
+          }
+          const state = parseState(readFileSync(sf, 'utf8'));
+          const report = rebindState(trajectory, state);
+          if (report.fromHash === report.toHash) {
+            process.stderr.write('state is already bound to this plan; nothing to migrate\n');
+            return 0;
+          }
+          writeFileSync(sf, serializeState(state));
+          process.stderr.write(err.green('✓') + ` migrated ${sf}\n` +
+            err.dim(`  from ${report.fromHash.slice(0, 19)}…\n  to   ${report.toHash.slice(0, 19)}…\n`));
+          const note = (label: string, items: string[]) => {
+            if (items.length > 0) process.stderr.write(`  ${label}: ${items.join(', ')}\n`);
+          };
+          note('dropped taken choices', report.droppedTaken);
+          note('dropped variables', Object.keys(report.droppedVariables));
+          note('added variables', Object.entries(report.addedVariables).map(([k, v]) => `${k}=${JSON.stringify(v)}`));
+          note('reset variables (type changed)', report.resetVariables);
+          note('visited phases no longer in the plan', report.missingVisited);
           printFrontier(trajectory, state);
           return 0;
         }

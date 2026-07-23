@@ -1,13 +1,14 @@
 {
-  "hash": "sha256:dec8b94ac5337e8d5ab5a5a23b79e229f79676ebb7f8b2de2786262621bde1eb",
+  "hash": "sha256:4275ff5eb0b139495a611d08685511824278041e8040b775f0b05b0fdb02751c",
   "status": "active",
-  "current": "dogfood_gate",
+  "current": "phase2_runtime",
   "variables": {
     "skill_revisions": 1
   },
   "taken": [
     "phase1_toolchain#0",
-    "authoring_skill#0"
+    "authoring_skill#0",
+    "dogfood_gate#0"
   ],
   "log": [
     {
@@ -36,6 +37,15 @@
       "label": "First-session compile success at or above 70%",
       "rationale": "36/36 simulated first-session compiles with zero errors across sessions 1-5, 8-38 (Wilson 95% lower bound 90.4%); 2/2 seeded revision tests recovered in one loop; evidence in docs/dogfood/, data points on issue #2",
       "to": "dogfood_gate"
+    },
+    {
+      "at": "2026-07-23T15:17:39.038Z",
+      "actor": "lee",
+      "from": "dogfood_gate",
+      "choice": "dogfood_gate#0",
+      "label": "Phase 1 exit approved",
+      "rationale": "Phase 1 exit approved: 36/36 first-pass clean on the compile metric (Wilson LB 90.4%) and user directed Phase 2 (ingestion & execution) to begin",
+      "to": "phase2_runtime"
     }
   ]
 }

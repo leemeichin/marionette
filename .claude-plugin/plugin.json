@@ -1,6 +1,6 @@
 {
   "name": "marionette",
-  "description": "Author, validate and traverse Marionette project trajectories: plain-text plans (.mar) compiled into agent-traversable graphs with human checkpoints. Ships the marionette-authoring skill.",
+  "description": "Author, validate and traverse Marionette project trajectories: plain-text plans (.mar) compiled into agent-traversable graphs with human checkpoints. Ships the marionette-authoring and marionette-execution skills.",
   "version": "0.1.0",
   "author": { "name": "Lee Meichin" },
   "homepage": "https://github.com/leemeichin/marionette"

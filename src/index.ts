@@ -8,6 +8,15 @@ export { renderMermaid, type RenderOptions } from './render.js';
 export { summarize, type SummarizeOptions } from './summarize.js';
 export {
   initState, bindState, frontier, takeChoice, advance, visitedPath,
-  parseState, serializeState, DriftError, WalkError,
-  type AvailableChoice, type TakeOptions,
+  parseState, serializeState, rebindState, DriftError, WalkError,
+  type AvailableChoice, type TakeOptions, type WalkErrorCode, type MigrationReport,
 } from './state.js';
+export {
+  extractRefs, resolveDelivery, validateDelivery, analyzeMeta,
+  DELIVERY_MODES, REPORT_CADENCES, DEFAULT_DELIVERY,
+  type DeliveryConfig, type DeliveryMode, type ReportCadence,
+} from './refs.js';
+export {
+  buildBrief, renderBrief,
+  type Brief, type BriefChoice, type BriefStatus, type Escalation,
+} from './brief.js';

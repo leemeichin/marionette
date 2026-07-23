@@ -23,6 +23,8 @@ jobs:
       - name: Validate dogfood plan
         run: node bin/marionette.js validate plans/marionette.mar --strict
       - name: Validate examples
-        run: node bin/marionette.js validate examples/build_mvp.mar --strict
+        run: |
+          node bin/marionette.js validate examples/build_mvp.mar --strict
+          node bin/marionette.js validate examples/paas_replatform.mar --strict
       - name: Detect plan/state drift
         run: node bin/marionette.js state show plans/marionette.mar

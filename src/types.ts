@@ -62,6 +62,21 @@ export interface Divert {
   line: number;
 }
 
+/**
+ * A structured external reference (issue tracker, PR, document) normalised
+ * from namespaced metadata tags, so consumers never re-parse meta conventions.
+ */
+export interface Ref {
+  /** Source system: "github", "jira", "linear", "url", … (open set). */
+  provider: string;
+  /** What is referenced: "issue", "pr", "repo", "link", … (open set). */
+  kind: string;
+  /** Canonical identifier, e.g. "acme/platform#12", "PROJ-123", or a URL. */
+  id: string;
+  /** Browsable URL when derivable from the available context, else null. */
+  url: string | null;
+}
+
 export interface TrajectoryNode {
   id: string;
   /** Prose description of the phase. */
@@ -74,6 +89,8 @@ export interface TrajectoryNode {
   line: number;
   /** Namespaced extension metadata from `# key: value` tag lines (e.g. `github:issue`). */
   meta: Record<string, string | string[]>;
+  /** External references normalised from this node's metadata. */
+  refs: Ref[];
 }
 
 /** The compiled contract between authoring (Phase 1) and agent ingestion (Phase 2). */
@@ -91,9 +108,11 @@ export interface Trajectory {
   nodes: TrajectoryNode[];
   /** Plan-level namespaced extension metadata. */
   meta: Record<string, string | string[]>;
+  /** External references normalised from the plan-level metadata. */
+  refs: Ref[];
 }
 
-export const SPEC_VERSION = '0.1.0';
+export const SPEC_VERSION = '0.2.0';
 export const END = 'END';
 
 export type Severity = 'error' | 'warning';
@@ -126,6 +145,8 @@ export const CODES = {
   TYPE_MISMATCH: 'MAR015',
   UNUSED_VARIABLE: 'MAR016',
   LOOP_ONCE_ONLY: 'MAR017',
+  MALFORMED_REF: 'MAR018',
+  UNKNOWN_DELIVERY: 'MAR019',
 } as const;
 
 /** Decision log entry (G4: every taken branch records actor, timestamp, rationale). */

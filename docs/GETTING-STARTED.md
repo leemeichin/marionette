@@ -1,8 +1,13 @@
-# Getting started: install the skill and start dogfooding
+# Getting started: install the skills and start dogfooding
 
 Everything you need to author your first trajectory and record the Phase 1
-success metric. Two pieces: the **CLI** (compiler/validator) and the
-**authoring skill** (teaches Claude to draft plans that compile).
+success metric. Three pieces: the **CLI** (compiler/validator), the
+**authoring skill** (teaches Claude to draft plans that compile), and the
+**execution skill** (teaches Claude to traverse a compiled plan: ingest the
+work packet, do the work, record decisions, escalate at `@human` — see
+[`EXECUTION.md`](EXECUTION.md)). The plugin route installs both skills; the
+copy route works the same with `marionette-execution` in place of
+`marionette-authoring`.
 
 ## 1. Install the CLI
 
@@ -86,16 +91,21 @@ $ marionette state choose plans/marionette.mar 1 --actor <you> \
 
 ```console
 $ marionette state init plan.mar        # binds plan.state.json to the compiled hash
+$ marionette brief plan.mar             # work packet: phase, refs, choices, escalation
 $ marionette state show plan.mar        # current phase, variables, available choices
 $ marionette state choose plan.mar 1 --actor agent --rationale "why"
 $ marionette state advance plan.mar --actor agent   # follow a fallthrough divert
+$ marionette state rebind plan.mar      # after editing a live plan: migrate, keep the log
 $ marionette render plan.mar            # Mermaid, with taken path + frontier highlighted
 ```
 
 Rules the walker enforces: `@human` choices refuse `--actor agent` (that's
 the escalation boundary working); every choice requires `--rationale`;
 editing the plan after `state init` trips drift detection (exit code 3) and
-asks you to reconcile — that's by design, not breakage.
+asks you to reconcile via `state rebind` — that's by design, not breakage.
+To hand the traversal to an agent, use the execution skill: it loops on
+`marionette brief --json`, honours the plan's `# delivery:`/`# report:`
+config, and escalates `@human` checkpoints instead of taking them.
 
 ## 5. When something feels wrong
 

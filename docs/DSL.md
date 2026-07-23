@@ -5,7 +5,8 @@ A `.mar` file is a line-oriented script. Humans normally don't hand-write it
 of truth, so it stays small and legible.
 
 ```
-// Comments run to the end of the line, anywhere.
+// Comments run to the end of the line (at line start or after whitespace,
+// so URLs like https://… survive).
 # project: my-project          // plan-level metadata tag (preamble)
 VAR iteration = 0              // typed variables: number, boolean, "string"
 VAR approved = false
@@ -44,7 +45,7 @@ Launch to the beta cohort.
 | Loop | `~loop~` on a choice | Declares an intentional cycle. A cycle is declared when **any one** of its edges carries `~loop~` (convention: the returning edge); overlapping cycles each need a marked edge. Undeclared cycles are compile errors. |
 | Divert | `-> target` on its own line | Fallthrough edge. At most one per phase; must come after choices. |
 | End | `-> END` | Terminal. Reaching it completes the plan. |
-| Metadata | `# key: value` · `# tag` | Plan-level in the preamble, node-level inside a phase. Namespaced keys (`github:issue`) are the extension mechanism. |
+| Metadata | `# key: value` · `# tag` | Plan-level in the preamble, node-level inside a phase. Namespaced keys (`github:issue`) are the extension mechanism. Repeated keys accumulate into a list. |
 
 ## Expressions
 
@@ -65,7 +66,27 @@ Warnings (review, or fail with `--strict`): constant-false gates (MAR011),
 `~loop~` on a non-cycle (MAR013), **unverified gates** (MAR014 — anything
 beyond constant expressions and monotonic counters; the compiler never claims
 "verified" for gates it cannot decide), unused variables (MAR016), once-only
-loop edges (MAR017).
+loop edges (MAR017), malformed external refs (MAR018), unknown delivery/report
+values (MAR019).
+
+## Well-known metadata namespaces (Phase 2)
+
+The compiler normalises these namespaces into structured `refs` and the
+executor's delivery config — see [`EXECUTION.md`](EXECUTION.md) for the full
+reference:
+
+```
+# github:repo: acme/platform        # jira:site: https://acme.atlassian.net
+# github:issue: 22                  # jira: PROJ-123, PROJ-124
+# github:pr: other/repo#9           # linear:workspace: acme
+# ref: https://wiki.acme.dev/brief  # linear: ENG-42
+
+# delivery: pr-per-phase | branch-per-phase | single-pr | single-branch | none
+# delivery:branch: replatform/{phase}
+# report: per-phase | at-checkpoints | at-end
+```
+
+All other namespaces pass through untouched as extension metadata.
 
 ## Loop verification
 
