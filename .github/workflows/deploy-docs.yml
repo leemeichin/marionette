@@ -1,0 +1,40 @@
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs-site/**'
+      - 'src/**'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build        # tsc output is staged into the site's /lib
+      - name: Build and gate the site
+        run: npm run build && npm run check
+        working-directory: docs-site
+      - name: Load secrets from 1Password
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          CLOUDFLARE_API_TOKEN: op://marionette/cloudflare/api-token
+          CLOUDFLARE_ACCOUNT_ID: op://marionette/cloudflare/account-id
+      - name: Deploy to Cloudflare
+        run: npx wrangler@4 deploy
+        working-directory: docs-site
