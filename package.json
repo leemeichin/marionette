@@ -1,7 +1,7 @@
 {
   "name": "marionette",
   "version": "0.1.0",
-  "description": "A compiled, plain-text project trajectory language — authored by humans, validated by a compiler, traversed by AI agents.",
+  "description": "A compiled, plain-text project trajectory language \u2014 authored by humans, validated by a compiler, traversed by AI agents.",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -25,5 +25,8 @@
     "@types/node": "^22.10.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

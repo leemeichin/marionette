@@ -1,0 +1,31 @@
+# Plan summary: checkout.mar
+
+Starts at **build_checkout**. 3 phases, 2 decision points (phases with 2+ choices), 5 choices overall.
+
+- **Human checkpoints:** "Cohort converts" (at build_checkout); "Not converging — rethink" (at build_checkout); "New direction agreed" (at rethink); "Park the revamp" (at rethink)
+- **Declared loops:** build_checkout → build_checkout ("Conversion flat — iterate"); rethink → build_checkout ("New direction agreed")
+- **Gates:** 2 gated choices, of which 0 unverified (review manually)
+- **Variables:** attempts: number = 0
+- **Contract hash:** `sha256:86c1623dd475…`
+
+## Walkthrough
+
+### build_checkout (start)
+Rebuild the checkout flow behind a feature flag.
+- on entry: `attempts += 1`
+- **Cohort converts** → rollout (**requires a human decision**)
+- **Conversion flat — iterate** → build_checkout (only if `attempts < 5`; loops back; repeatable)
+- **Not converging — rethink** → rethink (only if `attempts >= 5`; **requires a human decision**)
+
+### rethink
+Five iterations without lift: take the flow back to research.
+- **New direction agreed** → build_checkout (**requires a human decision**; loops back; repeatable)
+- **Park the revamp** → END (**requires a human decision**)
+
+### rollout
+Ramp the flag to 100% and retire the old flow.
+- otherwise → END
+
+## Compiler report
+
+No defects, no warnings. The plan is structurally sound: every phase is reachable, every path has an exit, and all declared loops have a verified exit.

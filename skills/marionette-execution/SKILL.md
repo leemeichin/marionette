@@ -38,8 +38,23 @@ Repeat until the brief says otherwise:
      when the brief shows only a fallthrough divert.
    - `awaiting-human` — deliver the brief's `escalation` payload to the
      primary session/human verbatim: the phase body, each choice (label,
-     target, gate) and the recorded `how`. Then **stop**. Never take an
-     `@human` choice yourself; a human records it with their own `--actor`.
+     target, gate) and the recorded `how`. Then **stop and wait**. Never
+     take an `@human` choice on your own judgement. The human answers
+     through either channel:
+     - **Out of band:** they run `state choose` themselves with their own
+       `--actor`.
+     - **In band (preferred — the conversation is the escalation
+       channel):** they state their decision in the session, and you record
+       it *as their proxy*: `marionette state choose <plan> <choice>
+       --actor <their-name> --rationale "<their words, quoted or faithfully
+       summarised>"`. Proxy rules: only for a decision they stated
+       explicitly and unambiguously in this conversation, mapped to exactly
+       one available choice; the rationale is *their* stated reasoning, not
+       yours (you may append context in brackets, e.g. "[relayed from
+       session]"); if their message is ambiguous, doesn't match a choice,
+       or is silence — ask, never infer, never default. The walker refuses
+       only `--actor agent` at `@human` gates: attribution, not ceremony,
+       is the contract.
    - `stranded` — report which gates are shut and the current variables; the
      plan likely needs editing (author fixes, then `marionette state rebind`).
      Stop.
@@ -84,6 +99,10 @@ packaged and reported — it is configuration, not advice:
   session (from `progress`), decisions recorded (label + rationale), any
   warnings (blocked choices, thin evidence), and — if escalating — the full
   escalation payload.
+- **Tone: outcome first, context on request.** Unless the plan itself is
+  the subject of the conversation (meta-work on marionette or on the plan),
+  reports state what happened and what's next — not how the sausage was
+  made. Keep process narration for when the human asks.
 
 When you portion work out to subagents, hand each one the phase's work
 packet (body, refs, delivery) — not the whole plan — and collect back the
@@ -93,9 +112,10 @@ evidence + proposed rationale; the choice itself is recorded once, by you.
 
 - Never edit the `.mar`, the trajectory JSON, or the state file by hand;
   state changes go through `state choose|advance|rebind` only.
-- Never pass `--actor` other than `agent` for your own steps; never record a
-  decision a human made without their explicit instruction (then use their
-  name and their stated rationale).
+- Never pass `--actor` other than `agent` for your own steps. Recording a
+  human's decision as their proxy requires their explicit in-conversation
+  instruction, their name as `--actor`, and their stated rationale — a
+  paraphrase of intent you inferred is not a decision.
 - Zero out-of-graph actions (G2): if what you did doesn't match any
   available choice, that's a finding to report, not something to force into
   the log.

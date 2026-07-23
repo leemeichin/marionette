@@ -19,32 +19,32 @@ Ship the smallest testable slice.
 * [Kill it] @human -> END
 `;
 
-function compiled() {
-  const result = compile(SOURCE, { file: 'test.mar' });
+async function compiled() {
+  const result = await compile(SOURCE, { file: 'test.mar' });
   assert.ok(result.ok, result.diagnostics.map((d) => d.message).join('; '));
   return result.trajectory!;
 }
 
-test('P0.7 hash is stable, semantic, and ignores comments/whitespace/source path', () => {
-  const a = compile(SOURCE, { file: 'a.mar' }).trajectory!;
-  const b = compile('// a comment\n' + SOURCE.replace('slice.', 'slice.'), { file: 'b.mar' }).trajectory!;
+test('P0.7 hash is stable, semantic, and ignores comments/whitespace/source path', async () => {
+  const a = (await compile(SOURCE, { file: 'a.mar' })).trajectory!;
+  const b = (await compile('// a comment\n' + SOURCE.replace('slice.', 'slice.'), { file: 'b.mar' })).trajectory!;
   assert.equal(a.hash, b.hash);
-  const c = compile(SOURCE.replace('iteration < 3', 'iteration < 4')).trajectory!;
+  const c = (await compile(SOURCE.replace('iteration < 3', 'iteration < 4'))).trajectory!;
   assert.notEqual(a.hash, c.hash);
-  assert.equal(a.hash, trajectoryHash(a));
+  assert.equal(a.hash, await trajectoryHash(a));
 });
 
-test('P0.7 drift detection: mutated script invalidates stale state', () => {
-  const t = compiled();
+test('P0.7 drift detection: mutated script invalidates stale state', async () => {
+  const t = await compiled();
   const state = initState(t);
-  const edited = compile(SOURCE.replace('iteration < 3', 'iteration < 4')).trajectory!;
+  const edited = (await compile(SOURCE.replace('iteration < 3', 'iteration < 4'))).trajectory!;
   assert.throws(() => bindState(edited, state), DriftError);
   assert.doesNotThrow(() => bindState(t, state));
   assert.throws(() => bindState(edited, state), /reconcil/i);
 });
 
-test('walker: init applies entry actions and evaluates the frontier', () => {
-  const t = compiled();
+test('walker: init applies entry actions and evaluates the frontier', async () => {
+  const t = await compiled();
   const state = initState(t, 'system', '2026-01-01T00:00:00Z');
   assert.equal(state.current, 'build_mvp');
   assert.equal(state.variables['iteration'], 1);
@@ -54,8 +54,8 @@ test('walker: init applies entry actions and evaluates the frontier', () => {
   assert.match(options[2].blocked ?? '', /false/);     // iteration >= 3
 });
 
-test('walker: @human checkpoints refuse agents and demand rationale (G4)', () => {
-  const t = compiled();
+test('walker: @human checkpoints refuse agents and demand rationale (G4)', async () => {
+  const t = await compiled();
   const state = initState(t);
   assert.throws(() => takeChoice(t, state, '0', { actor: 'agent', rationale: 'x' }), WalkError);
   assert.throws(() => takeChoice(t, state, '0', { actor: 'lee' }), WalkError);
@@ -68,8 +68,8 @@ test('walker: @human checkpoints refuse agents and demand rationale (G4)', () =>
   assert.ok(last.at);
 });
 
-test('walker: sticky loops iterate, counters progress, gated exit opens', () => {
-  const t = compiled();
+test('walker: sticky loops iterate, counters progress, gated exit opens', async () => {
+  const t = await compiled();
   const state = initState(t);
   takeChoice(t, state, 'Learnings', { actor: 'agent', rationale: 'iteration 1 red' });
   takeChoice(t, state, 'Learnings', { actor: 'agent', rationale: 'iteration 2 red' });
@@ -82,8 +82,8 @@ test('walker: sticky loops iterate, counters progress, gated exit opens', () => 
   assert.equal(state.log.filter((entry) => entry.choice !== null).length, 3);
 });
 
-test('walker: divert advance and completion', () => {
-  const t = compiled();
+test('walker: divert advance and completion', async () => {
+  const t = await compiled();
   const state = initState(t);
   takeChoice(t, state, '0', { actor: 'lee', rationale: 'green' });
   advance(t, state, { actor: 'agent' });
@@ -92,15 +92,15 @@ test('walker: divert advance and completion', () => {
   assert.throws(() => advance(t, state, { actor: 'agent' }), WalkError);
 });
 
-test('walker: once-only choices exhaust; unknown refs error helpfully', () => {
-  const t = compile(`
+test('walker: once-only choices exhaust; unknown refs error helpfully', async () => {
+  const t = (await compile(`
 === a ===
 * [Solo] -> a2
 * [Other] -> END
 === a2 ===
 * [Back] ~loop~ -> a
 * [Out] -> END
-`).trajectory!;
+`)).trajectory!;
   const state = initState(t);
   takeChoice(t, state, 'Solo', { actor: 'agent', rationale: 'first' });
   takeChoice(t, state, 'Back', { actor: 'agent', rationale: 'loop' });

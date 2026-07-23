@@ -1,0 +1,153 @@
+{
+  "hash": "sha256:c807cf129b29f0bf2e0bf2a742335673897829c2040d518bef4441d3bf7fc42a",
+  "status": "completed",
+  "current": "END",
+  "variables": {
+    "readme_passes": 1,
+    "demo_passes": 2
+  },
+  "taken": [
+    "rewrite_readme#0",
+    "build_demos#0",
+    "accessibility_pass#0",
+    "integrate_runtime#0",
+    "ship_review#0"
+  ],
+  "log": [
+    {
+      "at": "2026-07-23T15:46:23.549Z",
+      "actor": "system",
+      "from": null,
+      "choice": null,
+      "label": null,
+      "rationale": "plan started",
+      "to": "capture_reality"
+    },
+    {
+      "at": "2026-07-23T15:49:47.126Z",
+      "actor": "agent",
+      "from": "capture_reality",
+      "choice": null,
+      "label": null,
+      "rationale": "16 verbatim pty transcripts captured (validate fail/clean, compile, summarize, render, walk with @human refusal, drift, rebind, help) plus the three demo .mar sources in docs-site/transcripts",
+      "to": "rewrite_readme"
+    },
+    {
+      "at": "2026-07-23T15:51:16.055Z",
+      "actor": "agent",
+      "from": "rewrite_readme",
+      "choice": "rewrite_readme#0",
+      "label": "Reads clean, examples verified",
+      "rationale": "README rewritten around the captured checkout story; every console block checked line-for-line against docs-site/transcripts (elisions marked with …)",
+      "to": "design_system"
+    },
+    {
+      "at": "2026-07-23T15:52:40.670Z",
+      "actor": "agent",
+      "from": "design_system",
+      "choice": null,
+      "label": null,
+      "rationale": "design system defined in docs-site/DESIGN.md: dual-theme token palette verified AA programmatically (worst pair 4.82:1), ANSI mapping, type/spacing grid, interaction+SR rules, enforcement via build checks",
+      "to": "scaffold_site"
+    },
+    {
+      "at": "2026-07-23T15:57:29.447Z",
+      "actor": "agent",
+      "from": "scaffold_site",
+      "choice": null,
+      "label": null,
+      "rationale": "scaffold complete: zero-dep build (ANSI->HTML, .mar highlighter, layout assembler), wrangler static-assets config, preview server, and three enforcement gates (contrast/fidelity/html) all green on stub pages",
+      "to": "write_content"
+    },
+    {
+      "at": "2026-07-23T16:02:43.527Z",
+      "actor": "agent",
+      "from": "write_content",
+      "choice": null,
+      "label": null,
+      "rationale": "seven pages written (overview, getting-started, syntax, walkthrough, execution, examples, reference) + 404; content distilled from docs/ and every terminal frame drawn from the 20 captured transcripts; all three gates green",
+      "to": "build_demos"
+    },
+    {
+      "at": "2026-07-23T16:04:10.358Z",
+      "actor": "agent",
+      "from": "build_demos",
+      "choice": "build_demos#1",
+      "label": "Fidelity or interaction gaps",
+      "rationale": "browser pass 1 found a real mobile overflow bug (grid column min-content) and a wrong theme-test assumption; fixed both, re-verifying",
+      "to": "build_demos"
+    },
+    {
+      "at": "2026-07-23T19:36:39.284Z",
+      "actor": "agent",
+      "from": "build_demos",
+      "choice": "build_demos#0",
+      "label": "Demos faithful and interactive",
+      "rationale": "browser-verified on pass 2: 23/23 checks (collapse/step/skip/restart/play, keyboard activation, reduced-motion instant reveal, no-JS full transcript, theme persistence, zero console errors, no 320px overflow); screenshots reviewed both themes",
+      "to": "accessibility_pass"
+    },
+    {
+      "at": "2026-07-23T19:39:00.192Z",
+      "actor": "agent",
+      "from": "accessibility_pass",
+      "choice": "accessibility_pass#0",
+      "label": "Audit clean",
+      "rationale": "audit green: 60 AA pairs, 27 browser checks incl. focus outlines, keyboard-focusable scroll regions added and gated, reduced-motion + no-JS + SR structure verified",
+      "to": "integrate_runtime"
+    },
+    {
+      "at": "2026-07-23T19:41:08.654Z",
+      "actor": "agent",
+      "from": "integrate_runtime",
+      "choice": "integrate_runtime#0",
+      "label": "Runtime folded in, gates green",
+      "rationale": "runtime folded in: live NDJSON session captured (forbidden at @human, committed decision with journal events, idempotent replay), help recaptured, execution/reference/getting-started/README updated; repo tests + all site gates + browser checks green",
+      "to": "ship_review"
+    },
+    {
+      "at": "2026-07-23T19:59:01.120Z",
+      "actor": "lee",
+      "from": "ship_review",
+      "choice": "ship_review#1",
+      "label": "Changes requested",
+      "rationale": "palette reads as 'piss filter' — go lighter, watercolour pastel, less yellow/orange/grey; demos cause page reflow — fix their height; add a playground page: compile in-browser, render diagram, step through with a Three.js visualisation",
+      "to": "address_feedback"
+    },
+    {
+      "at": "2026-07-23T20:09:23.920Z",
+      "actor": "agent",
+      "from": "address_feedback",
+      "choice": null,
+      "label": null,
+      "rationale": "feedback applied: watercolour pastel palette both themes (AA verified, worst 4.69:1, yellow removed from syntax tint), demos hold full height from first paint (CLS 0, browser-verified), playground page runs the real compiler+walker in-browser with a Three.js graph — 27+15 browser checks and all three build gates green",
+      "to": "ship_review"
+    },
+    {
+      "at": "2026-07-23T20:14:10.913Z",
+      "actor": "lee",
+      "from": "ship_review",
+      "choice": "ship_review#1",
+      "label": "Changes requested",
+      "rationale": "round 2: replace node:crypto with WebCrypto (Node 24 era — platform crypto, drop the hand-rolled shim); and the @human gate needs an in-band path: the execution skill should let the human decide in-chat and have the agent record it, instead of going out of band to the CLI",
+      "to": "address_feedback"
+    },
+    {
+      "at": "2026-07-23T20:23:41.595Z",
+      "actor": "agent",
+      "from": "address_feedback",
+      "choice": null,
+      "label": null,
+      "rationale": "round 2 applied: hashing moved to WebCrypto (compile/trajectoryHash async, node:crypto gone from src, shim deleted, hashes byte-identical so transcripts and live state stay valid, 84 tests pass, engines>=20 + CI on node 24); execution skill + EXECUTION.md + site now define the in-band proxied @human decision protocol",
+      "to": "ship_review"
+    },
+    {
+      "at": "2026-07-23T20:26:37.220Z",
+      "actor": "lee",
+      "from": "ship_review",
+      "choice": "ship_review#0",
+      "label": "Approved — merge and deploy",
+      "rationale": "approved -- merge and deploy [relayed from session]",
+      "to": "END"
+    }
+  ]
+}

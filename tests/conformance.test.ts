@@ -41,16 +41,16 @@ const AT = '2026-01-01T00:00:00.000Z';
 
 const caseFiles = readdirSync(casesDir).filter((f) => f.endsWith('.json'));
 
-test('conformance: suite is non-empty', () => {
+test('conformance: suite is non-empty', async () => {
   assert.ok(caseFiles.length >= 2);
 });
 
 for (const file of caseFiles) {
   const spec = JSON.parse(readFileSync(join(casesDir, file), 'utf8')) as Case;
 
-  test(`conformance: ${spec.case}`, () => {
+  test(`conformance: ${spec.case}`, async () => {
     const source = readFileSync(join(root, spec.plan), 'utf8');
-    const result = compile(source, { file: spec.plan });
+    const result = await compile(source, { file: spec.plan });
     assert.ok(result.ok && result.trajectory,
       `${spec.plan} must compile: ` + result.diagnostics.map((d) => d.message).join('; '));
     const trajectory = result.trajectory!;

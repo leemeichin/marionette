@@ -1,0 +1,48 @@
+<h1>playground</h1>
+<p class="lede">Write a plan, and your browser compiles it with the
+<em>real</em> Marionette compiler (the same TypeScript that runs in the
+CLI, hash and all) and walks it with the <em>real</em> walker. No agent is
+attached here — the part an agent would play is yours to press — but every
+rule is live: gates evaluate, once-only choices exhaust, and
+<code>@human</code> checkpoints refuse the agent actor.</p>
+
+<noscript><p><strong>The playground needs JavaScript</strong> — it runs the
+compiler in your browser. The <a href="/walkthrough">walkthrough</a> shows
+the same flow as captured terminal sessions.</p></noscript>
+
+<div class="pg" data-playground>
+  <section class="pg-editor">
+    <label for="pg-src"><code>playground.mar</code> — edits compile as you type</label>
+    <textarea id="pg-src" spellcheck="false" autocomplete="off" rows="20"></textarea>
+    <div class="pg-diagnostics" data-diagnostics aria-label="compiler diagnostics" role="log"></div>
+  </section>
+
+  <section class="pg-viz">
+    <h2 id="pg-graph-h">Graph</h2>
+    <div class="pg-canvas" data-canvas aria-hidden="true"></div>
+    <p class="pg-hint">The picture is a courtesy; the controls below are the
+    real interface. Current phase is lit, taken edges stay lit,
+    <span class="mar-human">@human</span> edges are violet.</p>
+
+    <h2 id="pg-walk-h">Walk it</h2>
+    <div class="pg-walk" data-walk>
+      <fieldset class="pg-actor">
+        <legend>Acting as</legend>
+        <label><input type="radio" name="pg-actor" value="agent" checked> agent</label>
+        <label><input type="radio" name="pg-actor" value="human"> human</label>
+      </fieldset>
+      <label for="pg-rationale">Rationale (logged with every step)</label>
+      <input id="pg-rationale" type="text" value="exploring in the playground">
+      <div class="pg-node" data-node role="status"></div>
+      <div class="pg-choices" data-choices></div>
+      <button type="button" class="pg-reset" data-reset>↺ reset walk</button>
+      <h3>Decision log</h3>
+      <ol class="pg-log" data-log aria-label="decision log"></ol>
+    </div>
+  </section>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"/vendor/three.module.min.js"}}
+</script>
+<script type="module" src="/playground.js"></script>

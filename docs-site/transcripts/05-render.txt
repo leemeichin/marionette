@@ -1,0 +1,18 @@
+flowchart TD
+  build_checkout["<b>build_checkout</b><br/>Rebuild the checkout flow behind a feature flag."]
+  rethink["<b>rethink</b><br/>Five iterations without lift: take the flow back to resea…"]
+  rollout["<b>rollout</b><br/>Ramp the flag to 100% and retire the old flow."]
+  build_checkout -- "✋ Cohort converts" --> rollout
+  build_checkout -. "↻ Conversion flat — iterate {attempts &lt; 5}" .-> build_checkout
+  build_checkout -- "✋ Not converging — rethink {attempts &gt;= 5}" --> rethink
+  rethink -. "✋ ↻ New direction agreed" .-> build_checkout
+  rethink -- "✋ Park the revamp" --> END
+  rollout --> END
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 0 stroke:#c62828,stroke-width:3px;
+  linkStyle 2 stroke:#c62828,stroke-width:3px;
+  linkStyle 3 stroke:#c62828,stroke-width:3px;
+  linkStyle 4 stroke:#c62828,stroke-width:3px;

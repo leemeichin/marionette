@@ -1,0 +1,10 @@
+// Cloudflare Workers static-assets deployment for the Marionette docs site.
+// Build first (npm run build), then: npx wrangler deploy
+{
+  "name": "marionette-docs",
+  "compatibility_date": "2026-07-23",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "404-page"
+  }
+}

@@ -3,7 +3,7 @@
  * running structural validation and gate checking along the way.
  */
 
-import { createHash } from 'node:crypto';
+import { sha256Hex } from './hash.js';
 import type { Diagnostic, Trajectory } from './types.js';
 import { SPEC_VERSION } from './types.js';
 import { parsePlan } from './parser.js';
@@ -24,7 +24,7 @@ export interface CompileOptions {
   file?: string;
 }
 
-export function compile(source: string, options: CompileOptions = {}): CompileResult {
+export async function compile(source: string, options: CompileOptions = {}): Promise<CompileResult> {
   const parsed = parsePlan(source);
   const diagnostics = [...parsed.diagnostics];
   validatePlan(parsed, diagnostics);
@@ -45,7 +45,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     meta: parsed.meta,
     refs: planRefs,
   };
-  trajectory.hash = trajectoryHash(trajectory);
+  trajectory.hash = await trajectoryHash(trajectory);
   return { trajectory, diagnostics, ok };
 }
 
@@ -55,10 +55,10 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
  * comments/whitespace/file moves don't invalidate recorded state, but any
  * change to variables, nodes, gates, choices or metadata does.
  */
-export function trajectoryHash(trajectory: Trajectory): string {
+export async function trajectoryHash(trajectory: Trajectory): Promise<string> {
   const { hash: _hash, source: _source, ...rest } = trajectory;
   const canonical = canonicalize(rest);
-  return 'sha256:' + createHash('sha256').update(canonical).digest('hex');
+  return 'sha256:' + await sha256Hex(canonical);
 }
 
 function canonicalize(value: unknown): string {

@@ -150,6 +150,17 @@ the repo. There is no timeout/fallback: an unanswered escalation simply leaves
 the plan parked at the checkpoint, visible in `brief`/`render`/`summarize`.
 (The walker separately refuses `--actor agent` on `@human` choices with the
 `human-checkpoint` error code, so escalation is enforced, not advisory.)
+
+The human's answer can come back through the same channel: when they state
+an explicit, unambiguous decision in-session, the executor records it **as
+their proxy** — `state choose <plan> <choice> --actor <their-name>
+--rationale "<their stated reasoning>"` — instead of making them leave the
+conversation for a terminal. The contract at an `@human` gate is
+*attribution and evidence*, not ceremony: the walker refuses only the
+`agent` actor, and the log must carry the human's name and their words.
+Proxy recording is forbidden for inferred intent, ambiguous replies, or
+silence — the executor asks instead. (This is how the
+`marionette-execution` skill implements OQ2's escalation loop end to end.)
 The formal decision on OQ2 is itself `@human`-gated in the dogfood plan
 (`escalation_protocol` node, issue #4); this payload is the working proposal.
 

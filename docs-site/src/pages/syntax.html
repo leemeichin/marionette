@@ -1,0 +1,137 @@
+<h1>syntax</h1>
+<p class="lede">The <code>.mar</code> language, in full. It is line-oriented
+and deliberately small: humans normally have an AI draft it from notes, but
+the file stays the durable, diffable source of truth — so it has to stay
+legible.</p>
+
+<h2 id="anatomy">Anatomy of a plan</h2>
+
+<mar-src title="anatomy.mar — every construct at a glance">
+// Comments run to the end of the line.
+# project: my-project          // plan-level metadata tag (preamble)
+VAR iteration = 0              // typed variables: number, boolean, "string"
+VAR approved = false
+
+-> build_mvp                   // optional explicit start (default: first phase)
+
+=== build_mvp ===              // a phase (node)
+Ship the smallest testable slice.       // prose body: what this phase is
+# github:issue: 12                      // node-level metadata tag
+~ iteration += 1                        // mutation, applied on entry (=, +=, -=)
+* [Metrics green] @human -> beta_launch          // once-only choice, human checkpoint
++ {iteration < 3} [Go again] ~loop~ -> build_mvp // sticky choice, gated, declared loop
+* {iteration >= 3} [Three strikes] -> pivot
+
+=== beta_launch ===
+Launch to the beta cohort.
+-> END                         // fallthrough divert; END terminates the plan
+
+=== pivot ===
+* [Pivot] @human ~loop~ -> build_mvp
+* [Kill it] @human -> END
+</mar-src>
+
+<h2 id="constructs">Constructs</h2>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Construct</th><th scope="col">Syntax</th><th scope="col">Notes</th></tr>
+  <tr><td>Phase</td><td><code>=== name ===</code></td>
+      <td>Unique <code>[A-Za-z_]\w*</code> id; trailing <code>===</code> optional. <code>END</code> is reserved.</td></tr>
+  <tr><td>Body</td><td>prose lines</td>
+      <td>Joined verbatim; the first line becomes the node title in renders. This prose is the executing agent's task description.</td></tr>
+  <tr><td>Variable</td><td><code>VAR name = literal</code></td>
+      <td>Preamble only. Type inferred from the literal (number, <code>true</code>/<code>false</code>, <code>"string"</code>).</td></tr>
+  <tr><td>Mutation</td><td><code>~ name = expr</code> · <code>~ name += expr</code> · <code>~ name -= expr</code></td>
+      <td>Applied in order when the phase is <strong>entered</strong>. <code>+=</code>/<code>-=</code> require numbers.</td></tr>
+  <tr><td>Choice (once)</td><td><code>* [Label] -&gt; target</code></td>
+      <td>May be taken at most once per traversal.</td></tr>
+  <tr><td>Choice (sticky)</td><td><code>+ [Label] -&gt; target</code></td>
+      <td>Repeatable. Use for loop edges — and for every choice a traversal can revisit.</td></tr>
+  <tr><td>Gate</td><td><code>{expr}</code> before or after the label</td>
+      <td>The choice is available only while the expression is true.</td></tr>
+  <tr><td>Human checkpoint</td><td><code>@human</code> on a choice</td>
+      <td>The agent must pause and escalate; only a human may record this decision. Enforced by the walker.</td></tr>
+  <tr><td>Loop</td><td><code>~loop~</code> on a choice</td>
+      <td>Declares an intentional cycle. A cycle counts as declared when <em>any one</em> of its edges carries <code>~loop~</code> (convention: the returning edge). Undeclared cycles are compile errors.</td></tr>
+  <tr><td>Divert</td><td><code>-&gt; target</code> on its own line</td>
+      <td>Fallthrough edge. At most one per phase; must come after the choices.</td></tr>
+  <tr><td>End</td><td><code>-&gt; END</code></td>
+      <td>Terminal. Reaching it completes the plan.</td></tr>
+  <tr><td>Metadata</td><td><code># key: value</code> · <code># tag</code></td>
+      <td>Plan-level in the preamble, node-level inside a phase. Namespaced keys (<code>github:issue</code>) are the extension mechanism. Repeated keys accumulate into a list.</td></tr>
+</table>
+</div>
+
+<h2 id="expressions">Expressions</h2>
+
+<p>Operands: numbers (<code>3</code>, <code>1.5</code>), booleans,
+<code>"strings"</code>, variables. Operators, loosest to tightest:
+<code>||</code>/<code>or</code> · <code>&amp;&amp;</code>/<code>and</code> ·
+<code>==</code> <code>!=</code> · <code>&lt;</code> <code>&lt;=</code>
+<code>&gt;</code> <code>&gt;=</code> · <code>+</code> <code>-</code> ·
+<code>*</code> <code>/</code> <code>%</code> · unary
+<code>!</code>/<code>not</code>, <code>-</code> · <code>( )</code>.
+Comparisons are type-checked at runtime; <code>+</code> concatenates
+strings.</p>
+
+<h2 id="guarantees">What the compiler guarantees</h2>
+
+<p><strong>Structural errors</strong> fail the build: dead ends
+(<code>MAR006</code>), unreachable phases (<code>MAR007</code>), undefined
+targets (<code>MAR003</code>) and variables (<code>MAR004</code>),
+duplicates (<code>MAR002</code>, <code>MAR005</code>), undeclared cycles
+(<code>MAR008</code>), loops with no exit (<code>MAR009</code>) or
+provably-unsatisfiable exits (<code>MAR010</code>), <code>@human</code>
+without an escalation path (<code>MAR012</code>), type mismatches
+(<code>MAR015</code>).</p>
+
+<p><strong>Warnings</strong> ask for review — or fail the build with
+<code>--strict</code>: constant-false gates (<code>MAR011</code>),
+<code>~loop~</code> on a non-cycle (<code>MAR013</code>), unverified gates
+(<code>MAR014</code> — anything beyond constant expressions and monotonic
+counters; the compiler never claims "verified" for gates it cannot decide),
+unused variables (<code>MAR016</code>), once-only loop edges
+(<code>MAR017</code>), malformed external refs (<code>MAR018</code>),
+unknown delivery values (<code>MAR019</code>). The full table with fixes:
+<a href="/reference#diagnostics">reference</a>.</p>
+
+<h2 id="loops">Loop verification</h2>
+
+<p>A declared loop passes when its cycle has at least one exit that is
+ungated, or whose gate is trivially decidable and satisfiable — the
+canonical shape is a <strong>monotonic counter</strong>:
+<code>~ i += 1</code> inside the loop with an exit gate
+<code>{i &gt;= 3}</code>. A loop-continue gate that provably shuts
+(<code>{i &lt; 3}</code> with an increasing <code>i</code>) also counts, on
+any edge of the cycle. Everything else is enumerated as an unverified-gate
+warning. Resetting a counter (<code>~ i = 0</code>) anywhere makes its
+gates non-monotonic and therefore unverifiable — those warn by design;
+review them manually.</p>
+
+<p>Authoring rule of thumb: keep every choice on a path a traversal can
+revisit sticky (<code>+</code>). A once-only (<code>*</code>) choice inside
+a cycle is consumed on the first pass and can strand a later iteration at
+runtime; the compiler warns (<code>MAR017</code>) only when the
+<code>~loop~</code> edge itself is once-only.</p>
+
+<h2 id="metadata">Well-known metadata namespaces</h2>
+
+<p>The compiler normalises these into structured refs and delivery config
+(see <a href="/execution">execution</a>); all other namespaces pass through
+untouched as extension metadata.</p>
+
+<mar-src title="metadata vocabulary">
+# github:repo: acme/platform        // context for github refs
+# github:issue: 22                  // → https://github.com/acme/platform/issues/22
+# github:pr: other/repo#9           // explicit repo wins over context
+# jira:site: https://acme.atlassian.net
+# jira: PROJ-123, PROJ-124          // comma-separated lists allowed
+# linear:workspace: acme
+# linear: ENG-42
+# ref: https://wiki.acme.dev/brief  // generic link
+
+# delivery: pr-per-phase            // or branch-per-phase | single-pr | single-branch | none
+# delivery:branch: replatform/{phase}
+# report: per-phase                 // or at-checkpoints | at-end
+</mar-src>

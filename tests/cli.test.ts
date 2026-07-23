@@ -25,7 +25,7 @@ function cli(args: string[], dir: string): { code: number; stdout: string; stder
   }
 }
 
-test('P0.8 CLI exit codes are CI-suitable', () => {
+test('P0.8 CLI exit codes are CI-suitable', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'marionette-'));
   cpSync(join(here, 'fixtures/kitchen_sink.mar'), join(dir, 'plan.mar'));
 
@@ -77,7 +77,7 @@ test('P0.8 CLI exit codes are CI-suitable', () => {
   assert.match(drifted.stderr, /drift/);
 });
 
-test('runtime CLI exposes a clean NDJSON process surface', () => {
+test('runtime CLI exposes a clean NDJSON process surface', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'marionette-runtime-cli-'));
   writeFileSync(join(dir, 'plan.mar'), [
     '=== a ===',

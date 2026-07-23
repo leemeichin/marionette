@@ -1,0 +1,15 @@
+[1mwork packet — checkout-revamp[22m[2m (sha256:86c1623dd475…)[22m
+status: [35mawaiting human decision ✋[39m   progress: 1/3 phases, 5 steps
+
+[1m=== build_checkout ===[22m
+Rebuild the checkout flow behind a feature flag.
+[2mdelivery: none · report per-phase[22m
+variables: attempts=5
+
+choices:
+  [0] Cohort converts [35m@human[39m -> rollout[2m — Ramp the flag to 100% and retire the old flow.[22m
+[2m  [1] Conversion flat — iterate [36m~loop~[39m [2m{attempts < 5}[22m -> build_checkout[2m — Rebuild the checkout flow behind a feature flag.[22m  [unavailable: gate {attempts < 5} is false][22m
+  [2] Not converging — rethink [35m@human[39m [2m{attempts >= 5}[22m -> rethink[2m — Five iterations without lift: take the flow back to research.[22m
+
+[35m[1mescalation required: [22m[39mevery currently-available choice is an @human checkpoint
+  pause and escalate: present this phase and its choices to a human; a human records the decision with `marionette state choose checkout.mar <choice> --actor <name> --rationale <text>`. Do not take these choices autonomously.

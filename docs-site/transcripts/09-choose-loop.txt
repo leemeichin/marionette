@@ -1,0 +1,7 @@
+current: [1mbuild_checkout[22m
+[2mRebuild the checkout flow behind a feature flag.[22m
+variables: attempts=2
+choices:
+  [0] Cohort converts [35m@human[39m -> rollout
+  [1] Conversion flat — iterate [36m~loop~[39m [2m{attempts < 5}[22m -> build_checkout
+[2m  [2] Not converging — rethink [35m@human[39m [2m{attempts >= 5}[22m -> rethink  [unavailable: gate {attempts >= 5} is false][22m

@@ -1,0 +1,93 @@
+<h1>reference</h1>
+<p class="lede">Commands, exit codes, compiler diagnostics, walker refusal
+codes. The contracts behind them live in the repo:
+<code>spec/trajectory.schema.json</code> (the compiled plan),
+<code>spec/brief.schema.json</code> (the work packet), and
+<code>spec/conformance/</code> (walker behaviour).</p>
+
+<h2 id="cli">Command surface</h2>
+
+<demo-cast id="16-help" title="marionette help"></demo-cast>
+
+<h2 id="exit-codes">Exit codes</h2>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
+  <tr><td><code>0</code></td><td>success (warnings allowed unless <code>--strict</code>)</td></tr>
+  <tr><td><code>1</code></td><td>validation errors (or warnings with <code>--strict</code>); refused walk operations</td></tr>
+  <tr><td><code>2</code></td><td>usage or I/O errors</td></tr>
+  <tr><td><code>3</code></td><td>plan/state drift detected — reconcile with <code>state rebind</code> (or <code>state init --force</code>)</td></tr>
+</table>
+</div>
+
+<h2 id="diagnostics">Compiler diagnostics</h2>
+
+<p>Errors fail the build. Warnings pass unless <code>--strict</code>; zero
+<em>errors</em> is the authoring bar, and a plan whose only diagnostics are
+expected <code>MAR014</code> dynamic-fact warnings is a legitimate end
+state.</p>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Code</th><th scope="col">Severity</th><th scope="col">Meaning</th><th scope="col">Usual fix</th></tr>
+  <tr><td><code>MAR001</code></td><td>error</td><td>parse error</td><td>fix the line the message points at</td></tr>
+  <tr><td><code>MAR002</code></td><td>error</td><td>duplicate phase id</td><td>rename one of the phases</td></tr>
+  <tr><td><code>MAR003</code></td><td>error</td><td>undefined divert/choice target</td><td>typo — take the <em>did you mean</em> suggestion, or define the phase</td></tr>
+  <tr><td><code>MAR004</code></td><td>error</td><td>undefined variable in a gate or mutation</td><td>declare it with <code>VAR</code> in the preamble</td></tr>
+  <tr><td><code>MAR005</code></td><td>error</td><td>duplicate variable declaration</td><td>remove the extra <code>VAR</code></td></tr>
+  <tr><td><code>MAR006</code></td><td>error</td><td>dead end: phase with no choices and no divert</td><td>add an exit choice or <code>-&gt; END</code></td></tr>
+  <tr><td><code>MAR007</code></td><td>error</td><td>unreachable phase</td><td>link it from a real decision, or delete it</td></tr>
+  <tr><td><code>MAR008</code></td><td>error</td><td>undeclared cycle</td><td>if the loop is intentional, add <code>~loop~</code> to the returning choice; otherwise re-point the edge</td></tr>
+  <tr><td><code>MAR009</code></td><td>error</td><td>declared loop with no exit</td><td>add a counter-gated or <code>@human</code> sibling exit</td></tr>
+  <tr><td><code>MAR010</code></td><td>error</td><td>loop exit gate provably unsatisfiable</td><td>fix the gate so the counter can actually reach it</td></tr>
+  <tr><td><code>MAR011</code></td><td>warning</td><td>constant-false gate</td><td>the choice can never be taken — fix or remove it</td></tr>
+  <tr><td><code>MAR012</code></td><td>error</td><td><code>@human</code> choice with no escalation path</td><td>give the choice a <code>-&gt; target</code></td></tr>
+  <tr><td><code>MAR013</code></td><td>warning</td><td><code>~loop~</code> on an edge that isn't part of a cycle</td><td>drop the mark, or point the edge where you meant</td></tr>
+  <tr><td><code>MAR014</code></td><td>warning</td><td>unverified gate (dynamic fact the compiler can't decide)</td><td>expected for real-world facts — review manually, don't churn the plan to silence it</td></tr>
+  <tr><td><code>MAR015</code></td><td>error</td><td>type mismatch in an expression or mutation</td><td>align the literal/variable types</td></tr>
+  <tr><td><code>MAR016</code></td><td>warning</td><td>unused variable</td><td>gate on it, or delete it</td></tr>
+  <tr><td><code>MAR017</code></td><td>warning</td><td>once-only (<code>*</code>) loop edge</td><td>make it sticky (<code>+</code>) so the loop can repeat</td></tr>
+  <tr><td><code>MAR018</code></td><td>warning</td><td>malformed external ref (<code>github:</code>/<code>jira:</code>/<code>linear:</code>/<code>ref:</code>)</td><td>fix the value to the namespace's expected shape</td></tr>
+  <tr><td><code>MAR019</code></td><td>warning</td><td>unknown <code>delivery:</code>/<code>report:</code> value</td><td>use a listed value; typos fall back to defaults loudly</td></tr>
+</table>
+</div>
+
+<h2 id="walk-errors">Walker refusal codes</h2>
+
+<p>Refusals are machine-coded so executors can react programmatically, and
+a refused operation never mutates state. (The runtime protocol carries its
+own error codes on the same principles — e.g. <code>forbidden</code> for an
+agent connection at an <code>@human</code> checkpoint,
+<code>stale-revision</code> for an outdated <code>expectedRevision</code> —
+see <code>spec/runtime-protocol.schema.json</code>.)</p>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
+  <tr><td><code>completed</code></td><td>the plan has already reached END</td></tr>
+  <tr><td><code>unknown-node</code></td><td>state points at a node absent from the compiled plan</td></tr>
+  <tr><td><code>unknown-choice</code></td><td>no choice matches the given reference</td></tr>
+  <tr><td><code>ambiguous-choice</code></td><td>a label prefix matched more than one choice</td></tr>
+  <tr><td><code>gate-blocked</code></td><td>the choice's gate is currently false (or failed to evaluate)</td></tr>
+  <tr><td><code>once-exhausted</code></td><td>a once-only (<code>*</code>) choice was already taken</td></tr>
+  <tr><td><code>human-checkpoint</code></td><td>an agent tried to take an <code>@human</code> choice</td></tr>
+  <tr><td><code>rationale-required</code></td><td>the step is missing its auditable rationale</td></tr>
+  <tr><td><code>no-divert</code></td><td><code>advance</code> called on a node without a fallthrough divert</td></tr>
+  <tr><td><code>migration-blocked</code></td><td>state cannot be rebound onto the edited plan (current phase gone) — needs a human</td></tr>
+</table>
+</div>
+
+<h2 id="files">Files on disk</h2>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">File</th><th scope="col">What it is</th></tr>
+  <tr><td><code>plan.mar</code></td><td>the script — durable, diffable source of truth</td></tr>
+  <tr><td><code>plan.trajectory.json</code></td><td>compiled contract (<code>marionette compile</code>); content-hashed</td></tr>
+  <tr><td><code>plan.state.json</code></td><td>traversal state + decision log, bound to the trajectory hash</td></tr>
+  <tr><td><code>.marionette/graphs/&lt;hash&gt;.trajectory.json</code></td><td>runtime store: compiled trajectories archived by content hash</td></tr>
+  <tr><td><code>.marionette/runs/&lt;run-id&gt;/events.jsonl</code></td><td>runtime store: append-only event journal (authoritative)</td></tr>
+  <tr><td><code>.marionette/runs/&lt;run-id&gt;/snapshot.json</code></td><td>runtime store: fsynced snapshot, rebuilt from the journal on resume</td></tr>
+</table>
+</div>

@@ -1,0 +1,4 @@
+current: [1mrollout[22m
+[2mRamp the flag to 100% and retire the old flow.[22m
+variables: attempts=2
+no choices; divert available -> END (marionette state advance)

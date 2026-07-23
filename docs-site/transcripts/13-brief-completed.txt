@@ -1,0 +1,5 @@
+[1mwork packet — checkout-revamp[22m[2m (sha256:86c1623dd475…)[22m
+status: [32mcompleted ✓[39m   progress: 2/3 phases, 4 steps
+variables: attempts=2
+
+[32mthe plan has reached END — nothing left to execute.[39m

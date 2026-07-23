@@ -1,0 +1,31 @@
+# Plan summary: build_mvp.mar
+
+Starts at **build_mvp**. 3 phases, 2 decision points (phases with 2+ choices), 5 choices overall.
+
+- **Human checkpoints:** "Metrics green" (at build_mvp); "Pivot: new angle, fresh loop" (at pivot_or_kill); "Kill it" (at pivot_or_kill)
+- **Declared loops:** build_mvp → build_mvp ("Learnings, go again"); pivot_or_kill → build_mvp ("Pivot: new angle, fresh loop")
+- **Gates:** 2 gated choices, of which 0 unverified (review manually)
+- **Variables:** iteration: number = 0
+- **Contract hash:** `sha256:3ceefc9a501b…`
+
+## Walkthrough
+
+### build_mvp (start)
+Ship the smallest testable slice.
+- on entry: `iteration += 1`
+- **Metrics green** → beta_launch (**requires a human decision**)
+- **Learnings, go again** → build_mvp (only if `iteration < 3`; loops back; repeatable)
+- **Three strikes** → pivot_or_kill (only if `iteration >= 3`)
+
+### beta_launch
+Launch to the beta cohort and monitor.
+- otherwise → END
+
+### pivot_or_kill
+Three iterations without green metrics: decide whether to pivot or stop.
+- **Pivot: new angle, fresh loop** → build_mvp (**requires a human decision**; loops back; repeatable)
+- **Kill it** → END (**requires a human decision**)
+
+## Compiler report
+
+No defects, no warnings. The plan is structurally sound: every phase is reachable, every path has an exit, and all declared loops have a verified exit.

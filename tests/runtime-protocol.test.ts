@@ -4,7 +4,7 @@ import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference, parseRuntimeRequest,
 } from '../src/runtime-protocol.js';
 
-test('runtime protocol parses compact projection requests', () => {
+test('runtime protocol parses compact projection requests', async () => {
   assert.deepEqual(parseRuntimeRequest({
     protocol: RUNTIME_PROTOCOL_VERSION,
     id: 1,
@@ -20,7 +20,7 @@ test('runtime protocol parses compact projection requests', () => {
   });
 });
 
-test('runtime protocol requires exact choice ids and optimistic revisions', () => {
+test('runtime protocol requires exact choice ids and optimistic revisions', async () => {
   const request = parseRuntimeRequest({
     protocol: RUNTIME_PROTOCOL_VERSION,
     id: 'decision-1',
@@ -35,7 +35,7 @@ test('runtime protocol requires exact choice ids and optimistic revisions', () =
   assert.equal(request.expectedRevision, 4);
 });
 
-test('runtime protocol does not let request payloads assert actor identity', () => {
+test('runtime protocol does not let request payloads assert actor identity', async () => {
   assert.throws(
     () => parseRuntimeRequest({
       protocol: RUNTIME_PROTOCOL_VERSION,
@@ -53,7 +53,7 @@ test('runtime protocol does not let request payloads assert actor identity', () 
   );
 });
 
-test('runtime protocol rejects unsupported versions with a correlated error', () => {
+test('runtime protocol rejects unsupported versions with a correlated error', async () => {
   assert.throws(
     () => parseRuntimeRequest({ protocol: '9.0.0', id: 'old', op: 'next' }),
     (error: unknown) =>
@@ -63,7 +63,7 @@ test('runtime protocol rejects unsupported versions with a correlated error', ()
   );
 });
 
-test('graph references bind node and choice to one immutable trajectory', () => {
+test('graph references bind node and choice to one immutable trajectory', async () => {
   const ref = graphReference('sha256:abc', 'build', 'build#0');
   assert.deepEqual(ref, {
     trajectoryHash: 'sha256:abc',

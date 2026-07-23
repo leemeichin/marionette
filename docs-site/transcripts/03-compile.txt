@@ -1,0 +1,2 @@
+wrote checkout.trajectory.json
+[32m✓[39m compiled 3 phases, 5 choices [2m(sha256:86c1623dd475…)[22m

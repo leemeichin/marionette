@@ -1,0 +1,66 @@
+/* Design tokens — see DESIGN.md. Watercolour pastel: a cool paper-white
+   default and a slate-blue dark theme; no warm/olive cast. Every fg/bg
+   pair verified ≥ 4.5:1 (AA) by build/check-contrast.mjs; edit there and
+   here together. */
+
+:root {
+  --bg: #f8fafc;
+  --bg-elev: #eef2f8;
+  --bg-code: #f1f5fa;
+  --fg: #2c3644;
+  --fg-dim: #51606f;
+  --fg-faint: #5c6a79;
+  --green: #1e7566;
+  --red: #b04a5e;
+  --yellow: #7d661f;
+  --cyan: #22708a;
+  --magenta: #8b4d9e;
+  --accent: #1e7566;
+  --focus: #145c50;
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+  --s1: 0.5rem;
+  --s2: 1rem;
+  --s3: 1.5rem;
+  --s4: 2rem;
+  --s5: 3rem;
+  --s6: 4rem;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #14171d;
+    --bg-elev: #1b202a;
+    --bg-code: #212734;
+    --fg: #dee4ee;
+    --fg-dim: #a3aebf;
+    --fg-faint: #96a1b2;
+    --green: #93d9b2;
+    --red: #f4a9b4;
+    --yellow: #e8d3a4;
+    --cyan: #a1d6e8;
+    --magenta: #d8b6ec;
+    --accent: #93d9b2;
+    --focus: #aee8ff;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14171d;
+  --bg-elev: #1b202a;
+  --bg-code: #212734;
+  --fg: #dee4ee;
+  --fg-dim: #a3aebf;
+  --fg-faint: #96a1b2;
+  --green: #93d9b2;
+  --red: #f4a9b4;
+  --yellow: #e8d3a4;
+  --cyan: #a1d6e8;
+  --magenta: #d8b6ec;
+  --accent: #93d9b2;
+  --focus: #aee8ff;
+  color-scheme: dark;
+}

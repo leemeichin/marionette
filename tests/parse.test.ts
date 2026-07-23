@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { compile } from '../src/compile.js';
 import { CODES } from '../src/types.js';
 
-function mustCompile(source: string) {
-  const result = compile(source);
+async function mustCompile(source: string) {
+  const result = await compile(source);
   assert.equal(
     result.diagnostics.filter((d) => d.severity === 'error').length, 0,
     'expected no errors, got:\n' + result.diagnostics.map((d) => `${d.code}: ${d.message}`).join('\n'),
@@ -13,8 +13,8 @@ function mustCompile(source: string) {
   return result.trajectory!;
 }
 
-test('P0.2 construct: phases, prose bodies, start divert', () => {
-  const t = mustCompile(`
+test('P0.2 construct: phases, prose bodies, start divert', async () => {
+  const t = await mustCompile(`
 -> b
 === a ===
 Unused but reachable via b.
@@ -29,8 +29,8 @@ Second line.
   assert.equal(t.nodes[1].body, 'First line.\nSecond line.');
 });
 
-test('P0.2 construct: typed VARs (number, boolean, string)', () => {
-  const t = mustCompile(`
+test('P0.2 construct: typed VARs (number, boolean, string)', async () => {
+  const t = await mustCompile(`
 VAR n = 3
 VAR flag = true
 VAR name = "mvp"
@@ -43,8 +43,8 @@ VAR name = "mvp"
   assert.deepEqual(t.variables['name'], { type: 'string', initial: 'mvp', line: 4 });
 });
 
-test('P0.2 construct: once-only (*) vs sticky (+) choices', () => {
-  const t = mustCompile(`
+test('P0.2 construct: once-only (*) vs sticky (+) choices', async () => {
+  const t = await mustCompile(`
 === a ===
 * [Once] -> END
 + [Repeat] -> END
@@ -53,8 +53,8 @@ test('P0.2 construct: once-only (*) vs sticky (+) choices', () => {
   assert.equal(t.nodes[0].choices[1].sticky, true);
 });
 
-test('P0.2 construct: gates, @human, ~loop~, diverts, END', () => {
-  const t = mustCompile(`
+test('P0.2 construct: gates, @human, ~loop~, diverts, END', async () => {
+  const t = await mustCompile(`
 VAR i = 0
 === a ===
 ~ i += 1
@@ -72,8 +72,8 @@ VAR i = 0
   assert.deepEqual(t.nodes[1].divert, { target: 'END', line: 8 });
 });
 
-test('P0.2 construct: mutations =, +=, -=', () => {
-  const t = mustCompile(`
+test('P0.2 construct: mutations =, +=, -=', async () => {
+  const t = await mustCompile(`
 VAR i = 10
 VAR s = "x"
 === a ===
@@ -85,8 +85,8 @@ VAR s = "x"
   assert.deepEqual(t.nodes[0].actions.map((a) => a.op), ['-=', '=', '=']);
 });
 
-test('P0.2 construct: comments stripped, including after content', () => {
-  const t = mustCompile(`
+test('P0.2 construct: comments stripped, including after content', async () => {
+  const t = await mustCompile(`
 // full-line comment
 === a === // trailing comment
 Body text. // this comment goes; URLs like https://x are prose, not comments
@@ -95,8 +95,8 @@ Body text. // this comment goes; URLs like https://x are prose, not comments
   assert.equal(t.nodes[0].body, 'Body text.');
 });
 
-test('P0.2 construct: metadata tags (plan-level and node-level)', () => {
-  const t = mustCompile(`
+test('P0.2 construct: metadata tags (plan-level and node-level)', async () => {
+  const t = await mustCompile(`
 # project: demo
 # draft
 === a ===
@@ -110,8 +110,8 @@ test('P0.2 construct: metadata tags (plan-level and node-level)', () => {
   assert.deepEqual(t.nodes[0].meta['tags'], ['critical']);
 });
 
-test('flexible choice part order: gate after label', () => {
-  const t = mustCompile(`
+test('flexible choice part order: gate after label', async () => {
+  const t = await mustCompile(`
 VAR ok = true
 === a ===
 * [Go] {ok} -> END
@@ -120,8 +120,8 @@ VAR ok = true
   assert.equal(t.nodes[0].choices[0].gate?.source, 'ok');
 });
 
-test('parse errors carry line numbers and suggestions', () => {
-  const result = compile(`
+test('parse errors carry line numbers and suggestions', async () => {
+  const result = await compile(`
 === a ===
 * [No divert here]
 `);
@@ -131,8 +131,8 @@ test('parse errors carry line numbers and suggestions', () => {
   assert.ok(err!.suggestion);
 });
 
-test('choice without label is rejected', () => {
-  const result = compile(`
+test('choice without label is rejected', async () => {
+  const result = await compile(`
 === a ===
 * -> END
 `);
