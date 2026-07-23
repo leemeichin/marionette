@@ -11,6 +11,9 @@ Phase 2 adds two sibling contracts:
   (`marionette brief --json`): the ingestion surface executors act on.
 - [`conformance/`](./conformance/README.md) — runtime-agnostic walk scripts
   any walker implementation must pass.
+- [`runtime-protocol.schema.json`](./runtime-protocol.schema.json) — compact
+  NDJSON requests for the local runtime process. Principal identity is bound
+  by the connection and intentionally absent from request bodies.
 
 ## Top-level shape
 

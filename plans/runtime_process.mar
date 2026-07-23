@@ -1,0 +1,41 @@
+// Dogfood trajectory: turn Marionette's existing walker into a local runtime
+// process with a compact, event-oriented IPC boundary for agent hosts.
+# project: marionette-runtime-process
+# delivery: single-branch
+# report: at-end
+
+=== protocol_contract ===
+The runtime protocol is a small, versioned command/query/event contract that
+does not depend on MCP or change the DSL. Its schemas and fixtures define
+compact projections, exact choice references, revisions and idempotency.
+* [Protocol contract tests pass] -> command_engine
+
+=== command_engine ===
+The existing walker is wrapped by an immutable command processor that binds
+principal roles, rejects stale revisions and returns lifecycle events plus the
+next compact projection without duplicating graph semantics.
+* [Command engine tests pass] -> event_persistence
+
+=== event_persistence ===
+Runtime events are durably appended as bounded JSONL records, compiled graphs
+are archived by content hash, and state snapshots are written atomically so a
+run can be reopened and its historical graph references resolved.
+* [Persistence and replay tests pass] -> stdio_runtime
+
+=== stdio_runtime ===
+A single-writer runtime process accepts newline-delimited JSON commands over
+stdio, emits correlated responses and lifecycle events, and keeps diagnostics
+on stderr so an agent host can communicate without context-heavy tooling.
+* [Stdio integration tests pass] -> cli_and_docs
+
+=== cli_and_docs ===
+The CLI exposes the runtime process and documentation explains ownership,
+framing, compact context profiles, identity boundaries and how a host should
+consume events without injecting the whole stream into model context.
+* [CLI surface and runtime guide are complete] -> verification
+
+=== verification ===
+The TypeScript check, complete test suite, existing walker conformance cases
+and a representative end-to-end runtime traversal all pass without changing
+the Marionette DSL or weakening current refusal guarantees.
+* [Full verification passes] -> END

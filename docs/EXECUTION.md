@@ -12,6 +12,11 @@ native extension, a Claude session running the
 [`marionette-execution` skill](../skills/marionette-execution/SKILL.md), and a
 CI job all consume the same contract.
 
+For a long-lived agent host, [`marionette start`](RUNTIME.md) exposes the
+same walker as a compact local NDJSON process with revisions, idempotency,
+event replay and principal-bound human checkpoints. It is an optional runtime
+surface; it does not change this CLI loop or the DSL.
+
 ## The executor loop
 
 ```

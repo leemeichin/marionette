@@ -1,0 +1,79 @@
+{
+  "hash": "sha256:038e9db48db1f04cf45d3f5bb1a7f6a56de9a1d1712d0b187e5e0e6acd0385e4",
+  "status": "completed",
+  "current": "END",
+  "variables": {},
+  "taken": [
+    "protocol_contract#0",
+    "command_engine#0",
+    "event_persistence#0",
+    "stdio_runtime#0",
+    "cli_and_docs#0",
+    "verification#0"
+  ],
+  "log": [
+    {
+      "at": "2026-07-23T18:43:08.705Z",
+      "actor": "system",
+      "from": null,
+      "choice": null,
+      "label": null,
+      "rationale": "plan started",
+      "to": "protocol_contract"
+    },
+    {
+      "at": "2026-07-23T18:45:05.619Z",
+      "actor": "agent",
+      "from": "protocol_contract",
+      "choice": "protocol_contract#0",
+      "label": "Protocol contract tests pass",
+      "rationale": "Runtime protocol v0.1 types, strict parser, graph references and JSON Schema added; TypeScript check and 5 focused contract tests pass, including rejection of actor spoofing.",
+      "to": "command_engine"
+    },
+    {
+      "at": "2026-07-23T18:47:12.265Z",
+      "actor": "agent",
+      "from": "command_engine",
+      "choice": "command_engine#0",
+      "label": "Command engine tests pass",
+      "rationale": "Immutable runtime command processor added with principal-bound human authority, exact choice IDs, optimistic revisions, idempotent retries, graph-linked lifecycle events and signal/work/debug projections; TypeScript check and 10 focused tests pass.",
+      "to": "event_persistence"
+    },
+    {
+      "at": "2026-07-23T18:49:05.289Z",
+      "actor": "agent",
+      "from": "event_persistence",
+      "choice": "event_persistence#0",
+      "label": "Persistence and replay tests pass",
+      "rationale": "Added a single-writer file store with 64 KiB bounded JSONL events, fsynced atomic snapshots, hash-addressed trajectory archives, journal replay/repair, persisted idempotency and stale disk revision checks; TypeScript check and 15 focused tests pass.",
+      "to": "stdio_runtime"
+    },
+    {
+      "at": "2026-07-23T18:50:22.724Z",
+      "actor": "agent",
+      "from": "stdio_runtime",
+      "choice": "stdio_runtime#0",
+      "label": "Stdio integration tests pass",
+      "rationale": "Added a handshake-gated single-writer NDJSON service with 64 KiB request bounds, correlated compact responses, event notifications, clean stdout/stderr separation and durable commits; TypeScript check and 17 focused tests including stdio integration pass.",
+      "to": "cli_and_docs"
+    },
+    {
+      "at": "2026-07-23T18:54:03.161Z",
+      "actor": "agent",
+      "from": "cli_and_docs",
+      "choice": "cli_and_docs#0",
+      "label": "CLI surface and runtime guide are complete",
+      "rationale": "CLI now exposes create/resume runtime mode with principal binding and clean stdio; runtime guide documents NDJSON framing, compact profiles, context filtering, retries, graph-linked records and recovery, with README/spec/execution links. Build and 19 focused tests pass.",
+      "to": "verification"
+    },
+    {
+      "at": "2026-07-23T18:55:13.282Z",
+      "actor": "agent",
+      "from": "verification",
+      "choice": "verification#0",
+      "label": "Full verification passes",
+      "rationale": "Full verification passed: TypeScript check, production build, strict plan validation, JSON parsing, git diff hygiene, compiled-bin NDJSON traversal, and all 83 tests including existing walker conformance and new runtime coverage.",
+      "to": "END"
+    }
+  ]
+}

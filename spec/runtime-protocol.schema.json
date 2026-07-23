@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/leemeichin/marionette/spec/runtime-protocol.schema.json",
+  "title": "Marionette local runtime protocol v0.1",
+  "description": "Compact newline-delimited requests accepted by `marionette runtime`. The connection binds principal identity; actor fields are intentionally absent.",
+  "oneOf": [
+    { "$ref": "#/$defs/initialize" },
+    { "$ref": "#/$defs/next" },
+    { "$ref": "#/$defs/choose" },
+    { "$ref": "#/$defs/advance" },
+    { "$ref": "#/$defs/record" },
+    { "$ref": "#/$defs/events" }
+  ],
+  "$defs": {
+    "base": {
+      "type": "object",
+      "required": ["protocol", "id", "op"],
+      "properties": {
+        "protocol": { "const": "0.1.0" },
+        "id": { "type": ["string", "number"] },
+        "op": { "type": "string" }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxItems": { "type": "integer", "minimum": 0 },
+        "maxBodyChars": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "projection": {
+      "properties": {
+        "profile": { "enum": ["signal", "work", "debug"] },
+        "budget": { "$ref": "#/$defs/budget" }
+      }
+    },
+    "initialize": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "op": { "const": "initialize" },
+            "client": {
+              "type": "object",
+              "required": ["name", "version"],
+              "additionalProperties": false,
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "version": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "required": ["client"],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "next": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        { "$ref": "#/$defs/projection" },
+        {
+          "properties": { "op": { "const": "next" } },
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "write": {
+      "properties": {
+        "rationale": { "type": "string", "minLength": 1 },
+        "expectedRevision": { "type": "integer", "minimum": 0 },
+        "idempotencyKey": { "type": "string", "minLength": 1 }
+      },
+      "required": ["rationale", "expectedRevision"]
+    },
+    "choose": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        { "$ref": "#/$defs/write" },
+        { "$ref": "#/$defs/projection" },
+        {
+          "properties": {
+            "op": { "const": "choose" },
+            "choiceId": { "type": "string", "minLength": 1 },
+            "evidence": { "type": "array" }
+          },
+          "required": ["choiceId"],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "advance": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        { "$ref": "#/$defs/write" },
+        { "$ref": "#/$defs/projection" },
+        {
+          "properties": {
+            "op": { "const": "advance" },
+            "evidence": { "type": "array" }
+          },
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "record": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "op": { "const": "record" },
+            "kind": { "type": "string", "minLength": 1 },
+            "summary": { "type": "string", "minLength": 1 },
+            "rationale": { "type": "string", "minLength": 1 },
+            "expectedRevision": { "type": "integer", "minimum": 0 },
+            "idempotencyKey": { "type": "string", "minLength": 1 },
+            "refs": { "type": "array" }
+          },
+          "required": ["kind", "summary", "expectedRevision"],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "events": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "op": { "const": "events" },
+            "after": { "type": "integer", "minimum": 0 },
+            "limit": { "type": "integer", "minimum": 0 }
+          },
+          "unevaluatedProperties": false
+        }
+      ]
+    }
+  }
+}
