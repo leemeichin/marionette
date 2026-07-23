@@ -25,6 +25,7 @@ $ marionette state init plan.mar      # → plan.state.json bound by content has
 $ marionette brief plan.mar --json    # → work packet: what an executor does next
 $ marionette state choose plan.mar 1 --actor agent --rationale "metrics red, iterate"
 $ marionette state rebind plan.mar    # migrate state onto an edited plan, keeping the log
+$ marionette start plan.mar --run agent-1  # start a local agent runtime
 ```
 
 ## Getting started
@@ -52,12 +53,14 @@ Full install options and the dogfood kick-off protocol: [`docs/GETTING-STARTED.m
 - `docs/PRD.md` — product requirements document
 - `docs/DSL.md` — DSL v0 language reference
 - `docs/EXECUTION.md` — Phase 2: the executor loop, work packet, refs, delivery config, escalation
+- `docs/RUNTIME.md` — local start/stop lifecycle and compact NDJSON protocol
 - `docs/decisions/` — ADRs (0001: Ink influence-only; 0002: TypeScript now, contract-first portability)
 - `skills/marionette-authoring/` — the P0.5 authoring skill: NL notes → validated `.mar`
 - `skills/marionette-execution/` — the executor skill: brief → work → recorded decision (both installable as a plugin)
 - `docs/GETTING-STARTED.md` — install the CLI + skills, and the dogfood kick-off protocol
 - `docs/PARKING.md` — out-of-scope ideas parking lot
 - `spec/` — the contracts: trajectory JSON, brief (work packet), walker conformance suite
+- `spec/runtime-protocol.schema.json` — versioned local runtime request contract
 - `src/` — compiler, validators, gate analysis, renderer, summarizer, state engine, brief, CLI
 - `plans/` — dogfood: Marionette's own development trajectory (G5)
 - `examples/`, `tests/` — worked examples (incl. the Phase 2 baseline), golden files, conformance runner
