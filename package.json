@@ -12,7 +12,8 @@
   "files": [
     "bin",
     "dist",
-    "spec"
+    "spec",
+    "skills"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
