@@ -21,7 +21,8 @@ Usage:
   marionette state show    <plan.mar|.json> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
-  marionette state rebind  <plan.mar|.json> [--state f]         Migrate state onto an edited plan
+  marionette state rebind  <plan.mar|.json> [--actor <name>] [--rationale <text>] [--state f]
+                           Migrate state onto an edited plan; the amendment is logged (G4)
 
 Options:
   -o, --out <file>    Output file ('-' for stdout; default varies by command)

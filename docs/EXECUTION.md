@@ -176,13 +176,24 @@ The formal decision on OQ2 is itself `@human`-gated in the dogfood plan
 Plans change mid-flight. Any semantic edit changes the content hash, and every
 walk command then refuses with a drift error (exit 3). The sanctioned paths:
 
-- `marionette state rebind <plan>` — migrate the existing state onto the
-  edited plan, *keeping the decision log*: taken-choice ids that vanished are
-  dropped (reported), removed variables dropped, new variables added at their
-  initials, type-changed variables reset (reported). Refused
-  (`migration-blocked`) when the current phase no longer exists — that
-  decision needs a human.
+- `marionette state rebind <plan> [--actor <name>] [--rationale <text>]` —
+  migrate the existing state onto the edited plan, *keeping the decision
+  log*: taken-choice ids that vanished are dropped (reported), removed
+  variables dropped, new variables added at their initials, type-changed
+  variables reset (reported). The migration itself is appended to the
+  decision log as an amendment entry — actor, timestamp, rationale, and the
+  old → new graph hashes — so plan evolution carries the same G4
+  attribution as any branch. Refused (`migration-blocked`) when the current
+  phase no longer exists — that decision needs a human.
 - `marionette state init --force` — start over (history discarded).
+
+An executor never edits the plan itself: it *proposes* an amendment (a
+validated draft plus the diff and why the graph can't absorb the work),
+escalates in-band like an `@human` gate, and applies it only on the owner's
+explicit approval, recording them as the rebind's `--actor` with their
+rationale. The `marionette-execution` skill carries the full protocol,
+including the park-don't-spin rule for standing service phases (`# wake:`,
+see DSL.md).
 
 ## Conformance
 

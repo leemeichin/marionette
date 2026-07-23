@@ -81,16 +81,64 @@ the plan changed underneath the state: stop and surface the drift message;
 - **Missing context is a question, not a licence to infer.** If the phase
   body names work whose specifics you'd have to guess ("rebuild the flow" —
   which flow, to what spec?) and neither the body, the plan's intent, nor
-  `node.refs` supplies them, stop and ask the plan owner for the missing
-  source before starting — in-band, like an `@human` escalation, stating
-  exactly what's unspecified. Record the answer where it survives: as the
-  decision rationale, or better, ask the owner to attach it to the plan
-  (`# ref:`/`# github:issue:` on the phase, or `marionette sync link`) so
-  the next traversal doesn't re-ask. Never substitute your own reading of
-  under-specified work for the owner's — a wrong guess executed
+  `node.refs` supplies them, resolve it in this order. First, discover:
+  search with your own tools — the plan's tracker (`# github:repo:`,
+  `# jira:site:` scope it), the repo, the linked docs — for the source the
+  phase implies; a found source gets linked into the plan
+  (`marionette sync link`, or ask the owner to add a `# ref:`). Only when
+  discovery comes up empty, stop and ask the plan owner — in-band, like an
+  `@human` escalation, stating exactly what's unspecified — and record the
+  answer where it survives: the decision rationale, or better, a ref on the
+  phase so the next traversal doesn't re-ask. Never substitute your own
+  reading of under-specified work for the owner's — a wrong guess executed
   confidently is worse than a paused phase.
 - **Honest rationales beat optimistic ones.** If the evidence for a choice
   is thin, that is what loop edges and `@human` escapes are for.
+
+## Proposing plan amendments
+
+The plan is not frozen — it is gated. When traversal surfaces novel work no
+phase covers and no queue absorbs, do not force it into the nearest
+rationale and do not edit the plan yourself. Propose an amendment:
+
+1. **Draft and prove it.** Edit a copy of the `.mar`;
+   `marionette validate draft.mar --strict` must pass, and the current
+   phase must survive the edit (a deleted current phase blocks migration).
+2. **Escalate in-band**, exactly like an `@human` gate: show the diff, the
+   novel work it admits, and why the current graph cannot absorb it.
+3. **On explicit approval**, apply the edit and record the amendment with
+   the owner's attribution:
+   `marionette state rebind plan.mar --actor <owner> --rationale "<their words>"`.
+   The rebind appends a decision-log entry carrying the old and new graph
+   hashes — the amendment joins the audit trail, not a side channel.
+4. **Silence or ambiguity is not approval**: the un-amended plan stays in
+   force and the novel work stays unstarted.
+
+Mechanical ref edits have their own doors and need no proposal:
+`marionette sync link` / `sync bind` recompile-check, rebind automatically,
+and log as actor `sync`.
+
+## Service phases: park, don't spin
+
+Some phases are standing services — "investigate and fix bugs from the
+queue" — an evidence-gated sticky `~loop~` edge over an external queue
+(tracker issues, alerts, review requests), with a `# wake:` tag naming what
+re-activates it. Protocol:
+
+- **Work available:** do one unit, record the loop choice with the unit as
+  the rationale (the issue id, the alert), re-brief, repeat.
+- **Queue empty:** do not spin, poll in a tight loop, or take an exit whose
+  claim is false. Park: arrange the watch with your platform's own tools
+  (webhook subscription, scheduled check-in) matching the `# wake:`
+  condition, report "parked — watching <condition>", and end your turn.
+  The state file keeps the phase current; any later session resumes with
+  `marionette brief`.
+- **On wake:** re-brief and work the queue. Waking is the harness's job,
+  never the walker's — marionette holds the map; your platform holds the
+  alarm clock.
+- **Exits stay evidence:** "queue empty" earns the exit only when it is
+  actually empty and no more work is expected — or a human retires the
+  service at its `@human` door.
 
 ## Portioning and reporting (`delivery`)
 

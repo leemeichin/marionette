@@ -171,13 +171,22 @@ test('rebind: migrates state across a plan edit, keeping the log', async () => {
   )).trajectory!;
   assert.notEqual(v1.hash, v2.hash);
 
-  const report = rebindState(v2, state);
+  const report = rebindState(v2, state, { actor: 'lee', rationale: 'scope grew: hold door added', at: AT });
   assert.equal(state.hash, v2.hash);
   assert.deepEqual(report.droppedTaken, ['a#0']);
   assert.deepEqual(Object.keys(report.droppedVariables), ['n']);
   assert.deepEqual(report.addedVariables, { added: true });
-  assert.equal(state.log.length, 2, 'decision log survives migration');
+  assert.equal(state.log.length, 3, 'decision log survives migration and records the amendment');
+  const amendment = state.log[2];
+  assert.equal(amendment.actor, 'lee');
+  assert.equal(amendment.rationale, 'scope grew: hold door added');
+  assert.match(amendment.label!, /^plan rebound sha256:/);
+  assert.equal(amendment.to, 'b');
   assert.equal(state.current, 'b');
+
+  // Rebinding onto the already-bound plan is a no-op: no amendment entry.
+  rebindState(v2, state, { actor: 'lee', at: AT });
+  assert.equal(state.log.length, 3, 'no-op rebind logs nothing');
 });
 
 test('rebind: refuses when the current phase no longer exists', async () => {

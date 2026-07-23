@@ -9,7 +9,7 @@ export { renderMermaid, type RenderOptions } from './render.js';
 export { summarize, type SummarizeOptions } from './summarize.js';
 export {
   initState, bindState, frontier, takeChoice, advance, visitedPath,
-  parseState, serializeState, rebindState, DriftError, WalkError,
+  parseState, serializeState, rebindState, type RebindOptions, DriftError, WalkError,
   type AvailableChoice, type TakeOptions, type WalkErrorCode, type MigrationReport,
 } from './state.js';
 export {

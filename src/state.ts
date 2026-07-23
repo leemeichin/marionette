@@ -261,7 +261,19 @@ export interface MigrationReport {
  * sanctioned alternative to `state init --force` that keeps the decision log.
  * Refuses when the current node no longer exists — that needs a human call.
  */
-export function rebindState(trajectory: Trajectory, state: PlanState): MigrationReport {
+export interface RebindOptions {
+  /** Who authorised the plan amendment this rebind applies (G4 attribution). */
+  actor?: string;
+  /** Why the plan changed — recorded in the decision log alongside the hashes. */
+  rationale?: string | null;
+  at?: string;
+}
+
+export function rebindState(
+  trajectory: Trajectory,
+  state: PlanState,
+  options: RebindOptions = {},
+): MigrationReport {
   const report: MigrationReport = {
     fromHash: state.hash,
     toHash: trajectory.hash,
@@ -308,6 +320,18 @@ export function rebindState(trajectory: Trajectory, state: PlanState): Migration
   )];
 
   state.hash = trajectory.hash;
+
+  // A plan amendment is a decision like any branch (G4): log who applied it,
+  // against which graph, and why — not just an ephemeral migration report.
+  state.log.push({
+    at: options.at ?? new Date().toISOString(),
+    actor: options.actor ?? 'system',
+    from: null,
+    choice: null,
+    label: `plan rebound ${report.fromHash.slice(0, 19)}… → ${report.toHash.slice(0, 19)}…`,
+    to: state.current,
+    rationale: options.rationale ?? null,
+  });
   return report;
 }
 

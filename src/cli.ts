@@ -89,7 +89,8 @@ Usage:
   marionette state show    <plan.mar|.json> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
-  marionette state rebind  <plan.mar|.json> [--state f]         Migrate state onto an edited plan
+  marionette state rebind  <plan.mar|.json> [--actor <name>] [--rationale <text>] [--state f]
+                           Migrate state onto an edited plan; the amendment is logged (G4)
 
 Options:
   -o, --out <file>    Output file ('-' for stdout; default varies by command)
@@ -473,7 +474,12 @@ export async function run(argv: string[]): Promise<number> {
           : `linked ${positional[1]} → ${positional[2]} in ${file}`}\n`);
         if (existsSync(sf)) {
           const state = parseState(readFileSync(sf, 'utf8'));
-          const report = rebindState(recompiled.trajectory, state);
+          const report = rebindState(recompiled.trajectory, state, {
+            actor: 'sync',
+            rationale: sub === 'bind'
+              ? `bound plan to tracker "${flags['tracker']}"`
+              : `linked ${positional[1]} → ${positional[2]}`,
+          });
           if (report.fromHash !== report.toHash) {
             writeFileSync(sf, serializeState(state));
             process.stderr.write(err.dim(`  state rebound ${report.fromHash.slice(0, 19)}… → ${report.toHash.slice(0, 19)}…\n`));
@@ -638,7 +644,10 @@ export async function run(argv: string[]): Promise<number> {
             throw new UsageError(`no state file at ${sf}; run "marionette state init" first`);
           }
           const state = parseState(readFileSync(sf, 'utf8'));
-          const report = rebindState(trajectory, state);
+          const report = rebindState(trajectory, state, {
+            actor: typeof flags['actor'] === 'string' ? flags['actor'] : 'system',
+            rationale: typeof flags['rationale'] === 'string' ? flags['rationale'] : null,
+          });
           if (report.fromHash === report.toHash) {
             process.stderr.write('state is already bound to this plan; nothing to migrate\n');
             return 0;
