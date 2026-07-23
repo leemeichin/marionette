@@ -1,14 +1,15 @@
 {
   "hash": "sha256:4275ff5eb0b139495a611d08685511824278041e8040b775f0b05b0fdb02751c",
   "status": "active",
-  "current": "phase2_runtime",
+  "current": "escalation_protocol",
   "variables": {
     "skill_revisions": 1
   },
   "taken": [
     "phase1_toolchain#0",
     "authoring_skill#0",
-    "dogfood_gate#0"
+    "dogfood_gate#0",
+    "phase2_runtime#0"
   ],
   "log": [
     {
@@ -46,6 +47,15 @@
       "label": "Phase 1 exit approved",
       "rationale": "Phase 1 exit approved: 36/36 first-pass clean on the compile metric (Wilson LB 90.4%) and user directed Phase 2 (ingestion & execution) to begin",
       "to": "phase2_runtime"
+    },
+    {
+      "at": "2026-07-23T15:37:20.386Z",
+      "actor": "agent",
+      "from": "phase2_runtime",
+      "choice": "phase2_runtime#0",
+      "label": "Walker passes conformance tests",
+      "rationale": "Conformance suite (spec/conformance) merged to main in PR #9: walker passes all cases incl. the 44-step baseline traversal; refusal codes, state-unchanged-on-refusal and one-log-entry-per-step verified in CI",
+      "to": "escalation_protocol"
     }
   ]
 }
