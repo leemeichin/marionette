@@ -125,6 +125,8 @@ $ marionette brief plan.mar --json    # → work packet: what an executor does n
 $ marionette state choose plan.mar 1 --actor agent --rationale "metrics red, iterate"
 $ marionette state rebind plan.mar    # migrate state onto an edited plan, keeping the log
 $ marionette start plan.mar --run agent-1  # start a local agent runtime
+$ marionette import issues.json -o plan.mar  # scaffold a plan from tracker issues
+$ marionette sync plan.mar --json     # → manifest: what your tracker should show
 ```
 
 Humans normally don't hand-write the DSL: the bundled **authoring skill**
@@ -163,6 +165,7 @@ end-to-end usage guides — deployable to Cloudflare with `wrangler deploy`
 - `docs/PRD.md` — product requirements document
 - `docs/DSL.md` — DSL v0 language reference
 - `docs/EXECUTION.md` — Phase 2: the executor loop, work packet, refs, delivery config, escalation
+- `docs/SYNC.md` — tracker import/export: `marionette import` and the `sync` manifest (Jira/Linear/GitHub)
 - `docs/RUNTIME.md` — local start/stop lifecycle and compact NDJSON protocol
 - `docs/decisions/` — ADRs (0001: Ink influence-only; 0002: TypeScript now, contract-first portability)
 - `skills/marionette-authoring/` — the P0.5 authoring skill: NL notes → validated `.mar`
@@ -197,5 +200,9 @@ single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
 checks, idempotent writes and an append-only journal — the pi agent
 integration builds on it next (issue #4, OQ2 escalation channel).
-Dogfooding is live: `plans/marionette.mar` tracks this project and CI
-re-validates plan + state drift on every push.
+Tracker integration landed connection-free: `marionette import` ingests a
+Jira/Linear/GitHub backlog into a plan, and `marionette sync` computes the
+manifest an executor applies with its own tracker tools
+([`docs/SYNC.md`](docs/SYNC.md)). Dogfooding is live:
+`plans/marionette.mar` tracks this project and CI re-validates plan +
+state drift on every push.

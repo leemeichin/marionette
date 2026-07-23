@@ -147,6 +147,7 @@ export const CODES = {
   LOOP_ONCE_ONLY: 'MAR017',
   MALFORMED_REF: 'MAR018',
   UNKNOWN_DELIVERY: 'MAR019',
+  UNKNOWN_TRACKER: 'MAR020',
 } as const;
 
 /** Decision log entry (G4: every taken branch records actor, timestamp, rationale). */

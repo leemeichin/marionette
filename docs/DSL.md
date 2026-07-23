@@ -67,9 +67,16 @@ Warnings (review, or fail with `--strict`): constant-false gates (MAR011),
 beyond constant expressions and monotonic counters; the compiler never claims
 "verified" for gates it cannot decide), unused variables (MAR016), once-only
 loop edges (MAR017), malformed external refs (MAR018), unknown delivery/report
-values (MAR019).
+values (MAR019), unknown tracker values (MAR020).
 
 ## Well-known metadata namespaces (Phase 2)
+
+All metadata rides on one syntax — `# key: value` tags, plan-level in the
+preamble, node-level inside a phase (the construct table above). The
+namespaces below are the ones the compiler *normalises* (into structured
+`refs`, the delivery config, the tracker binding and the plan's intent) and
+validates; every other namespace passes through untouched as extension
+metadata.
 
 Two plain keys anchor the plan to its origin, so the file never operates
 in a vacuum — `summarize` leads with them and the executor's brief carries
@@ -86,25 +93,29 @@ containing only """.
 ```
 
 Any metadata key accepts the fenced form (`# key: """` … `"""`); short
-values keep the one-line form, and repeated keys accumulate in order
-either way. An unterminated fence is a parse error (`MAR001`).
+values keep the one-line form. An unterminated fence is a parse error
+(`MAR001`).
 
-The compiler normalises these namespaces into structured `refs` and the
-executor's delivery config — see [`EXECUTION.md`](EXECUTION.md) for the full
-reference:
+Two conventions apply uniformly: repeated occurrences of a key accumulate
+into a list, and wherever a single value is needed (project, tracker,
+delivery, report, context tags) the **last occurrence wins**.
 
-```
-# github:repo: acme/platform        # jira:site: https://acme.atlassian.net
-# github:issue: 22                  # jira: PROJ-123, PROJ-124
-# github:pr: other/repo#9           # linear:workspace: acme
-# ref: https://wiki.acme.dev/brief  # linear: ENG-42
-
-# delivery: pr-per-phase | branch-per-phase | single-pr | single-branch | none
-# delivery:branch: replatform/{phase}
-# report: per-phase | at-checkpoints | at-end
-```
-
-All other namespaces pass through untouched as extension metadata.
+| Tag | Level | Meaning | Validated | Reference |
+|---|---|---|---|---|
+| `# project:` | plan | display name used in briefs, summaries and manifests | — | — |
+| `# summary:` | plan | executive abstract; leads `summarize`, carried in the brief as `plan.intent` | — | [`EXECUTION.md`](EXECUTION.md) |
+| `# prompt:` | plan | the original ask, verbatim (usually fenced); carried as `plan.intent` | — | [`EXECUTION.md`](EXECUTION.md) |
+| `# tracker:` | **plan only** | which tracker `marionette sync` binds to: `github` \| `jira` \| `linear`. Node-level tags have no effect and warn. | MAR020 | [`SYNC.md`](SYNC.md) |
+| `# github:repo:` | plan (node may override for its refs) | GitHub context, e.g. `acme/platform`; also a `repo` ref | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
+| `# github:issue:` · `# github:pr:` | node or plan | issue/PR refs: `22`, `other/repo#9`, comma lists | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
+| `# jira:site:` | plan (node override) | Jira site URL context | — | [`EXECUTION.md`](EXECUTION.md) |
+| `# jira:` | node or plan | issue keys: `PROJ-123`, comma lists | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
+| `# linear:workspace:` | plan (node override) | Linear workspace slug context | — | [`EXECUTION.md`](EXECUTION.md) |
+| `# linear:` | node or plan | issue ids: `ENG-42`, comma lists | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
+| `# ref:` | node or plan | generic http(s) link | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
+| `# delivery:` | plan default, node override | `pr-per-phase` \| `branch-per-phase` \| `single-pr` \| `single-branch` \| `none` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
+| `# delivery:branch:` | plan default, node override | branch template; `{phase}` → node id | — | [`EXECUTION.md`](EXECUTION.md) |
+| `# report:` | plan default, node override | `per-phase` \| `at-checkpoints` \| `at-end` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
 
 ## Loop verification
 

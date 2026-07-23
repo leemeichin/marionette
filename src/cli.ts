@@ -1,5 +1,5 @@
 /**
- * marionette CLI: compile | validate | render | summarize | brief | state | runtime.
+ * marionette CLI: compile | validate | render | summarize | brief | sync | import | state | runtime.
  *
  * Exit codes (CI-suitable):
  *   0  success (warnings allowed unless --strict)
@@ -21,6 +21,15 @@ import {
   DriftError, WalkError, advance, bindState, frontier, initState, parseState,
   rebindState, serializeState, takeChoice,
 } from './state.js';
+import {
+  ImportError, parseImportSpec, scaffoldPlan, type ImportMode,
+} from './scaffold.js';
+import {
+  SyncEditError, TRACKERS, bindTrackerInSource, buildSyncManifest,
+  linkNodeInSource, renderSyncManifest, resolveTracker,
+  syncFileFor, type TrackerProvider,
+} from './sync.js';
+import { loadSidecar, saveSidecar } from './sync-store.js';
 import { RuntimeService, serveRuntimeLines } from './runtime-process.js';
 import {
   RuntimeStoreError, claimRuntimeProcess, initializeRuntimeStore, loadRuntimeStore,
@@ -31,8 +40,9 @@ import type { RuntimePrincipal, RuntimeRole } from './runtime-protocol.js';
 const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
-const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'start', 'stop', 'state', 'help', 'version'];
+const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'sync', 'import', 'start', 'stop', 'state', 'help', 'version'];
 const STATE_SUBCOMMANDS = ['init', 'show', 'choose', 'advance', 'rebind'];
+const SYNC_SUBCOMMANDS = ['status', 'bind', 'link', 'mark'];
 
 function readTextFile(file: string, what = 'plan'): string {
   try {
@@ -61,6 +71,11 @@ Usage:
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
+  marionette sync      <plan.mar|.json> [--json]                Tracker sync manifest (see docs/SYNC.md)
+  marionette sync bind <plan.mar> --tracker <github|jira|linear>   Remember the plan's tracker
+  marionette sync link <plan.mar> <phase> <issue-id>            Record a created issue in the plan
+  marionette sync mark <plan.mar|.json> [--cursor n]            Advance the applied-audit cursor
+  marionette import    <issues.json> [--mode queue|phases] [-o out.mar]   Scaffold a plan from issues
   marionette start     <plan.mar|.json> --run <id> [--store dir]
                        [--principal id] [--role agent|human] [--principal-uri uri]
   marionette stop      <plan.mar|.json> --run <id> [--store dir]
@@ -79,6 +94,9 @@ Options:
   --force             Overwrite an existing state file on init
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
   --rationale <text>  Why the step was taken (required for choices)
+  --tracker <name>    Tracker to bind/link against: github, jira or linear
+  --cursor <n>        Decision-log position to mark as synced (default: all of it)
+  --mode <mode>       Import shape: queue (one loop phase) or phases (one per issue)
   --run <id>           Run id (required by start/stop)
   --store <dir>        Run store (default: <plan-dir>/.marionette)
   --create             Start a new run; error if it already exists
@@ -97,6 +115,7 @@ function parseArgs(argv: string[]): Args {
   const flags: Record<string, string | boolean> = {};
   const takesValue = new Set([
     '-o', '--out', '--state', '--actor', '--rationale',
+    '--tracker', '--cursor', '--mode',
     '--run', '--store', '--principal', '--role', '--principal-uri',
   ]);
   for (let i = 0; i < argv.length; i++) {
@@ -300,6 +319,125 @@ export async function run(argv: string[]): Promise<number> {
         return 0;
       }
 
+      case 'sync': {
+        const sub = SYNC_SUBCOMMANDS.includes(rest[0]) ? rest[0] : 'status';
+        const { positional, flags } = parseArgs(SYNC_SUBCOMMANDS.includes(rest[0]) ? rest.slice(1) : rest);
+        const file = positional[0];
+        if (!file) throw new UsageError(`sync ${sub}: missing <plan.mar${sub === 'bind' || sub === 'link' ? '>' : '|.json>'}`);
+        const { trajectory, ok, diagnostics, source } = await readSource(file);
+        if (!ok) {
+          process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
+          process.stderr.write('refusing to sync a plan that does not validate\n');
+          return 1;
+        }
+        const sf = stateFileFor(file, flags);
+        const syncFile = syncFileFor(file);
+
+        if (sub === 'status') {
+          const state = existsSync(sf) ? loadState(trajectory, sf) : null;
+          const cursor = loadSidecar(syncFile)?.cursor ?? 0;
+          const manifest = buildSyncManifest(trajectory, state, { file, cursor });
+          output(flags, null, flags['json']
+            ? JSON.stringify(manifest, null, 2) + '\n'
+            : renderSyncManifest(manifest, out));
+          return 0;
+        }
+
+        if (sub === 'mark') {
+          const state = loadState(trajectory, sf);
+          const cursor = typeof flags['cursor'] === 'string' ? Number(flags['cursor']) : state.log.length;
+          if (!Number.isInteger(cursor) || cursor < 0 || cursor > state.log.length) {
+            throw new UsageError(`sync mark: --cursor must be an integer in 0..${state.log.length} (the decision log length)`);
+          }
+          saveSidecar(syncFile, {
+            spec: '0.1.0', cursor, hash: trajectory.hash, updated: new Date().toISOString(),
+          });
+          process.stderr.write(err.green('✓') + ` marked ${cursor}/${state.log.length} decision-log entries as synced (${syncFile})\n`);
+          return 0;
+        }
+
+        // bind / link edit the plan source mechanically, then rebind live state.
+        if (!source || !file.endsWith('.mar')) {
+          throw new UsageError(`sync ${sub}: edits the plan source; pass the .mar file, not compiled JSON`);
+        }
+
+        let edited: string;
+        if (sub === 'bind') {
+          const tracker = flags['tracker'];
+          if (typeof tracker !== 'string' || !(TRACKERS as readonly string[]).includes(tracker.toLowerCase())) {
+            throw new UsageError(`sync bind: pass --tracker <${TRACKERS.join('|')}>`);
+          }
+          edited = bindTrackerInSource(source, tracker.toLowerCase() as TrackerProvider);
+        } else {
+          const [, node, id] = positional;
+          if (!node || !id) throw new UsageError('sync link: expected "sync link <plan.mar> <phase> <issue-id>"');
+          const provider = typeof flags['tracker'] === 'string'
+            ? flags['tracker'].toLowerCase() as TrackerProvider
+            : resolveTracker(trajectory).binding?.provider;
+          if (!provider || !(TRACKERS as readonly string[]).includes(provider)) {
+            throw new UsageError('sync link: no tracker bound to this plan; run "marionette sync bind" first or pass --tracker');
+          }
+          const target = trajectory.nodes.find((n) => n.id === node);
+          if (!target) throw new UsageError(`sync link: no phase "${node}" in ${file}`);
+          const cleaned = id.replace(/^#/, '');
+          const existing = target.refs.some((r) =>
+            r.provider === provider && r.kind === 'issue' &&
+            (r.id.toUpperCase() === cleaned.toUpperCase() || r.id.split('#').pop() === cleaned));
+          if (existing) {
+            process.stderr.write(`· ${node} already links ${provider} issue ${id}; nothing to do\n`);
+            return 0;
+          }
+          edited = linkNodeInSource(source, node, provider, id);
+        }
+
+        const recompiled = await compile(edited, { file });
+        if (!recompiled.ok || !recompiled.trajectory) {
+          process.stderr.write(formatDiagnostics(recompiled.diagnostics, file, { source: edited, style: err }) + '\n');
+          throw new UsageError(`sync ${sub}: the edit did not compile; the plan was left unchanged`);
+        }
+        writeFileSync(file, edited);
+        process.stderr.write(err.green('✓') + ` ${sub === 'bind'
+          ? `bound ${file} to tracker "${flags['tracker']}"`
+          : `linked ${positional[1]} → ${positional[2]} in ${file}`}\n`);
+        if (existsSync(sf)) {
+          const state = parseState(readFileSync(sf, 'utf8'));
+          const report = rebindState(recompiled.trajectory, state);
+          if (report.fromHash !== report.toHash) {
+            writeFileSync(sf, serializeState(state));
+            process.stderr.write(err.dim(`  state rebound ${report.fromHash.slice(0, 19)}… → ${report.toHash.slice(0, 19)}…\n`));
+          }
+        }
+        return 0;
+      }
+
+      case 'import': {
+        const { positional, flags } = parseArgs(rest);
+        const file = positional[0];
+        if (!file) throw new UsageError('import: missing <issues.json>');
+        const mode = (typeof flags['mode'] === 'string' ? flags['mode'] : 'queue') as ImportMode;
+        if (mode !== 'queue' && mode !== 'phases') {
+          throw new UsageError('import: --mode must be "queue" or "phases"');
+        }
+        let mar: string;
+        try {
+          mar = scaffoldPlan(parseImportSpec(readTextFile(file, 'issues file')), mode);
+        } catch (e) {
+          if (e instanceof ImportError) throw new UsageError(`import: ${e.message}`);
+          throw e;
+        }
+        const result = await compile(mar, { file: 'imported.mar' });
+        if (!result.ok || !result.trajectory) {
+          process.stderr.write(formatDiagnostics(result.diagnostics, 'imported.mar', { source: mar, style: err }) + '\n');
+          process.stderr.write(err.red('✗') + ' import produced a non-compiling draft — this is a marionette bug; please report it\n');
+          return 1;
+        }
+        output(flags, null, mar);
+        process.stderr.write(err.green('✓') +
+          ` drafted ${result.trajectory.nodes.length} phase${result.trajectory.nodes.length === 1 ? '' : 's'} (${mode} mode); ` +
+          'review, then validate + init state as usual\n');
+        return 0;
+      }
+
       case 'start':
       case 'runtime': { // compatibility alias for pre-0.2 callers
         const { positional, flags } = parseArgs(rest);
@@ -493,7 +631,7 @@ export async function run(argv: string[]): Promise<number> {
       process.stderr.write(`${err.red('error:')} ${e.message}\n`);
       return 1;
     }
-    if (e instanceof UsageError) {
+    if (e instanceof UsageError || e instanceof SyncEditError) {
       process.stderr.write(`${err.red('error:')} ${e.message}\n`);
       return 2;
     }
