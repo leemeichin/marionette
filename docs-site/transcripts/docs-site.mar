@@ -1,0 +1,77 @@
+# project: marionette-docs-site
+# github:repo: leemeichin/marionette
+# delivery: single-pr
+# delivery:branch: claude/marionette-docs-site-zm5vzp
+# report: at-checkpoints
+
+VAR readme_passes = 0
+VAR demo_passes = 0
+
+-> capture_reality
+
+=== capture_reality ===
+Run the real CLI against the worked examples and capture verbatim transcripts:
+validate (clean and failing), compile, render, summarize, state init/choose,
+and brief. These transcripts are the single source of truth — every terminal
+snippet in the README and every interactive demo on the site must match them
+byte-for-byte.
+-> rewrite_readme
+
+=== rewrite_readme ===
+Rewrite README.md to say what Marionette is and does: the one-line thesis,
+why it exists, the authoring-to-execution flow, with brief but illustrative
+examples whose output is checked against the captured transcripts.
+~ readme_passes += 1
+* [Reads clean, examples verified] -> design_system
++ {readme_passes < 3} [Tighten prose and examples] ~loop~ -> rewrite_readme
+* {readme_passes >= 3} [Not landing after three passes] @human -> design_system
+
+=== design_system ===
+Define the site's design system: full-viewport terminal aesthetic with
+design tokens (monospace type scale, phosphor palette at WCAG AA contrast,
+spacing grid), semantic HTML rules, keyboard focus and reduced-motion
+behaviour. Accessibility is a constraint, not a variant.
+-> scaffold_site
+
+=== scaffold_site ===
+Scaffold the static site under docs-site/: dependency-free HTML/CSS/JS,
+a Wrangler config for Cloudflare (static assets), and a local preview path.
+Done means the shell page deploy-ready and the design tokens rendering.
+-> write_content
+
+=== write_content ===
+Write the documentation pages: what-it-is overview, getting started, DSL
+syntax reference, worked examples, use-cases, and the execution/state
+workflow in practice. Content is distilled from docs/ and verified against
+the real CLI, not paraphrased from memory.
+-> build_demos
+
+=== build_demos ===
+Build the interactive terminal demonstrations: replayable sessions that
+type and stream the captured transcripts end-to-end (author, validate with
+errors, fix, compile, traverse, escalate at @human). Fidelity rule: every
+frame shown is a captured byte, not a mock-up.
+~ demo_passes += 1
+* [Demos faithful and interactive] -> accessibility_pass
++ {demo_passes < 3} [Fidelity or interaction gaps] ~loop~ -> build_demos
+* {demo_passes >= 3} [Demos not converging] @human -> accessibility_pass
+
+=== accessibility_pass ===
+Audit the whole site: AA contrast on the terminal palette, full keyboard
+operability of the demos, visible focus, prefers-reduced-motion honoured,
+landmarks and skip links, sensible screen-reader output for animated
+terminals.
+* [Audit clean] -> ship_review
++ [Issues found — fix and re-audit] ~loop~ -> accessibility_pass
+
+=== ship_review ===
+Everything committed on the delivery branch and pushed, draft PR open with
+the site preview story and deployment instructions. A human reviews the
+README and the site before anything merges or deploys.
+* [Approved — merge and deploy] @human -> END
++ [Changes requested] @human ~loop~ -> address_feedback
+
+=== address_feedback ===
+Apply the review feedback across README, site or demos, re-verify affected
+output against the transcripts, and return for review.
+-> ship_review

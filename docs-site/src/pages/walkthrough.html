@@ -1,2 +1,117 @@
 <h1>walkthrough</h1>
-<p>Content pending.</p>
+<p class="lede">One plan, end to end: author it, fail the build, fix it,
+compile it, review it, hand it to an agent, gate it as a human, finish it —
+then edit it mid-flight and reconcile. Every terminal below replays a
+captured session of the real CLI; nothing is mocked.</p>
+
+<h2 id="author">1 · Write down what you actually mean</h2>
+
+<p>The project: revamp a checkout flow. The intent: iterate behind a
+feature flag until conversion moves, let a human decide when it ships, and
+have an answer for "what if it never converts?". A first draft usually
+looks like this — and has the classic two bugs: the iteration loop isn't
+declared, and the <code>rollout</code> phase quietly goes nowhere.</p>
+
+<mar-file src="checkout-broken.mar" title="checkout.mar — first draft"></mar-file>
+
+<h2 id="validate">2 · The compiler reads it more carefully than you do</h2>
+
+<demo-cast id="01-validate-broken" title="validate — two structural errors"></demo-cast>
+
+<p>Both errors are the plan lying about itself. The undeclared cycle asks:
+<em>did you mean to iterate here, and what bounds it?</em> The dead end
+asks: <em>then what?</em> Marionette refuses to hand an agent a plan that
+cannot answer.</p>
+
+<h2 id="fix">3 · Fix by deciding, not by appeasing</h2>
+
+<p>The fix forces real decisions: the loop gets a budget
+(<code>attempts &lt; 5</code>) and a declared <code>~loop~</code> mark, the
+budget's exhaustion gets an escalation path (<code>rethink</code>, gated
+<code>@human</code>), and rollout flows to <code>END</code>.</p>
+
+<mar-file src="checkout.mar" title="checkout.mar — fixed"></mar-file>
+
+<demo-cast id="02-validate-clean" title="validate --strict — clean"></demo-cast>
+
+<h2 id="compile">4 · Compile to the contract</h2>
+
+<p>The trajectory JSON is the machine contract an executor ingests. Its
+content hash is what traversal state binds to — you'll see it again.</p>
+
+<demo-cast id="03-compile" title="compile — the trajectory contract"></demo-cast>
+
+<h2 id="review">5 · Review without reading the DSL</h2>
+
+<p>Reviewers don't have to parse syntax: <code>summarize</code> produces a
+plain-language walkthrough with every human checkpoint called out, and
+<code>render</code> emits a Mermaid graph (human gates flagged
+<code>✋</code>, loops <code>↻</code>).</p>
+
+<demo-cast id="04-summarize" title="summarize — the reviewer's view"></demo-cast>
+<demo-cast id="05-render" title="render — Mermaid source"></demo-cast>
+
+<h2 id="walk">6 · Hand it to the walker</h2>
+
+<p><code>state init</code> creates <code>checkout.state.json</code> next to
+the plan, bound to the compiled hash. Entering the first phase applies its
+mutation (<code>attempts</code> ticks to 1) and shows the frontier: what
+can happen next, and what's blocked and why.</p>
+
+<demo-cast id="06-state-init" title="state init — traversal begins"></demo-cast>
+
+<p>An executing agent doesn't look at the state file — it asks for the
+<strong>brief</strong>, the work packet: current phase prose (the author's
+instruction), live variables, the frontier with reasons, and the exact
+protocol for recording an outcome.</p>
+
+<demo-cast id="07-brief" title="brief — the work packet"></demo-cast>
+
+<h2 id="refuse">7 · The agent tries the gate — and is refused</h2>
+
+<p>Choice <code>[0]</code> is marked <code>@human</code>. The refusal is a
+machine-coded error (<code>human-checkpoint</code>, exit 1), and refused
+operations don't touch state. Autonomy boundaries here are walker
+guarantees, not prompt suggestions.</p>
+
+<demo-cast id="08-choose-refused" title="state choose — @human refusal (exit 1)"></demo-cast>
+
+<p>So the agent does what it may: takes the iteration edge, with its
+rationale logged. Re-entering the phase ticks the counter — the loop
+budget is being spent, visibly.</p>
+
+<demo-cast id="09-choose-loop" title="state choose — the agent iterates, attempts=2"></demo-cast>
+<demo-cast id="10-state-show" title="state show — where things stand"></demo-cast>
+
+<h2 id="gate">8 · The human takes the gate</h2>
+
+<p>The cohort numbers come in. The same command, a human actor, an honest
+rationale — the decision and its evidence are now part of the plan's
+permanent log.</p>
+
+<demo-cast id="11-choose-human" title="state choose — a human records the ship decision"></demo-cast>
+<demo-cast id="12-advance-end" title="state advance — rollout completes the plan"></demo-cast>
+<demo-cast id="13-brief-completed" title="brief — a completed traversal"></demo-cast>
+
+<h2 id="drift">9 · Edit a live plan, get caught, reconcile</h2>
+
+<p>Rewind to mid-walk (the agent parked at <code>build_checkout</code>,
+two attempts in) and suppose you edit the plan — say, adding a
+<code>postmortem</code> phase after rollout. Any semantic edit changes the
+content hash, and every walk command refuses with exit code 3 rather than
+misapply history to a graph it wasn't recorded against:</p>
+
+<demo-cast id="14-drift" title="state show — drift detected (exit 3)"></demo-cast>
+
+<p><code>state rebind</code> is the sanctioned path: it migrates the state
+onto the edited plan, keeps the decision log, and reports exactly what
+changed in the crossing.</p>
+
+<demo-cast id="15-rebind" title="state rebind — migrate, keep the log"></demo-cast>
+
+<h2 id="then">And that's the whole loop</h2>
+
+<p>Author → compile → review → traverse → escalate → decide → complete,
+with drift detection guarding the whole way. To run this yourself:
+<a href="/getting-started">getting-started</a>. To see what the executor
+consumes programmatically: <a href="/execution">execution</a>.</p>

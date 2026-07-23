@@ -1,4 +1,76 @@
 <h1>marionette</h1>
-<p class="lede">The project plan is the agent's script; the compiler guarantees the script is sound; humans author and gate it.</p>
+<p class="lede">The project plan is the agent's script; the compiler guarantees
+the script is sound; humans author and gate it.</p>
+
+<p>Marionette is a plain-text language for <strong>project
+trajectories</strong> — the phases a project moves through, the decisions
+that connect them, and the conditions under which each path opens. You
+write a plan as a small, legible script (or let an AI draft it from your
+notes); a compiler validates it into a canonical JSON graph; an AI agent
+then executes the project by <em>walking</em> that graph — bounded,
+auditable, and unable to route around the plan. Decisions marked
+<code>@human</code> are ones the agent cannot take: it must stop and
+escalate to you.</p>
+
+<p>The design is borrowed from <a href="https://github.com/inkle/ink">Ink</a>,
+the interactive-fiction language, with the player swapped out: instead of a
+human choosing their way through a story compiled by <code>inklecate</code>,
+an AI agent chooses its way through your project — and the human holds the
+gates.</p>
+
+<div class="table-wrap">
+<table>
+  <caption class="visually-hidden">The three layers, in Ink and in Marionette</caption>
+  <tr><th scope="col">Layer</th><th scope="col">Ink</th><th scope="col">Marionette</th></tr>
+  <tr><td>Language</td><td>Narrative script: knots, choices, diverts, state</td>
+      <td>Trajectory script: phases, decisions, gates, state, human checkpoints, bounded loops</td></tr>
+  <tr><td>Compiler</td><td><code>inklecate</code> → story JSON</td>
+      <td><code>marionette compile</code> → trajectory JSON (the contract) + static validation</td></tr>
+  <tr><td>Player</td><td>Human, in a game</td>
+      <td>AI agent walking the graph; humans author, review, and gate</td></tr>
+</table>
+</div>
+
+<h2 id="a-plan">A plan is a file</h2>
+
+<p>Eighteen lines: iterate on checkout conversion up to five times, a human
+decides when it ships (or when to go back to research), and every route
+ends somewhere on purpose.</p>
+
 <mar-file src="checkout.mar" title="checkout.mar"></mar-file>
+
+<h2 id="compiler">The compiler holds the line</h2>
+
+<p>Dead ends, unreachable phases, undeclared cycles, loops with no
+satisfiable exit, human checkpoints with no escalation path — all build
+failures, each with a line number and a fix. This is a real session
+(press play, or step through it):</p>
+
 <demo-cast id="01-validate-broken" title="validate — a broken plan fails the build"></demo-cast>
+
+<h2 id="enforced">The autonomy boundary is enforced, not advisory</h2>
+
+<p>Once the plan compiles, an agent traverses it step by step, recording a
+rationale for every decision. When it reaches a choice you marked
+<code>@human</code>, the walker refuses — the agent's only move is to
+escalate to you:</p>
+
+<demo-cast id="08-choose-refused" title="state choose — the walker refuses an agent at @human"></demo-cast>
+
+<h2 id="next">Where to go</h2>
+
+<ul>
+  <li><a href="/walkthrough">walkthrough</a> — one plan taken end to end:
+    author, fail the build, fix, compile, review, traverse, escalate,
+    complete. Every frame is captured output from the real CLI.</li>
+  <li><a href="/getting-started">getting-started</a> — install the CLI and
+    the authoring/execution skills, write your first plan.</li>
+  <li><a href="/syntax">syntax</a> — the full <code>.mar</code> language
+    reference.</li>
+  <li><a href="/execution">execution</a> — how agents ingest a plan: the
+    work packet, escalation, drift, delivery config.</li>
+  <li><a href="/examples">examples</a> — worked plans and use-cases,
+    including the plan that built this site.</li>
+  <li><a href="/reference">reference</a> — CLI commands, exit codes, all
+    compiler diagnostics.</li>
+</ul>

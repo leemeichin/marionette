@@ -1,2 +1,67 @@
 <h1>examples</h1>
-<p>Content pending.</p>
+<p class="lede">Worked plans from the repo, with real compiler output — and
+the use-cases they stand in for.</p>
+
+<h2 id="build-mvp">The MVP loop</h2>
+
+<p>The canonical small plan: ship the smallest testable slice, iterate up
+to three times on the evidence, and force the pivot-or-kill conversation
+instead of letting attempt four happen by inertia. The human holds both the
+launch gate and the kill switch.</p>
+
+<mar-file src="build_mvp.mar" title="examples/build_mvp.mar"></mar-file>
+
+<demo-cast id="19-summarize-build-mvp" title="summarize — what a reviewer reads"></demo-cast>
+
+<h2 id="paas">A production replatform, 18 phases</h2>
+
+<p>The stress case: strangler-fig extraction of auth and billing, shadow
+traffic with parity holds, SRE and Finance sign-offs, error-budget
+cutbacks with a bounded retry budget, an architecture-board escalation
+after the third cutback, and a freeze-window booking loop that can rebook
+as many times as support pulls it. Eleven declared loops, every one with a
+verified or human exit — and the compiler checks all of it on every push:</p>
+
+<demo-cast id="20-validate-paas" title="validate --strict — 18 phases, 0 errors"></demo-cast>
+
+<p>The full source is longer than a screen, so it lives in the repo:
+<a href="https://github.com/leemeichin/marionette/blob/main/examples/paas_replatform.mar">examples/paas_replatform.mar</a>.
+It doubles as the execution baseline: the conformance suite walks it end to
+end, and it exercises every DSL v0 construct plus refs
+(<code>github:</code>/<code>jira:</code>/<code>linear:</code>) and
+per-phase delivery overrides.</p>
+
+<h2 id="meta">This site is a traversal</h2>
+
+<p>Dogfood, all the way down: the site you're reading was built by an agent
+walking a Marionette plan — capture real transcripts first, rewrite the
+README against them, design under an accessibility constraint, build,
+audit, and stop at an <code>@human</code> review gate before anything
+merges. The rationale log of that traversal is in the repo next to the
+plan.</p>
+
+<mar-file src="docs-site.mar" title="plans/docs-site.mar"></mar-file>
+
+<h2 id="use-cases">Where this shape of plan earns its keep</h2>
+
+<ul>
+  <li><strong>Agent-run projects with real stakes.</strong> The plan is the
+    agent's operating envelope: it can only take edges that exist, gates
+    compute availability from live variables, and your sign-offs are
+    walker-enforced <code>@human</code> checkpoints — autonomy boundaries
+    as versioned artifacts instead of prompt-soup.</li>
+  <li><strong>Migrations and cutovers.</strong> Contingencies
+    ("what if parity drifts?", "what if the freeze window gets pulled?")
+    become phases with exits, not hopes. The compiler proves every fallback
+    path actually leads somewhere.</li>
+  <li><strong>Iteration with a budget.</strong> "Try up to N times, then
+    escalate" is the native loop shape: a monotonic counter, a gated exit,
+    and a human decision when the budget runs dry.</li>
+  <li><strong>Decision records that write themselves.</strong> Every taken
+    edge logs actor, timestamp and rationale; <code>render</code> shows the
+    taken path; <code>summarize</code> is the status report. The plan file
+    and its state are the audit trail.</li>
+  <li><strong>Anything you'd sketch as a flowchart and then ignore.</strong>
+    Here the flowchart compiles, drifts loudly (exit 3) when reality
+    diverges, and migrates (<code>state rebind</code>) instead of rotting.</li>
+</ul>

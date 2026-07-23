@@ -1,2 +1,137 @@
 <h1>execution</h1>
-<p>Content pending.</p>
+<p class="lede">Phase 1 answers <em>"is this plan sound?"</em>. Execution
+answers <em>"an agent is holding this plan — what exactly does it do next,
+and how does the work come back?"</em> Everything here is
+executor-agnostic: a Claude session running the execution skill, a native
+agent integration, and a CI job all consume the same contract.</p>
+
+<h2 id="loop">The executor loop</h2>
+
+<pre class="code"><code>┌─────────────────────────────────────────────────────────────┐
+│  marionette brief plan.mar --json      ← "what now?"        │
+│      │                                                      │
+│      ├─ status: active         → do the phase's work, then  │
+│      │     marionette state choose plan.mar &lt;choice&gt;        │
+│      │        --actor agent --rationale "&lt;evidence&gt;"        │
+│      │     (or `state advance` for a fallthrough divert)    │
+│      │                                                      │
+│      ├─ status: awaiting-human → deliver the escalation     │
+│      │     payload to the primary session and STOP          │
+│      │                                                      │
+│      ├─ status: stranded       → report; plan needs editing │
+│      │     (then `marionette state rebind`)                 │
+│      │                                                      │
+│      └─ status: completed      → final report; done         │
+└──────────────── repeat until completed ─────────────────────┘</code></pre>
+
+<p>The brief is the single source of "what now". The executor never picks a
+target node directly — it only takes choices the frontier says are
+available, and every step records an actor and a rationale. Gates,
+once-only exhaustion, <code>@human</code> refusal and drift detection are
+enforced by the walker, not by prompt discipline: an out-of-graph action is
+an <em>error</em>, not a temptation.</p>
+
+<h2 id="brief">The brief, as a machine sees it</h2>
+
+<p>This is the same walk as the <a href="/walkthrough">walkthrough</a>,
+mid-traversal, in the machine form
+(<code>spec/brief.schema.json</code>) — plan identity and hash, the node
+prose (the author's instruction to the executor), live variables, the
+frontier with per-choice availability and blocking reasons, progress, and
+the protocol block that spells out exactly how to record an outcome:</p>
+
+<demo-cast id="17-brief-json" title="brief --json — the machine work packet"></demo-cast>
+
+<h2 id="escalation">@human escalation</h2>
+
+<p>When every <em>available</em> choice at the current node is
+<code>@human</code>, the brief's status becomes
+<code>awaiting-human</code> and it carries a structured escalation payload
+— everything a human needs to decide without opening the repo. Here the
+checkout plan has spent its five iteration attempts; the only moves left
+belong to a person:</p>
+
+<demo-cast id="18-brief-awaiting" title="brief — status: awaiting human decision"></demo-cast>
+
+<p>The escalation <em>channel</em> is executor-specific (a chat message to
+the primary session, a PR comment, a ping); the <em>payload</em> is this
+object. There is no timeout or fallback: an unanswered escalation leaves
+the plan parked at the checkpoint, visible in <code>brief</code>,
+<code>render</code> and <code>summarize</code>. And separately, the walker
+refuses <code>--actor agent</code> on <code>@human</code> choices with the
+<code>human-checkpoint</code> error code — so escalation is enforced, not
+advisory.</p>
+
+<h2 id="delivery">Portioning out the work: delivery config</h2>
+
+<p>How work product is packaged, and how often the executor reports back,
+is authored in the plan — versioned with it — rather than hard-coded in the
+executor. Plan-level tags set the default; node-level tags override per
+phase.</p>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Tag</th><th scope="col">Values</th><th scope="col">Meaning</th></tr>
+  <tr><td rowspan="5"><code># delivery:</code></td>
+      <td><code>pr-per-phase</code></td><td>each phase's work lands as its own pull request</td></tr>
+  <tr><td><code>branch-per-phase</code></td><td>a branch per phase; PRs at the executor's discretion</td></tr>
+  <tr><td><code>single-pr</code></td><td>one pull request for the whole traversal</td></tr>
+  <tr><td><code>single-branch</code></td><td>one branch, commits per phase, no PR automation</td></tr>
+  <tr><td><code>none</code> <em>(default)</em></td><td>no prescribed packaging (non-code plans, executor's discretion)</td></tr>
+  <tr><td rowspan="3"><code># report:</code></td>
+      <td><code>per-phase</code> <em>(default)</em></td><td>report back after every phase</td></tr>
+  <tr><td><code>at-checkpoints</code></td><td>report only at <code>@human</code> checkpoints and completion</td></tr>
+  <tr><td><code>at-end</code></td><td>one report when the traversal completes (or strands)</td></tr>
+  <tr><td><code># delivery:branch:</code></td>
+      <td>any string</td><td>branch name template; <code>{phase}</code> expands to the node id</td></tr>
+</table>
+</div>
+
+<p>Unknown values warn (<code>MAR019</code>) and fall back to the defaults,
+so a typo can't silently change delivery behaviour.</p>
+
+<h2 id="refs">External refs</h2>
+
+<p>Nodes and plans reference Jira, GitHub, Linear or anything with a URL
+through namespaced metadata — no new syntax. The compiler normalises each
+into <code>{ provider, kind, id, url }</code> in the trajectory <em>and</em>
+the brief, synthesising the URL when context tags
+(<code>github:repo</code>, <code>jira:site</code>,
+<code>linear:workspace</code>) make it derivable. Malformed values warn
+(<code>MAR018</code>); unknown namespaces stay available as raw metadata
+for your own extensions. Refs are deliberately <em>references</em>, not
+sync — the executor decides what to do with them (read the issue for
+context, comment progress, close on phase exit).</p>
+
+<h2 id="drift">Editing a live plan: drift and rebind</h2>
+
+<p>Plans change mid-flight. Any semantic edit changes the content hash, and
+every walk command then refuses with a drift error (exit 3). Two sanctioned
+paths out:</p>
+
+<ul>
+  <li><code>marionette state rebind plan.mar</code> — migrate the existing
+    state onto the edited plan, <strong>keeping the decision log</strong>.
+    Vanished taken-choices are dropped (and reported), removed variables
+    dropped, new variables added at their initials, type-changed variables
+    reset. Refused (<code>migration-blocked</code>) when the current phase
+    no longer exists — that reconciliation needs a human.</li>
+  <li><code>marionette state init --force</code> — start over; history
+    discarded.</li>
+</ul>
+
+<p>See it happen in the <a href="/walkthrough#drift">walkthrough</a>.</p>
+
+<h2 id="conformance">Conformance: any walker, same behaviour</h2>
+
+<p>The reference walker is not the spec — the conformance suite is
+(<code>spec/conformance/</code>). Any walker implementation must produce
+the same refusal codes (<code>completed</code>, <code>unknown-node</code>,
+<code>unknown-choice</code>, <code>ambiguous-choice</code>,
+<code>gate-blocked</code>, <code>once-exhausted</code>,
+<code>human-checkpoint</code>, <code>rationale-required</code>,
+<code>no-divert</code>, <code>migration-blocked</code>), refuse without
+mutating state, and append exactly one log entry per successful step. The
+baseline case traverses
+<a href="/examples#paas">examples/paas_replatform.mar</a>, which exercises
+every DSL construct plus the execution metadata.</p>

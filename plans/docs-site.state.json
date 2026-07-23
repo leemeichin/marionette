@@ -1,10 +1,10 @@
 {
   "hash": "sha256:ec2eaabc948a6182f4df7e59ee79a85c77f56e5b44e86112f703b1021460c6dc",
   "status": "active",
-  "current": "write_content",
+  "current": "build_demos",
   "variables": {
     "readme_passes": 1,
-    "demo_passes": 0
+    "demo_passes": 1
   },
   "taken": [
     "rewrite_readme#0"
@@ -54,6 +54,15 @@
       "label": null,
       "rationale": "scaffold complete: zero-dep build (ANSI->HTML, .mar highlighter, layout assembler), wrangler static-assets config, preview server, and three enforcement gates (contrast/fidelity/html) all green on stub pages",
       "to": "write_content"
+    },
+    {
+      "at": "2026-07-23T16:02:43.527Z",
+      "actor": "agent",
+      "from": "write_content",
+      "choice": null,
+      "label": null,
+      "rationale": "seven pages written (overview, getting-started, syntax, walkthrough, execution, examples, reference) + 404; content distilled from docs/ and every terminal frame drawn from the 20 captured transcripts; all three gates green",
+      "to": "build_demos"
     }
   ]
 }

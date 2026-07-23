@@ -1,18 +1,102 @@
 [
-  {"id": "01-validate-broken", "cmd": "marionette validate checkout.mar", "exit": 1},
-  {"id": "02-validate-clean", "cmd": "marionette validate checkout.mar --strict", "exit": 0},
-  {"id": "03-compile", "cmd": "marionette compile checkout.mar", "exit": 0},
-  {"id": "04-summarize", "cmd": "marionette summarize checkout.mar", "exit": 0},
-  {"id": "05-render", "cmd": "marionette render checkout.mar", "exit": 0},
-  {"id": "06-state-init", "cmd": "marionette state init checkout.mar", "exit": 0},
-  {"id": "07-brief", "cmd": "marionette brief checkout.mar", "exit": 0},
-  {"id": "08-choose-refused", "cmd": "marionette state choose checkout.mar 0 --actor agent --rationale \"metrics look good\"", "exit": 1},
-  {"id": "09-choose-loop", "cmd": "marionette state choose checkout.mar 1 --actor agent --rationale \"conversion flat; iterating on the payment step\"", "exit": 0},
-  {"id": "10-state-show", "cmd": "marionette state show checkout.mar", "exit": 0},
-  {"id": "11-choose-human", "cmd": "marionette state choose checkout.mar 0 --actor lee --rationale \"cohort shows +9% completion; ship it\"", "exit": 0},
-  {"id": "12-advance-end", "cmd": "marionette state advance checkout.mar --actor agent --rationale \"flag at 100%, old flow retired\"", "exit": 0},
-  {"id": "13-brief-completed", "cmd": "marionette brief checkout.mar", "exit": 0},
-  {"id": "14-drift", "cmd": "marionette state show checkout.mar", "exit": 3},
-  {"id": "15-rebind", "cmd": "marionette state rebind checkout.mar", "exit": 0},
-  {"id": "16-help", "cmd": "marionette help", "exit": 0}
+  {
+    "id": "01-validate-broken",
+    "cmd": "marionette validate checkout.mar",
+    "exit": 1
+  },
+  {
+    "id": "02-validate-clean",
+    "cmd": "marionette validate checkout.mar --strict",
+    "exit": 0
+  },
+  {
+    "id": "03-compile",
+    "cmd": "marionette compile checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "04-summarize",
+    "cmd": "marionette summarize checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "05-render",
+    "cmd": "marionette render checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "06-state-init",
+    "cmd": "marionette state init checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "07-brief",
+    "cmd": "marionette brief checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "08-choose-refused",
+    "cmd": "marionette state choose checkout.mar 0 --actor agent --rationale \"metrics look good\"",
+    "exit": 1
+  },
+  {
+    "id": "09-choose-loop",
+    "cmd": "marionette state choose checkout.mar 1 --actor agent --rationale \"conversion flat; iterating on the payment step\"",
+    "exit": 0
+  },
+  {
+    "id": "10-state-show",
+    "cmd": "marionette state show checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "11-choose-human",
+    "cmd": "marionette state choose checkout.mar 0 --actor lee --rationale \"cohort shows +9% completion; ship it\"",
+    "exit": 0
+  },
+  {
+    "id": "12-advance-end",
+    "cmd": "marionette state advance checkout.mar --actor agent --rationale \"flag at 100%, old flow retired\"",
+    "exit": 0
+  },
+  {
+    "id": "13-brief-completed",
+    "cmd": "marionette brief checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "14-drift",
+    "cmd": "marionette state show checkout.mar",
+    "exit": 3
+  },
+  {
+    "id": "15-rebind",
+    "cmd": "marionette state rebind checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "16-help",
+    "cmd": "marionette help",
+    "exit": 0
+  },
+  {
+    "id": "17-brief-json",
+    "cmd": "marionette brief checkout.mar --json",
+    "exit": 0
+  },
+  {
+    "id": "18-brief-awaiting",
+    "cmd": "marionette brief checkout.mar",
+    "exit": 0
+  },
+  {
+    "id": "19-summarize-build-mvp",
+    "cmd": "marionette summarize build_mvp.mar",
+    "exit": 0
+  },
+  {
+    "id": "20-validate-paas",
+    "cmd": "marionette validate paas_replatform.mar --strict",
+    "exit": 0
+  }
 ]

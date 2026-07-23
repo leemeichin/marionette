@@ -1,0 +1,91 @@
+{
+  "spec": "0.2.0",
+  "plan": {
+    "file": "checkout.mar",
+    "project": "checkout-revamp",
+    "hash": "sha256:86c1623dd475e6a7026f5565e97a2f94e0e3c3b24797347fd3418f3734e6f811",
+    "refs": []
+  },
+  "status": "active",
+  "variables": {
+    "attempts": 2
+  },
+  "node": {
+    "id": "build_checkout",
+    "title": "Rebuild the checkout flow behind a feature flag.",
+    "body": "Rebuild the checkout flow behind a feature flag.",
+    "meta": {},
+    "refs": []
+  },
+  "delivery": {
+    "mode": "none",
+    "report": "per-phase",
+    "branch": null
+  },
+  "frontier": [
+    {
+      "index": 0,
+      "id": "build_checkout#0",
+      "label": "Cohort converts",
+      "target": "rollout",
+      "targetTitle": "Ramp the flag to 100% and retire the old flow.",
+      "sticky": false,
+      "human": true,
+      "loop": false,
+      "gate": null,
+      "available": true,
+      "blocked": null,
+      "blockedCode": null
+    },
+    {
+      "index": 1,
+      "id": "build_checkout#1",
+      "label": "Conversion flat — iterate",
+      "target": "build_checkout",
+      "targetTitle": "Rebuild the checkout flow behind a feature flag.",
+      "sticky": true,
+      "human": false,
+      "loop": true,
+      "gate": "attempts < 5",
+      "available": true,
+      "blocked": null,
+      "blockedCode": null
+    },
+    {
+      "index": 2,
+      "id": "build_checkout#2",
+      "label": "Not converging — rethink",
+      "target": "rethink",
+      "targetTitle": "Five iterations without lift: take the flow back to research.",
+      "sticky": false,
+      "human": true,
+      "loop": false,
+      "gate": "attempts >= 5",
+      "available": false,
+      "blocked": "gate {attempts >= 5} is false",
+      "blockedCode": "gate-blocked"
+    }
+  ],
+  "divert": null,
+  "escalation": null,
+  "progress": {
+    "steps": 2,
+    "nodesVisited": 1,
+    "nodesTotal": 3,
+    "path": [
+      "build_checkout",
+      "build_checkout"
+    ]
+  },
+  "protocol": {
+    "choose": "marionette state choose checkout.mar <choice> --actor <name> --rationale <text>",
+    "advance": "marionette state advance checkout.mar --actor <name> --rationale <text>",
+    "rules": [
+      "do the work the current phase describes before recording an outcome",
+      "record every taken branch with an honest rationale (it is the audit trail)",
+      "never take an @human choice as the agent: escalate and wait for a human decision",
+      "gates are computed from the variables above: if a choice is blocked, it is not an option",
+      "re-run `marionette brief` after every recorded step: it is the single source of \"what now\""
+    ]
+  }
+}

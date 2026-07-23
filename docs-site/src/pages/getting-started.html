@@ -1,2 +1,108 @@
 <h1>getting-started</h1>
-<p>Content pending.</p>
+<p class="lede">Three pieces: the <strong>CLI</strong> (compiler, validator,
+walker), the <strong>authoring skill</strong> (teaches an AI to draft plans
+that compile), and the <strong>execution skill</strong> (teaches an AI to
+traverse one: ingest the work packet, do the work, record decisions,
+escalate at <code>@human</code>).</p>
+
+<h2 id="cli">1 · Install the CLI</h2>
+
+<pre class="code"><code># a) global command from a clone
+$ git clone https://github.com/leemeichin/marionette &amp;&amp; cd marionette
+$ npm install &amp;&amp; npm link          # installs deps, builds, puts `marionette` on PATH
+$ marionette version
+
+# b) zero-clone, from anywhere (npm builds it transparently on first use)
+$ npx --yes github:leemeichin/marionette validate plan.mar</code></pre>
+
+<p><code>npm link</code> is nicer for repeated use; <code>npx</code> is fine
+for trying it out, or for CI.</p>
+
+<h2 id="first-plan">2 · Write and validate a first plan</h2>
+
+<p>Start smaller than feels serious. Phases are <em>states</em> of the
+project, not tickets; choices are the decisions that move it between
+states.</p>
+
+<mar-src title="plan.mar">
+# project: importer
+VAR api_attempts = 0
+
+=== build_importer ===
+Build the importer against the vendor API.
+~ api_attempts += 1
+* [API integration works] -> signoff
++ {api_attempts < 3} [Tweak and retry] ~loop~ -> build_importer
+* {api_attempts >= 3} [API not viable] -> csv_fallback
+
+=== csv_fallback ===
+Fall back to CSV upload: same importer surface, manual ingestion.
+* [Fallback works] -> signoff
+
+=== signoff ===
+Sam reviews the shipped surface.
+* [Sam approves, ship it] @human -> END
++ [Changes requested] @human ~loop~ -> build_importer
+</mar-src>
+
+<pre class="code"><code>$ marionette validate plan.mar --strict   # zero errors is the authoring bar
+$ marionette summarize plan.mar           # plain-language review
+$ marionette render plan.mar              # Mermaid graph</code></pre>
+
+<p>If validation fails, every diagnostic carries a line number and a
+<code>help:</code> suggestion — see the
+<a href="/walkthrough#validate">walkthrough</a> for what that looks like,
+and the <a href="/reference#diagnostics">diagnostic table</a> for the full
+list.</p>
+
+<h2 id="skills">3 · Install the skills (author with AI, execute with AI)</h2>
+
+<p>Humans normally don't hand-write the DSL. The authoring skill turns
+natural-language notes into a validated draft; the execution skill drives a
+compiled plan. The repo is a single-plugin marketplace — in any Claude Code
+session:</p>
+
+<pre class="code"><code>/plugin marketplace add leemeichin/marionette
+/plugin install marionette@marionette</code></pre>
+
+<p>Then give the authoring skill real notes, e.g.:</p>
+
+<pre class="code"><code>Use marionette-authoring. Plan this for me: we're migrating the billing
+service off Stripe Classic. Spike the new API first — if metered billing
+isn't supported we stay put. Up to two spike attempts. Finance signs off
+before any customer is switched, and we roll back if error rates spike.</code></pre>
+
+<p>The skill drafts the <code>.mar</code>, runs
+<code>validate --strict</code>, fixes diagnostics (one revision loop), and
+shows you the render and summary with every <code>@human</code> checkpoint
+called out. Alternative install routes (copying the skill file, in-repo
+use): <a href="https://github.com/leemeichin/marionette/blob/main/docs/GETTING-STARTED.md">docs/GETTING-STARTED.md</a>.</p>
+
+<h2 id="traverse">4 · Traverse it</h2>
+
+<pre class="code"><code>$ marionette state init plan.mar        # binds plan.state.json to the compiled hash
+$ marionette brief plan.mar             # work packet: phase, refs, choices, escalation
+$ marionette state show plan.mar        # current phase, variables, available choices
+$ marionette state choose plan.mar 1 --actor agent --rationale "why"
+$ marionette state advance plan.mar --actor agent   # follow a fallthrough divert
+$ marionette state rebind plan.mar      # after editing a live plan: migrate, keep the log
+$ marionette render plan.mar            # Mermaid, with taken path + frontier highlighted</code></pre>
+
+<p>Rules the walker enforces, by design: <code>@human</code> choices refuse
+<code>--actor agent</code> (that's the escalation boundary working); every
+choice requires <code>--rationale</code>; editing the plan after
+<code>state init</code> trips drift detection (exit 3) and asks you to
+reconcile via <code>state rebind</code>. To hand the traversal to an agent,
+use the execution skill — it loops on <code>marionette brief --json</code>,
+honours the plan's delivery config, and escalates instead of taking your
+gates. Details: <a href="/execution">execution</a>.</p>
+
+<h2 id="ci">5 · Keep it honest in CI</h2>
+
+<p>Exit codes are CI-shaped: <code>0</code> success, <code>1</code>
+validation errors (or warnings with <code>--strict</code>) and refused walk
+operations, <code>2</code> usage/I-O errors, <code>3</code> plan/state
+drift. A minimal gate:</p>
+
+<pre class="code"><code>$ marionette validate plans/*.mar --strict     # plans stay sound
+$ marionette state show plans/project.mar      # exit 3 = plan edited without rebind</code></pre>
