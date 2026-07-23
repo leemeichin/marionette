@@ -1,0 +1,13 @@
+{
+  "name": "marionette-docs-site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Marionette documentation site: terminal-faithful demos, syntax reference, guides",
+  "type": "module",
+  "scripts": {
+    "build": "node build/build.mjs",
+    "check": "node build/check-contrast.mjs && node build/check-fidelity.mjs && node build/check-html.mjs",
+    "preview": "node build/serve.mjs",
+    "deploy": "npm run build && npm run check && npx wrangler deploy"
+  }
+}

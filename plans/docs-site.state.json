@@ -1,7 +1,7 @@
 {
   "hash": "sha256:ec2eaabc948a6182f4df7e59ee79a85c77f56e5b44e86112f703b1021460c6dc",
   "status": "active",
-  "current": "design_system",
+  "current": "write_content",
   "variables": {
     "readme_passes": 1,
     "demo_passes": 0
@@ -36,6 +36,24 @@
       "label": "Reads clean, examples verified",
       "rationale": "README rewritten around the captured checkout story; every console block checked line-for-line against docs-site/transcripts (elisions marked with …)",
       "to": "design_system"
+    },
+    {
+      "at": "2026-07-23T15:52:40.670Z",
+      "actor": "agent",
+      "from": "design_system",
+      "choice": null,
+      "label": null,
+      "rationale": "design system defined in docs-site/DESIGN.md: dual-theme token palette verified AA programmatically (worst pair 4.82:1), ANSI mapping, type/spacing grid, interaction+SR rules, enforcement via build checks",
+      "to": "scaffold_site"
+    },
+    {
+      "at": "2026-07-23T15:57:29.447Z",
+      "actor": "agent",
+      "from": "scaffold_site",
+      "choice": null,
+      "label": null,
+      "rationale": "scaffold complete: zero-dep build (ANSI->HTML, .mar highlighter, layout assembler), wrangler static-assets config, preview server, and three enforcement gates (contrast/fidelity/html) all green on stub pages",
+      "to": "write_content"
     }
   ]
 }

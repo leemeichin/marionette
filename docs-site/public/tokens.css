@@ -1,0 +1,64 @@
+/* Design tokens — see DESIGN.md. Every fg/bg pair verified ≥ 4.5:1 (AA)
+   by build/check-contrast.mjs; edit there and here together. */
+
+:root {
+  --bg: #0b0f0c;
+  --bg-elev: #121712;
+  --bg-code: #161c16;
+  --fg: #d8e4d8;
+  --fg-dim: #93a893;
+  --fg-faint: #7d917d;
+  --green: #54d17c;
+  --red: #ff7a76;
+  --yellow: #d9b96c;
+  --cyan: #5cc8d4;
+  --magenta: #d79ae0;
+  --accent: #54d17c;
+  --focus: #7ee2a0;
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
+    "DejaVu Sans Mono", monospace;
+  --s1: 0.5rem;
+  --s2: 1rem;
+  --s3: 1.5rem;
+  --s4: 2rem;
+  --s5: 3rem;
+  --s6: 4rem;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --bg: #f4f2ec;
+    --bg-elev: #e9e6dd;
+    --bg-code: #eceade;
+    --fg: #26302a;
+    --fg-dim: #54615a;
+    --fg-faint: #59665f;
+    --green: #186a3b;
+    --red: #a83232;
+    --yellow: #7a5b12;
+    --cyan: #0f6674;
+    --magenta: #8a3d99;
+    --accent: #186a3b;
+    --focus: #0d5c33;
+    color-scheme: light;
+  }
+}
+
+:root[data-theme="light"] {
+  --bg: #f4f2ec;
+  --bg-elev: #e9e6dd;
+  --bg-code: #eceade;
+  --fg: #26302a;
+  --fg-dim: #54615a;
+  --fg-faint: #59665f;
+  --green: #186a3b;
+  --red: #a83232;
+  --yellow: #7a5b12;
+  --cyan: #0f6674;
+  --magenta: #8a3d99;
+  --accent: #186a3b;
+  --focus: #0d5c33;
+  color-scheme: light;
+}
