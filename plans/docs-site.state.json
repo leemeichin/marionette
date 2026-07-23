@@ -1,7 +1,7 @@
 {
   "hash": "sha256:c807cf129b29f0bf2e0bf2a742335673897829c2040d518bef4441d3bf7fc42a",
-  "status": "active",
-  "current": "ship_review",
+  "status": "completed",
+  "current": "END",
   "variables": {
     "readme_passes": 1,
     "demo_passes": 2
@@ -10,7 +10,8 @@
     "rewrite_readme#0",
     "build_demos#0",
     "accessibility_pass#0",
-    "integrate_runtime#0"
+    "integrate_runtime#0",
+    "ship_review#0"
   ],
   "log": [
     {
@@ -138,6 +139,15 @@
       "label": null,
       "rationale": "round 2 applied: hashing moved to WebCrypto (compile/trajectoryHash async, node:crypto gone from src, shim deleted, hashes byte-identical so transcripts and live state stay valid, 84 tests pass, engines>=20 + CI on node 24); execution skill + EXECUTION.md + site now define the in-band proxied @human decision protocol",
       "to": "ship_review"
+    },
+    {
+      "at": "2026-07-23T20:26:37.220Z",
+      "actor": "lee",
+      "from": "ship_review",
+      "choice": "ship_review#0",
+      "label": "Approved — merge and deploy",
+      "rationale": "approved -- merge and deploy [relayed from session]",
+      "to": "END"
     }
   ]
 }

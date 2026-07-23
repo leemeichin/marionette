@@ -99,6 +99,10 @@ packaged and reported — it is configuration, not advice:
   session (from `progress`), decisions recorded (label + rationale), any
   warnings (blocked choices, thin evidence), and — if escalating — the full
   escalation payload.
+- **Tone: outcome first, context on request.** Unless the plan itself is
+  the subject of the conversation (meta-work on marionette or on the plan),
+  reports state what happened and what's next — not how the sausage was
+  made. Keep process narration for when the human asks.
 
 When you portion work out to subagents, hand each one the phase's work
 packet (body, refs, delivery) — not the whole plan — and collect back the
