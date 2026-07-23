@@ -102,6 +102,24 @@
       "label": "Runtime folded in, gates green",
       "rationale": "runtime folded in: live NDJSON session captured (forbidden at @human, committed decision with journal events, idempotent replay), help recaptured, execution/reference/getting-started/README updated; repo tests + all site gates + browser checks green",
       "to": "ship_review"
+    },
+    {
+      "at": "2026-07-23T19:59:01.120Z",
+      "actor": "lee",
+      "from": "ship_review",
+      "choice": "ship_review#1",
+      "label": "Changes requested",
+      "rationale": "palette reads as 'piss filter' — go lighter, watercolour pastel, less yellow/orange/grey; demos cause page reflow — fix their height; add a playground page: compile in-browser, render diagram, step through with a Three.js visualisation",
+      "to": "address_feedback"
+    },
+    {
+      "at": "2026-07-23T20:09:23.920Z",
+      "actor": "agent",
+      "from": "address_feedback",
+      "choice": null,
+      "label": null,
+      "rationale": "feedback applied: watercolour pastel palette both themes (AA verified, worst 4.69:1, yellow removed from syntax tint), demos hold full height from first paint (CLS 0, browser-verified), playground page runs the real compiler+walker in-browser with a Three.js graph — 27+15 browser checks and all three build gates green",
+      "to": "ship_review"
     }
   ]
 }

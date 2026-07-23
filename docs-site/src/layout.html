@@ -3,11 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+document.documentElement.classList.add('js');
+try { var t = localStorage.getItem('marionette-theme');
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+} catch (e) {}
+</script>
 <title>{{title}}</title>
 <meta name="description" content="{{desc}}">
 <link rel="stylesheet" href="/tokens.css">
 <link rel="stylesheet" href="/site.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230b0f0c'/><text x='2' y='12' font-family='monospace' font-size='11' fill='%2354d17c'>$</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%231b202a'/><text x='2' y='12' font-family='monospace' font-size='11' fill='%2393d9b2'>$</text></svg>">
 </head>
 <body>
 <a class="skip-link" href="#main">skip to content</a>

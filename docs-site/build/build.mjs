@@ -2,7 +2,7 @@
 // wraps them in src/layout.html, expands <demo-cast>, <mar-file> and
 // <mar-src> elements from transcripts/, and writes dist/.
 
-import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ansiLineToHtml, stripAnsi, escapeHtml } from './ansi.mjs';
@@ -18,6 +18,7 @@ export const PAGES = [
   { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI and skills, write and validate your first plan.' },
   { slug: 'syntax', nav: 'syntax', title: 'Syntax reference — Marionette', desc: 'The .mar language: phases, choices, gates, loops, human checkpoints, variables, metadata.' },
   { slug: 'walkthrough', slugAliases: [], nav: 'walkthrough', title: 'Walkthrough — Marionette', desc: 'An end-to-end session: author a plan, fix compile errors, walk it with an agent, gate it as a human. Every frame is real CLI output.' },
+  { slug: 'playground', nav: 'playground', title: 'Playground — Marionette', desc: 'Write a .mar plan, compile it in your browser with the real compiler, and step through the graph with the real walker.' },
   { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'How agents ingest and traverse a plan: state, briefs, escalation, drift and rebind, delivery metadata.' },
   { slug: 'examples', nav: 'examples', title: 'Examples & use-cases — Marionette', desc: 'Worked plans: product iteration loops, replatforms, and Marionette planning its own development.' },
   { slug: 'reference', nav: 'reference', title: 'CLI reference — Marionette', desc: 'Commands, exit codes, and the full compiler diagnostic table (MAR001–MAR019).' },
@@ -114,6 +115,17 @@ export function build() {
 
   for (const f of readdirSync(join(root, 'public'))) {
     cpSync(join(root, 'public', f), join(dist, f), { recursive: true });
+  }
+
+  // Stage the real compiler/walker (tsc output) for in-browser use on the
+  // playground. node:crypto is shimmed via an import map on that page.
+  const repoDist = join(root, '..', 'dist');
+  const LIB = ['types.js', 'expr.js', 'gates.js', 'refs.js', 'suggest.js', 'parser.js', 'validate.js', 'compile.js', 'state.js', 'term.js'];
+  mkdirSync(join(dist, 'lib'), { recursive: true });
+  for (const f of LIB) {
+    const src = join(repoDist, f);
+    if (!existsSync(src)) throw new Error(`missing ${src} — run \`npm run build\` at the repo root first`);
+    cpSync(src, join(dist, 'lib', f));
   }
   console.log(`built ${PAGES.length} pages → dist/`);
 }

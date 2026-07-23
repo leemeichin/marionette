@@ -9,8 +9,8 @@
 
   function current() {
     if (root.dataset.theme) return root.dataset.theme;
-    return window.matchMedia('(prefers-color-scheme: light)').matches
-      ? 'light' : 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? 'dark' : 'light';
   }
 
   function paint() {

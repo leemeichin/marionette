@@ -22,8 +22,8 @@ function blockFor(selector) {
   return css.slice(i, css.indexOf('}', i));
 }
 
-const dark = tokensFrom(blockFor(':root {'));
-const light = tokensFrom(blockFor(':root[data-theme="light"]'));
+const light = tokensFrom(blockFor(':root {'));
+const dark = tokensFrom(blockFor(':root[data-theme="dark"]'));
 
 const lum = (hex) => {
   const c = hex.slice(1);

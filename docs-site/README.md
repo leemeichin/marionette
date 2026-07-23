@@ -37,6 +37,10 @@ custom domain from the Cloudflare dashboard afterwards if wanted.
 - `<demo-cast id="06-state-init" title="…"></demo-cast>` in a page becomes
   an interactive terminal window replaying that capture. The fidelity check
   fails the build if rendered frames diverge from the capture by one byte.
+- `/playground` compiles and walks plans **in the browser** using the repo's
+  own tsc output (staged into `dist/lib` by the build — run `npm run build`
+  at the repo root first). `node:crypto` is shimmed via import map; Three.js
+  is vendored under `public/vendor/` and loaded only on that page.
 - `<mar-file src="checkout.mar">` / `<mar-src>…</mar-src>` render
   syntax-tinted `.mar` sources.
 
