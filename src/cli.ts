@@ -1,5 +1,5 @@
 /**
- * marionette CLI (P0.8): compile | validate | render | summarize | state.
+ * marionette CLI: compile | validate | render | summarize | brief | state | runtime.
  *
  * Exit codes (CI-suitable):
  *   0  success (warnings allowed unless --strict)
@@ -9,7 +9,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { Diagnostic, PlanState, Trajectory } from './types.js';
 import { compile, formatDiagnostics } from './compile.js';
 import { renderMermaid } from './render.js';
@@ -21,11 +21,16 @@ import {
   DriftError, WalkError, advance, bindState, frontier, initState, parseState,
   rebindState, serializeState, takeChoice,
 } from './state.js';
+import { RuntimeService, serveRuntimeLines } from './runtime-process.js';
+import {
+  RuntimeStoreError, initializeRuntimeStore, loadRuntimeStore,
+} from './runtime-store.js';
+import type { RuntimePrincipal, RuntimeRole } from './runtime-protocol.js';
 
 const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
-const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'state', 'help', 'version'];
+const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'state', 'runtime', 'help', 'version'];
 const STATE_SUBCOMMANDS = ['init', 'show', 'choose', 'advance', 'rebind'];
 
 function readTextFile(file: string, what = 'plan'): string {
@@ -55,6 +60,8 @@ Usage:
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
+  marionette runtime   <plan.mar|.json> --run <id> [--store dir] [--create]
+                       [--principal id] [--role agent|human] [--principal-uri uri]
   marionette state init    <plan.mar|.json> [--state f] [--force]
   marionette state show    <plan.mar|.json> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
@@ -70,6 +77,12 @@ Options:
   --force             Overwrite an existing state file on init
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
   --rationale <text>  Why the step was taken (required for choices)
+  --run <id>           Runtime run id (required by runtime)
+  --store <dir>        Runtime store (default: <plan-dir>/.marionette)
+  --create             Create the runtime run; otherwise resume it
+  --principal <id>     Connection principal id (default: agent)
+  --role <role>        Bound connection role: agent or human (default: agent)
+  --principal-uri <u>  Optional provenance URI for decision records
 `;
 
 interface Args {
@@ -80,7 +93,10 @@ interface Args {
 function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
-  const takesValue = new Set(['-o', '--out', '--state', '--actor', '--rationale']);
+  const takesValue = new Set([
+    '-o', '--out', '--state', '--actor', '--rationale',
+    '--run', '--store', '--principal', '--role', '--principal-uri',
+  ]);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg.startsWith('-') && arg !== '-') {
@@ -173,7 +189,7 @@ function printFrontier(trajectory: Trajectory, state: PlanState): void {
   if (node?.divert) process.stdout.write(out.dim(`  (fallthrough) -> ${node.divert.target}\n`));
 }
 
-export function run(argv: string[]): number {
+export async function run(argv: string[]): Promise<number> {
   try {
     const [command, ...rest] = argv;
     if (!command || command === 'help' || command === '--help' || command === '-h') {
@@ -279,6 +295,52 @@ export function run(argv: string[]): number {
         } else {
           output(flags, null, renderBrief(brief, out));
         }
+        return 0;
+      }
+
+      case 'runtime': {
+        const { positional, flags } = parseArgs(rest);
+        const file = positional[0];
+        if (!file) throw new UsageError('runtime: missing <plan.mar|.json>');
+        const runId = typeof flags['run'] === 'string' ? flags['run'] : undefined;
+        if (!runId) throw new UsageError('runtime: missing required --run <id>');
+        const role = (typeof flags['role'] === 'string' ? flags['role'] : 'agent') as RuntimeRole;
+        if (role !== 'agent' && role !== 'human') {
+          throw new UsageError('runtime: --role must be agent or human');
+        }
+        const principal: RuntimePrincipal = {
+          id: typeof flags['principal'] === 'string' ? flags['principal'] : role,
+          role,
+          uri: typeof flags['principal-uri'] === 'string' ? flags['principal-uri'] : undefined,
+        };
+        const { trajectory, ok, diagnostics, source } = readSource(file);
+        if (!ok) {
+          process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
+          process.stderr.write('refusing to start a runtime for a plan that does not validate\n');
+          return 1;
+        }
+        const store = typeof flags['store'] === 'string'
+          ? resolve(flags['store'])
+          : join(dirname(resolve(file)), '.marionette');
+        let snapshot;
+        try {
+          snapshot = flags['create']
+            ? initializeRuntimeStore(store, trajectory, { runId, principal })
+            : loadRuntimeStore(store, runId, trajectory);
+        } catch (error) {
+          if (error instanceof RuntimeStoreError) {
+            throw new UsageError(`runtime: ${error.message}`);
+          }
+          throw error;
+        }
+        process.stderr.write(
+          `runtime ${flags['create'] ? 'created' : 'resumed'}: ${runId} ` +
+          `at revision ${snapshot.revision} (${role}:${principal.id})\n`,
+        );
+        await serveRuntimeLines(
+          new RuntimeService(trajectory, snapshot, store, principal),
+          { input: process.stdin, output: process.stdout, diagnostics: process.stderr },
+        );
         return 0;
       }
 
@@ -389,5 +451,5 @@ export function run(argv: string[]): number {
 const invokedDirectly = process.argv[1] !== undefined &&
   (process.argv[1].endsWith('cli.js') || process.argv[1].endsWith('cli.ts'));
 if (invokedDirectly) {
-  process.exit(run(process.argv.slice(2)));
+  process.exit(await run(process.argv.slice(2)));
 }

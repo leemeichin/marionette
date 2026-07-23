@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, readFileSync, cpSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -75,4 +75,44 @@ test('P0.8 CLI exit codes are CI-suitable', () => {
   const drifted = cli(['state', 'show', 'plan.mar'], dir);
   assert.equal(drifted.code, 3);
   assert.match(drifted.stderr, /drift/);
+});
+
+test('runtime CLI exposes a clean NDJSON process surface', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'marionette-runtime-cli-'));
+  writeFileSync(join(dir, 'plan.mar'), [
+    '=== a ===',
+    'Alpha.',
+    '* [Go] -> END',
+    '',
+  ].join('\n'));
+  const input = [
+    JSON.stringify({
+      protocol: '0.1.0',
+      id: 1,
+      op: 'initialize',
+      client: { name: 'cli-test', version: '1' },
+    }),
+    JSON.stringify({ protocol: '0.1.0', id: 2, op: 'next', profile: 'signal' }),
+    '',
+  ].join('\n');
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import', 'tsx', join(root, 'src/cli.ts'),
+      'runtime', join(dir, 'plan.mar'),
+      '--run', 'cli-run',
+      '--store', join(dir, 'store'),
+      '--create',
+      '--principal', 'test-agent',
+      '--role', 'agent',
+    ],
+    { cwd: root, input, encoding: 'utf8' },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const messages = result.stdout.trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(messages.length, 2);
+  assert.equal(messages[0].id, 1);
+  assert.equal(messages[1].result.projection.node.id, 'a');
+  assert.doesNotMatch(result.stdout, /runtime created/);
+  assert.match(result.stderr, /runtime created: cli-run/);
 });
