@@ -1,0 +1,32 @@
+// Kitchen sink: every DSL v0 construct in one plan.
+# project: kitchen-sink
+# fixture
+VAR iteration = 0
+VAR budget = 100
+VAR title = "mvp"
+
+-> build_mvp
+
+=== build_mvp ===
+Ship the smallest testable slice.
+Iterate until metrics are green or we run out of strikes.
+# github:issue: 1
+~ iteration += 1
+~ budget -= 10
+* [Metrics green] @human -> beta_launch
++ {iteration < 3} [Learnings, go again] ~loop~ -> build_mvp
+* {iteration >= 3} [Three strikes] -> pivot_or_kill
+
+=== beta_launch ===
+Launch "mvp" to the beta cohort.
+* {title == "mvp"} [Announce] -> retro
+* [Quiet launch] -> retro
+
+=== pivot_or_kill ===
+Decide whether to pivot or stop.
++ [Pivot] @human ~loop~ -> build_mvp
+* [Kill it] @human -> retro
+
+=== retro ===
+Write the retro; archive the plan.
+-> END

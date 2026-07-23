@@ -1,0 +1,21 @@
+// The PRD's illustrative example, completed into a full valid plan.
+# project: build-mvp-example
+VAR iteration = 0
+
+-> build_mvp
+
+=== build_mvp ===
+Ship the smallest testable slice.
+~ iteration += 1
+* [Metrics green] @human -> beta_launch
++ {iteration < 3} [Learnings, go again] ~loop~ -> build_mvp
+* {iteration >= 3} [Three strikes] -> pivot_or_kill
+
+=== beta_launch ===
+Launch to the beta cohort and monitor.
+-> END
+
+=== pivot_or_kill ===
+Three iterations without green metrics: decide whether to pivot or stop.
++ [Pivot: new angle, fresh loop] @human ~loop~ -> build_mvp
+* [Kill it] @human -> END

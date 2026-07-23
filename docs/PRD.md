@@ -126,7 +126,7 @@ Ship the smallest testable slice.
 
 ## 8. Open Questions
 
-- **[OQ1, Eng, blocking-ish]** **Reuse Ink's compiler/runtime as engine vs. influence-only.** inklecate already detects loose ends and undefined diverts, and the Ink *runtime* evaluates conditions dynamically — which may give a cheap answer for gate reachability via exhaustive/heuristic traversal ("simulate all paths") rather than static analysis. Unknowns: how much narrative machinery comes along, whether its JSON format can carry our metadata, C# runtime fit for our stack. **Time-boxed spike: 3 days, decision recorded in repo.**
+- **[OQ1 — RESOLVED, see `docs/decisions/0001-ink-engine-reuse.md`: influence-only]** **Reuse Ink's compiler/runtime as engine vs. influence-only.** inklecate already detects loose ends and undefined diverts, and the Ink *runtime* evaluates conditions dynamically — which may give a cheap answer for gate reachability via exhaustive/heuristic traversal ("simulate all paths") rather than static analysis. Unknowns: how much narrative machinery comes along, whether its JSON format can carry our metadata, C# runtime fit for our stack. **Time-boxed spike: 3 days, decision recorded in repo.**
 - **[OQ2, Eng, blocking]** Escalation protocol shape for `@human` in Phase 2 (channel, payload, timeout/fallback semantics).
 - **[OQ3, Design, non-blocking]** Node payload size: sentence vs. document; whether nodes can reference external docs.
 - **[OQ4, Product, non-blocking]** Loop exits: counter-based vs. always-available "Enough. Decide." repeatable choice — dogfood both, pick a default.

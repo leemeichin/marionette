@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+
+      # Dogfood (G5): Marionette's own plan and the examples must stay sound.
+      - name: Validate dogfood plan
+        run: node bin/marionette.js validate plans/marionette.mar --strict
+      - name: Validate examples
+        run: node bin/marionette.js validate examples/build_mvp.mar --strict
+      - name: Detect plan/state drift
+        run: node bin/marionette.js state show plans/marionette.mar

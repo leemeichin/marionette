@@ -1,0 +1,59 @@
+// Marionette plans Marionette (G5): the trajectory from the Phase 1 toolchain
+// landing through the end of Phase 2. Node metadata carries GitHub mapping
+// stubs (github:issue) so each phase can be linked to an issue when filed.
+# project: marionette
+# github:repo: leemeichin/marionette
+VAR skill_revisions = 0
+
+-> phase1_toolchain
+
+=== phase1_toolchain ===
+Land the Phase 1 toolchain: DSL compiler, structural validation, gate checking,
+Mermaid render, plan summaries, hash-bound state with drift detection, CLI and
+test suite. (P0.1–P0.4, P0.6–P0.8)
+# github:issue: pending
+* [PR merged, CI green] -> authoring_skill
++ [Review requested changes] ~loop~ -> phase1_toolchain
+
+=== authoring_skill ===
+Build the NL → draft-script authoring skill (P0.5): project notes in, a
+compilable .mar out, with compiler errors surfaced for one revision loop.
+# github:issue: pending
+~ skill_revisions += 1
+* [First-session compile success at or above 70%] -> dogfood_gate
++ {skill_revisions < 5} [Below the bar, iterate on prompts] ~loop~ -> authoring_skill
+* {skill_revisions >= 5} [Not converging after five revisions] @human -> rethink_authoring
+
+=== rethink_authoring ===
+Five skill revisions without hitting the bar means the approach is wrong, not
+the prompts. Decide a new authoring strategy with fresh constraints.
++ [New approach chosen] @human ~loop~ -> authoring_skill
++ [Ship syntax-first, defer the skill] @human -> dogfood_gate
+
+=== dogfood_gate ===
+Phase 1 exit gate (G5): Marionette's own Phase 2 is planned in Marionette, and
+a reviewer with no DSL knowledge understands the rendered plan in under five
+minutes.
+* [Phase 1 exit approved] @human -> phase2_runtime
++ [Plan not legible enough, revise] @human ~loop~ -> authoring_skill
+
+=== phase2_runtime ===
+Reference runtime (P1): grow the minimal walker in src/state.ts into a full
+graph walker and gate evaluator consuming trajectory JSON, with a decision log
+recording actor, timestamp and rationale for every branch.
+# github:issue: pending
+* [Walker passes conformance tests] -> escalation_protocol
+
+=== escalation_protocol ===
+Resolve OQ2 — the @human escalation protocol (channel, payload, timeout and
+fallback semantics) — then wire the pi agent proving ground to ingest and
+traverse compiled trajectories.
+# github:issue: pending
+* [Protocol decided and implemented] @human -> phase2_gate
+
+=== phase2_gate ===
+Phase 2 exit gate (G2): the pi agent completes a trajectory of fifteen or more
+nodes with at least one loop and one @human escalation, zero out-of-graph
+actions, and rationale logged on every taken branch.
+* [G2 met] @human -> END
++ [Runtime gaps found] ~loop~ -> phase2_runtime
