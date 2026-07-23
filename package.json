@@ -1,0 +1,28 @@
+{
+  "name": "marionette",
+  "version": "0.1.0",
+  "description": "A compiled, plain-text project trajectory language — authored by humans, validated by a compiler, traversed by AI agents.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "marionette": "./bin/marionette.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "bin",
+    "dist",
+    "spec"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

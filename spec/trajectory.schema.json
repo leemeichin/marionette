@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/leemeichin/marionette/spec/trajectory.schema.json",
+  "title": "Marionette trajectory",
+  "description": "The compiled contract between authoring/validation (Phase 1) and agent ingestion (Phase 2). Produced by `marionette compile`; consumed by the runtime/agent.",
+  "type": "object",
+  "required": ["spec", "hash", "source", "variables", "start", "nodes", "meta"],
+  "additionalProperties": false,
+  "properties": {
+    "spec": {
+      "type": "string",
+      "description": "Version of this document shape (semver).",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "hash": {
+      "type": "string",
+      "description": "sha256 over the canonical form of this document: sorted keys, no whitespace, with `hash`, `source` and all `line` fields excluded. State files bind to this value; a mismatch means plan/state drift.",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source": {
+      "type": "object",
+      "description": "Provenance. Not part of the hash.",
+      "required": ["file"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" }
+      }
+    },
+    "variables": {
+      "type": "object",
+      "description": "Typed variable declarations, keyed by name.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "initial"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["number", "boolean", "string"] },
+          "initial": { "$ref": "#/$defs/value" },
+          "line": { "type": "integer" }
+        }
+      }
+    },
+    "start": {
+      "type": "string",
+      "description": "Id of the entry node."
+    },
+    "nodes": {
+      "type": "array",
+      "description": "The phases of the trajectory, in authoring order.",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "meta": { "$ref": "#/$defs/meta" }
+  },
+  "$defs": {
+    "value": {
+      "type": ["number", "boolean", "string"]
+    },
+    "meta": {
+      "type": "object",
+      "description": "Namespaced extension metadata (e.g. `github:issue`). Extensions must use a `namespace:` key prefix so they never collide with the core contract. The reserved key `tags` holds bare tags.",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "array", "items": { "type": "string" } }
+        ]
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "body", "actions", "choices", "divert", "meta"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
+        "body": { "type": "string", "description": "Prose description of the phase." },
+        "actions": {
+          "type": "array",
+          "description": "Mutations applied when the node is entered, in order.",
+          "items": { "$ref": "#/$defs/action" }
+        },
+        "choices": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/choice" }
+        },
+        "divert": {
+          "description": "Unconditional fallthrough divert, or null.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["target"],
+              "additionalProperties": false,
+              "properties": {
+                "target": { "$ref": "#/$defs/target" },
+                "line": { "type": "integer" }
+              }
+            }
+          ]
+        },
+        "line": { "type": "integer" },
+        "meta": { "$ref": "#/$defs/meta" }
+      }
+    },
+    "choice": {
+      "type": "object",
+      "required": ["id", "label", "sticky", "gate", "human", "loop", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable id: `<nodeId>#<index>`. Decision logs reference this."
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "sticky": {
+          "type": "boolean",
+          "description": "true (`+`): repeatable. false (`*`): may be taken at most once."
+        },
+        "gate": {
+          "description": "Availability condition, or null if always available.",
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/gate" }]
+        },
+        "human": {
+          "type": "boolean",
+          "description": "Human checkpoint (`@human`): an agent must pause and escalate; it may not take this choice autonomously."
+        },
+        "loop": {
+          "type": "boolean",
+          "description": "Declared loop edge (`~loop~`): intentionally revisits earlier phases. Undeclared cycles are a compile error."
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "line": { "type": "integer" }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": ["source", "ast"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "description": "Original gate text, for legibility." },
+        "ast": { "$ref": "#/$defs/expr" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["var", "op", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "var": { "type": "string" },
+        "op": { "enum": ["=", "+=", "-="] },
+        "value": { "$ref": "#/$defs/expr" },
+        "source": { "type": "string", "description": "Original expression text." },
+        "line": { "type": "integer" }
+      }
+    },
+    "target": {
+      "type": "string",
+      "description": "A node id, or the reserved terminal \"END\".",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "expr": {
+      "description": "Expression AST. Evaluated by the runtime against the state's variables.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "lit" },
+            "value": { "$ref": "#/$defs/value" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "name"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "var" },
+            "name": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "op", "operand"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "unary" },
+            "op": { "enum": ["!", "-"] },
+            "operand": { "$ref": "#/$defs/expr" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "op", "left", "right"],
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "const": "binary" },
+            "op": { "enum": ["||", "&&", "==", "!=", "<", "<=", ">", ">=", "+", "-", "*", "/", "%"] },
+            "left": { "$ref": "#/$defs/expr" },
+            "right": { "$ref": "#/$defs/expr" }
+          }
+        }
+      ]
+    }
+  }
+}

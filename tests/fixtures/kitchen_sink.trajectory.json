@@ -1,0 +1,210 @@
+{
+  "spec": "0.1.0",
+  "hash": "sha256:9e88744d1a35dd0226e051fff3d9781d818ae7c74d35a7ea5dfafd88875ef8ee",
+  "source": {
+    "file": "tests/fixtures/kitchen_sink.mar"
+  },
+  "variables": {
+    "iteration": {
+      "type": "number",
+      "initial": 0,
+      "line": 4
+    },
+    "budget": {
+      "type": "number",
+      "initial": 100,
+      "line": 5
+    },
+    "title": {
+      "type": "string",
+      "initial": "mvp",
+      "line": 6
+    }
+  },
+  "start": "build_mvp",
+  "nodes": [
+    {
+      "id": "build_mvp",
+      "body": "Ship the smallest testable slice.\nIterate until metrics are green or we run out of strikes.",
+      "actions": [
+        {
+          "var": "iteration",
+          "op": "+=",
+          "value": {
+            "kind": "lit",
+            "value": 1
+          },
+          "source": "1",
+          "line": 14
+        },
+        {
+          "var": "budget",
+          "op": "-=",
+          "value": {
+            "kind": "lit",
+            "value": 10
+          },
+          "source": "10",
+          "line": 15
+        }
+      ],
+      "choices": [
+        {
+          "id": "build_mvp#0",
+          "label": "Metrics green",
+          "sticky": false,
+          "gate": null,
+          "human": true,
+          "loop": false,
+          "target": "beta_launch",
+          "line": 16
+        },
+        {
+          "id": "build_mvp#1",
+          "label": "Learnings, go again",
+          "sticky": true,
+          "gate": {
+            "source": "iteration < 3",
+            "ast": {
+              "kind": "binary",
+              "op": "<",
+              "left": {
+                "kind": "var",
+                "name": "iteration"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 3
+              }
+            }
+          },
+          "human": false,
+          "loop": true,
+          "target": "build_mvp",
+          "line": 17
+        },
+        {
+          "id": "build_mvp#2",
+          "label": "Three strikes",
+          "sticky": false,
+          "gate": {
+            "source": "iteration >= 3",
+            "ast": {
+              "kind": "binary",
+              "op": ">=",
+              "left": {
+                "kind": "var",
+                "name": "iteration"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 3
+              }
+            }
+          },
+          "human": false,
+          "loop": false,
+          "target": "pivot_or_kill",
+          "line": 18
+        }
+      ],
+      "divert": null,
+      "line": 10,
+      "meta": {
+        "github:issue": "1"
+      }
+    },
+    {
+      "id": "beta_launch",
+      "body": "Launch \"mvp\" to the beta cohort.",
+      "actions": [],
+      "choices": [
+        {
+          "id": "beta_launch#0",
+          "label": "Announce",
+          "sticky": false,
+          "gate": {
+            "source": "title == \"mvp\"",
+            "ast": {
+              "kind": "binary",
+              "op": "==",
+              "left": {
+                "kind": "var",
+                "name": "title"
+              },
+              "right": {
+                "kind": "lit",
+                "value": "mvp"
+              }
+            }
+          },
+          "human": false,
+          "loop": false,
+          "target": "retro",
+          "line": 22
+        },
+        {
+          "id": "beta_launch#1",
+          "label": "Quiet launch",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "loop": false,
+          "target": "retro",
+          "line": 23
+        }
+      ],
+      "divert": null,
+      "line": 20,
+      "meta": {}
+    },
+    {
+      "id": "pivot_or_kill",
+      "body": "Decide whether to pivot or stop.",
+      "actions": [],
+      "choices": [
+        {
+          "id": "pivot_or_kill#0",
+          "label": "Pivot",
+          "sticky": true,
+          "gate": null,
+          "human": true,
+          "loop": true,
+          "target": "build_mvp",
+          "line": 27
+        },
+        {
+          "id": "pivot_or_kill#1",
+          "label": "Kill it",
+          "sticky": false,
+          "gate": null,
+          "human": true,
+          "loop": false,
+          "target": "retro",
+          "line": 28
+        }
+      ],
+      "divert": null,
+      "line": 25,
+      "meta": {}
+    },
+    {
+      "id": "retro",
+      "body": "Write the retro; archive the plan.",
+      "actions": [],
+      "choices": [],
+      "divert": {
+        "target": "END",
+        "line": 32
+      },
+      "line": 30,
+      "meta": {}
+    }
+  ],
+  "meta": {
+    "project": "kitchen-sink",
+    "tags": [
+      "fixture"
+    ]
+  }
+}
