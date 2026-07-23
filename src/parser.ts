@@ -52,6 +52,13 @@ function stripComment(line: string): string {
   return line;
 }
 
+function addTagValue(meta: Record<string, string | string[]>, key: string, value: string): void {
+  const prev = meta[key];
+  if (prev === undefined) meta[key] = value;
+  else if (Array.isArray(prev)) prev.push(value);
+  else meta[key] = [prev, value];
+}
+
 function addTag(meta: Record<string, string | string[]>, raw: string): void {
   // "key: value" — the key may itself be namespaced ("github:issue: 42"), so
   // split at the first colon that is followed by whitespace.
@@ -60,10 +67,7 @@ function addTag(meta: Record<string, string | string[]>, raw: string): void {
     const key = kv[1].trim();
     const value = kv[2].trim();
     if (IDENT.test(key.replace(/[.:/-]/g, '_'))) {
-      const prev = meta[key];
-      if (prev === undefined) meta[key] = value;
-      else if (Array.isArray(prev)) prev.push(value);
-      else meta[key] = [prev, value];
+      addTagValue(meta, key, value);
       return;
     }
   }
@@ -84,9 +88,22 @@ export function parsePlan(source: string): ParsedPlan {
   const error = (line: number, code: string, message: string, suggestion?: string) =>
     diagnostics.push({ severity: 'error', code, message, line, suggestion });
 
+  // An open fenced metadata value: # key: """ … """ — a container for
+  // markdown, collected verbatim (no comment stripping, no trimming).
+  let fence: { key: string; target: Record<string, string | string[]>; lines: string[]; line: number } | null = null;
+
   const lines = source.split(/\r?\n/);
   for (let idx = 0; idx < lines.length; idx++) {
     const lineNo = idx + 1;
+    if (fence) {
+      if (lines[idx].trim() === '"""') {
+        addTagValue(fence.target, fence.key, fence.lines.join('\n'));
+        fence = null;
+      } else {
+        fence.lines.push(lines[idx]);
+      }
+      continue;
+    }
     const line = stripComment(lines[idx]).trim();
     if (line.length === 0) continue;
 
@@ -117,9 +134,14 @@ export function parsePlan(source: string): ParsedPlan {
       continue;
     }
 
-    // Tag: # key: value | # tag
+    // Tag: # key: value | # tag | # key: """ (fenced markdown value)
     const tag = line.match(/^#\s*(.+)$/);
     if (tag) {
+      const fenced = tag[1].match(/^(.+?):\s+"""\s*$/);
+      if (fenced) {
+        fence = { key: fenced[1].trim(), target: current ? current.meta : planMeta, lines: [], line: lineNo };
+        continue;
+      }
       addTag(current ? current.meta : planMeta, tag[1]);
       continue;
     }
@@ -242,6 +264,11 @@ export function parsePlan(source: string): ParsedPlan {
   }
 
   if (start === null && nodes.length > 0) start = nodes[0].id;
+
+  if (fence) {
+    error(fence.line, CODES.PARSE, `unterminated """ block for metadata key "${fence.key}"`,
+      'close the fenced value with a line containing only """');
+  }
 
   return { variables, start, nodes, meta: planMeta, diagnostics };
 }

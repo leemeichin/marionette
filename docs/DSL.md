@@ -71,6 +71,24 @@ values (MAR019).
 
 ## Well-known metadata namespaces (Phase 2)
 
+Two plain keys anchor the plan to its origin, so the file never operates
+in a vacuum — `summarize` leads with them and the executor's brief carries
+them as `plan.intent`:
+
+```
+# summary: One-line executive abstract of what this plan achieves and why.
+# prompt: """
+The original ask, verbatim — a fenced value is a container for markdown:
+paragraphs, blank lines and list syntax survive untouched. `#` at line
+start inside the fence is text, not metadata. Closes at the first line
+containing only """.
+"""
+```
+
+Any metadata key accepts the fenced form (`# key: """` … `"""`); short
+values keep the one-line form, and repeated keys accumulate in order
+either way. An unterminated fence is a parse error (`MAR001`).
+
 The compiler normalises these namespaces into structured `refs` and the
 executor's delivery config — see [`EXECUTION.md`](EXECUTION.md) for the full
 reference:

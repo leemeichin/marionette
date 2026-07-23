@@ -1,4 +1,21 @@
 # project: marionette-docs-site
+# summary: Rewrite the README around captured reality and ship a Cloudflare docs site whose terminal demos are byte-faithful replays of the real CLI.
+# prompt: """
+Let's do two things and use marionette itself to plan it out:
+
+1. updating the readme to describe what marionette is and does, with
+   (brief but illustrative) examples
+2. creating a doc site to be hosted on cloudflare that does similar but
+   with realistic interactive demonstrations (these have to be true to how
+   it would actually appear in a terminal) along with examples of the
+   output and what it looks like end to end, and how to use it in practice.
+
+The latter requires a design system: full viewport terminal aesthetic, but
+don't compromise accessibility. This isn't a SaaS but a tool — no
+marketing bumf, just what really helps understand and visualise what this
+does, plus a syntax reference, examples, use-cases, and the usual doc
+faire.
+"""
 # github:repo: leemeichin/marionette
 # delivery: single-pr
 # delivery:branch: claude/marionette-docs-site-zm5vzp

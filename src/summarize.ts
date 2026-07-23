@@ -28,6 +28,15 @@ export function summarize(trajectory: Trajectory, options: SummarizeOptions = {}
 
   out.push(`# Plan summary: ${options.file ?? trajectory.source.file}`);
   out.push('');
+  const metaText = (v: string | string[] | undefined): string | null =>
+    v === undefined ? null : Array.isArray(v) ? v.join('\n') : v;
+  const summary = metaText(trajectory.meta['summary']);
+  const prompt = metaText(trajectory.meta['prompt']);
+  if (summary || prompt) {
+    if (summary) out.push(`**Intent:** ${summary}`);
+    if (prompt) out.push(`${summary ? '\n' : ''}> ${prompt.split('\n').join('\n> ')}`);
+    out.push('');
+  }
   out.push(`Starts at **${trajectory.start}**. ` +
     `${nodes.length} phase${s(nodes.length)}, ${decisionPoints.length} decision point${s(decisionPoints.length)} ` +
     `(phases with 2+ choices), ${choices.length} choice${s(choices.length)} overall.`);

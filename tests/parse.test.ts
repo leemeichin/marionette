@@ -138,3 +138,28 @@ test('choice without label is rejected', async () => {
 `);
   assert.ok(result.diagnostics.some((d) => d.code === CODES.PARSE && /label/.test(d.message)));
 });
+
+test('metadata: # key: """ fences a verbatim markdown value', async () => {
+  const result = await compile(`# summary: Ship the importer.
+# prompt: """
+Build the importer against the vendor API.
+
+- retry twice, then fall back to CSV
+- ## headings and # tags in here are text, not metadata
+"""
+=== a ===
+Alpha.
+* [Ship] -> END
+`);
+  assert.equal(result.diagnostics.length, 0);
+  const meta = result.trajectory!.meta;
+  assert.equal(meta['prompt'],
+    'Build the importer against the vendor API.\n\n- retry twice, then fall back to CSV\n- ## headings and # tags in here are text, not metadata');
+  assert.equal(meta['summary'], 'Ship the importer.');
+});
+
+test('metadata: unterminated """ fence is a parse error', async () => {
+  const result = await compile('# prompt: """\nnever closed\n=== a ===\nAlpha.\n* [Ship] -> END\n');
+  const hit = result.diagnostics.find((d) => d.code === 'MAR001');
+  assert.ok(hit && /unterminated/.test(hit.message));
+});

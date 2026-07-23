@@ -51,7 +51,9 @@ not a temptation.
 ([`spec/brief.schema.json`](../spec/brief.schema.json)); without `--json` it
 renders the same packet for humans. It contains:
 
-- **plan** — file, project name, content hash (state binding), plan-level refs.
+- **plan** — file, project name, content hash (state binding), plan-level
+  refs, and `intent` — the plan's `# summary:` and `# prompt:` metadata, so
+  the executor holds the original ask, not just the current phase.
 - **status** — `active` | `awaiting-human` | `stranded` | `completed`.
 - **node** — the current phase: id, title (first body line), full prose body,
   raw meta, and normalised refs. The prose is the task description; it is

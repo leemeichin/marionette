@@ -1,6 +1,6 @@
 {
   "spec": "0.2.0",
-  "hash": "sha256:c807cf129b29f0bf2e0bf2a742335673897829c2040d518bef4441d3bf7fc42a",
+  "hash": "sha256:0ad88235854560dedb31fe20735580c9a6a400aa5fe772a339c684424bb54ed1",
   "source": {
     "file": "plans/docs-site.mar"
   },
@@ -8,12 +8,12 @@
     "readme_passes": {
       "type": "number",
       "initial": 0,
-      "line": 7
+      "line": 24
     },
     "demo_passes": {
       "type": "number",
       "initial": 0,
-      "line": 8
+      "line": 25
     }
   },
   "start": "capture_reality",
@@ -25,9 +25,9 @@
       "choices": [],
       "divert": {
         "target": "rewrite_readme",
-        "line": 18
+        "line": 35
       },
-      "line": 12,
+      "line": 29,
       "meta": {},
       "refs": []
     },
@@ -43,7 +43,7 @@
             "value": 1
           },
           "source": "1",
-          "line": 24
+          "line": 41
         }
       ],
       "choices": [
@@ -55,7 +55,7 @@
           "human": false,
           "loop": false,
           "target": "design_system",
-          "line": 25
+          "line": 42
         },
         {
           "id": "rewrite_readme#1",
@@ -79,7 +79,7 @@
           "human": false,
           "loop": true,
           "target": "rewrite_readme",
-          "line": 26
+          "line": 43
         },
         {
           "id": "rewrite_readme#2",
@@ -103,11 +103,11 @@
           "human": true,
           "loop": false,
           "target": "design_system",
-          "line": 27
+          "line": 44
         }
       ],
       "divert": null,
-      "line": 20,
+      "line": 37,
       "meta": {},
       "refs": []
     },
@@ -118,9 +118,9 @@
       "choices": [],
       "divert": {
         "target": "scaffold_site",
-        "line": 34
+        "line": 51
       },
-      "line": 29,
+      "line": 46,
       "meta": {},
       "refs": []
     },
@@ -131,9 +131,9 @@
       "choices": [],
       "divert": {
         "target": "write_content",
-        "line": 40
+        "line": 57
       },
-      "line": 36,
+      "line": 53,
       "meta": {},
       "refs": []
     },
@@ -144,9 +144,9 @@
       "choices": [],
       "divert": {
         "target": "build_demos",
-        "line": 47
+        "line": 64
       },
-      "line": 42,
+      "line": 59,
       "meta": {},
       "refs": []
     },
@@ -162,7 +162,7 @@
             "value": 1
           },
           "source": "1",
-          "line": 54
+          "line": 71
         }
       ],
       "choices": [
@@ -174,7 +174,7 @@
           "human": false,
           "loop": false,
           "target": "accessibility_pass",
-          "line": 55
+          "line": 72
         },
         {
           "id": "build_demos#1",
@@ -198,7 +198,7 @@
           "human": false,
           "loop": true,
           "target": "build_demos",
-          "line": 56
+          "line": 73
         },
         {
           "id": "build_demos#2",
@@ -222,11 +222,11 @@
           "human": true,
           "loop": false,
           "target": "accessibility_pass",
-          "line": 57
+          "line": 74
         }
       ],
       "divert": null,
-      "line": 49,
+      "line": 66,
       "meta": {},
       "refs": []
     },
@@ -243,7 +243,7 @@
           "human": false,
           "loop": false,
           "target": "integrate_runtime",
-          "line": 64
+          "line": 81
         },
         {
           "id": "accessibility_pass#1",
@@ -253,11 +253,11 @@
           "human": false,
           "loop": true,
           "target": "accessibility_pass",
-          "line": 65
+          "line": 82
         }
       ],
       "divert": null,
-      "line": 59,
+      "line": 76,
       "meta": {},
       "refs": []
     },
@@ -274,11 +274,11 @@
           "human": false,
           "loop": false,
           "target": "ship_review",
-          "line": 72
+          "line": 89
         }
       ],
       "divert": null,
-      "line": 67,
+      "line": 84,
       "meta": {},
       "refs": []
     },
@@ -295,7 +295,7 @@
           "human": true,
           "loop": false,
           "target": "END",
-          "line": 78
+          "line": 95
         },
         {
           "id": "ship_review#1",
@@ -305,11 +305,11 @@
           "human": true,
           "loop": true,
           "target": "address_feedback",
-          "line": 79
+          "line": 96
         }
       ],
       "divert": null,
-      "line": 74,
+      "line": 91,
       "meta": {},
       "refs": []
     },
@@ -320,15 +320,17 @@
       "choices": [],
       "divert": {
         "target": "ship_review",
-        "line": 84
+        "line": 101
       },
-      "line": 81,
+      "line": 98,
       "meta": {},
       "refs": []
     }
   ],
   "meta": {
     "project": "marionette-docs-site",
+    "summary": "Rewrite the README around captured reality and ship a Cloudflare docs site whose terminal demos are byte-faithful replays of the real CLI.",
+    "prompt": "Let's do two things and use marionette itself to plan it out:\n\n1. updating the readme to describe what marionette is and does, with\n   (brief but illustrative) examples\n2. creating a doc site to be hosted on cloudflare that does similar but\n   with realistic interactive demonstrations (these have to be true to how\n   it would actually appear in a terminal) along with examples of the\n   output and what it looks like end to end, and how to use it in practice.\n\nThe latter requires a design system: full viewport terminal aesthetic, but\ndon't compromise accessibility. This isn't a SaaS but a tool — no\nmarketing bumf, just what really helps understand and visualise what this\ndoes, plus a syntax reference, examples, use-cases, and the usual doc\nfaire.",
     "github:repo": "leemeichin/marionette",
     "delivery": "single-pr",
     "delivery:branch": "claude/marionette-docs-site-zm5vzp",

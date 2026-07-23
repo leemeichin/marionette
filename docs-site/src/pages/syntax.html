@@ -117,11 +117,22 @@ runtime; the compiler warns (<code>MAR017</code>) only when the
 
 <h2 id="metadata">Well-known metadata namespaces</h2>
 
-<p>The compiler normalises these into structured refs and delivery config
-(see <a href="/execution">execution</a>); all other namespaces pass through
-untouched as extension metadata.</p>
+<p>Any key accepts the fenced <code>"""</code> form for well-formed
+multiline text; an unterminated fence is a parse error.
+<code>summary</code> and <code>prompt</code> anchor the plan to its
+origin — <code>summarize</code> leads with them and the executor's brief
+carries them as <code>plan.intent</code>, so the file never operates in a
+vacuum. The provider namespaces normalise into structured refs and
+delivery config (see <a href="/execution">execution</a>); all other
+namespaces pass through untouched as extension metadata.</p>
 
 <mar-src title="metadata vocabulary">
+# summary: One-line abstract: what this plan achieves and why.
+# prompt: """
+The original ask, verbatim. A fenced value is a container for
+markdown — blank lines, lists and # characters are plain text.
+"""
+
 # github:repo: acme/platform        // context for github refs
 # github:issue: 22                  // → https://github.com/acme/platform/issues/22
 # github:pr: other/repo#9           // explicit repo wins over context

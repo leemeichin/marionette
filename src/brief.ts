@@ -57,6 +57,8 @@ export interface Brief {
     project: string | null;
     hash: string;
     refs: Ref[];
+    /** Why this plan exists: # summary: (abstract) and # prompt: (original ask). */
+    intent: { summary: string | null; prompt: string | null };
   };
   status: BriefStatus;
   variables: Record<string, Value>;
@@ -93,6 +95,10 @@ const title = (node: TrajectoryNode | undefined): string | null =>
 
 const metaString = (v: string | string[] | undefined): string | null =>
   v === undefined ? null : Array.isArray(v) ? v[v.length - 1] : v;
+
+// Repeated tags accumulate; for intent text every line matters, so join.
+const metaText = (v: string | string[] | undefined): string | null =>
+  v === undefined ? null : Array.isArray(v) ? v.join('\n') : v;
 
 export interface BriefOptions {
   /** Plan path used in the protocol command templates. */
@@ -152,6 +158,10 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
       file,
       project: metaString(trajectory.meta['project']),
       hash: trajectory.hash,
+      intent: {
+        summary: metaText(trajectory.meta['summary']),
+        prompt: metaText(trajectory.meta['prompt']),
+      },
       refs: trajectory.refs,
     },
     status,
@@ -196,6 +206,10 @@ export function renderBrief(brief: Brief, style?: Style): string {
     : brief.status === 'stranded' ? s.red('stranded — no available step')
     : s.cyan('active');
   lines.push(`status: ${badge}   progress: ${brief.progress.nodesVisited}/${brief.progress.nodesTotal} phases, ${brief.progress.steps} steps`);
+  if (brief.plan.intent.summary) lines.push(`intent: ${brief.plan.intent.summary}`);
+  if (brief.plan.intent.prompt) {
+    lines.push(s.dim('prompt: ' + brief.plan.intent.prompt.split('\n').join('\n        ')));
+  }
 
   if (brief.node) {
     lines.push('');
