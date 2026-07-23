@@ -1,7 +1,7 @@
-[2mcheckout.mar:19:[22m [31m[1merror[22m[39m[2m[MAR006][22m: phase "rollout" is a dead end: no choices and no divert
-[2m  19 | [22m=== rollout ===
+[2mcheckout.mar:22:[22m [31m[1merror[22m[39m[2m[MAR006][22m: phase "rollout" is a dead end: no choices and no divert
+[2m  22 | [22m=== rollout ===
   [36mhelp:[39m add a choice or divert (e.g. "-> END") so every path has an exit
-[2mcheckout.mar:17:[22m [31m[1merror[22m[39m[2m[MAR008][22m: undeclared cycle: build_checkout -> build_checkout
-[2m  17 | [22m+ [Conversion flat — iterate] -> build_checkout
+[2mcheckout.mar:20:[22m [31m[1merror[22m[39m[2m[MAR008][22m: undeclared cycle: build_checkout -> build_checkout
+[2m  20 | [22m+ [Conversion flat — iterate] -> build_checkout
   [36mhelp:[39m cycles must be intentional: mark the returning choice with ~loop~
 [31m✗[39m checkout.mar: 2 errors, 0 warnings

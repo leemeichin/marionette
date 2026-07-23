@@ -3,9 +3,17 @@ marionette — compiled project trajectories for AI agents
 Usage:
   marionette compile   <plan.mar> [-o out.trajectory.json]   Compile to trajectory JSON
   marionette validate  <plan.mar> [--strict]                 Check only; print diagnostics
+  marionette facts     <plan.mar> [-o out.pl]                 Prolog fact base (see spec/rules/)
+  marionette oracle    <plan.mar>                             Check via the bundled rule engine
+  marionette query     <plan.mar> <goal> [--limit n]          Ask the plan a Prolog question
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
+  marionette sync      <plan.mar|.json> [--json]                Tracker sync manifest (see docs/SYNC.md)
+  marionette sync bind <plan.mar> --tracker <github|jira|linear>   Remember the plan's tracker
+  marionette sync link <plan.mar> <phase> <issue-id>            Record a created issue in the plan
+  marionette sync mark <plan.mar|.json> [--cursor n]            Advance the applied-audit cursor
+  marionette import    <issues.json> [--mode queue|phases] [-o out.mar]   Scaffold a plan from issues
   marionette start     <plan.mar|.json> --run <id> [--store dir]
                        [--principal id] [--role agent|human] [--principal-uri uri]
   marionette stop      <plan.mar|.json> --run <id> [--store dir]
@@ -24,6 +32,9 @@ Options:
   --force             Overwrite an existing state file on init
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
   --rationale <text>  Why the step was taken (required for choices)
+  --tracker <name>    Tracker to bind/link against: github, jira or linear
+  --cursor <n>        Decision-log position to mark as synced (default: all of it)
+  --mode <mode>       Import shape: queue (one loop phase) or phases (one per issue)
   --run <id>           Run id (required by start/stop)
   --store <dir>        Run store (default: <plan-dir>/.marionette)
   --create             Start a new run; error if it already exists

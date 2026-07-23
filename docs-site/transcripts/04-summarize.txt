@@ -13,7 +13,7 @@ Starts at **build_checkout**. 3 phases, 2 decision points (phases with 2+ choice
 - **Declared loops:** build_checkout → build_checkout ("Conversion flat — iterate"); rethink → build_checkout ("New direction agreed")
 - **Gates:** 2 gated choices, of which 0 unverified (review manually)
 - **Variables:** attempts: number = 0
-- **Contract hash:** `sha256:24d32e0b2820…`
+- **Contract hash:** `sha256:45a90f7fc02f…`
 
 ## Walkthrough
 

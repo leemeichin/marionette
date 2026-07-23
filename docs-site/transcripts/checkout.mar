@@ -6,9 +6,12 @@ behind a flag and iterate on cohort evidence — five attempts max. I take
 the ship call, and if it never converts we go back to research rather
 than grinding out attempt six.
 """
+# github:repo: acme/shop
+# ref: https://wiki.acme.dev/checkout-revamp
 VAR attempts = 0
 
 === build_checkout ===
+# github:issue: 41
 Rebuild the checkout flow behind a feature flag.
 Ship one measurable change per attempt to the flag cohort and read the
 conversion funnel after a full week; an attempt is done when its data is in.
@@ -18,6 +21,7 @@ conversion funnel after a full week; an attempt is done when its data is in.
 * {attempts >= 5} [Not converging — rethink] @human -> rethink
 
 === rethink ===
+# ref: https://wiki.acme.dev/checkout-usability-study
 Five iterations without lift: take the flow back to research.
 Run the checkout usability study and write up why the five attempts failed;
 that write-up is the input to whichever door is taken next.
@@ -25,6 +29,7 @@ that write-up is the input to whichever door is taken next.
 * [Park the revamp] @human -> END
 
 === rollout ===
+# github:issue: 42
 Ramp the flag to 100% and retire the old flow.
 Watch error rates and conversion during the ramp; done means the old flow is
 deleted, not merely dark.

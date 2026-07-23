@@ -1,4 +1,4 @@
-[1mwork packet — checkout-revamp[22m[2m (sha256:24d32e0b2820…)[22m
+[1mwork packet — checkout-revamp[22m[2m (sha256:45a90f7fc02f…)[22m
 status: [32mcompleted ✓[39m   progress: 2/3 phases, 4 steps
 intent: Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.
 [2mprompt: Checkout conversion has been flat for two quarters. Rebuild the flow
