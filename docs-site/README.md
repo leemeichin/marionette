@@ -39,8 +39,9 @@ custom domain from the Cloudflare dashboard afterwards if wanted.
   fails the build if rendered frames diverge from the capture by one byte.
 - `/playground` compiles and walks plans **in the browser** using the repo's
   own tsc output (staged into `dist/lib` by the build — run `npm run build`
-  at the repo root first). `node:crypto` is shimmed via import map; Three.js
-  is vendored under `public/vendor/` and loaded only on that page.
+  at the repo root first). Hashing is WebCrypto (`globalThis.crypto`), the
+  same code path on Node ≥ 20 and browsers — no shims. Three.js is vendored
+  under `public/vendor/` and loaded only on that page.
 - `<mar-file src="checkout.mar">` / `<mar-src>…</mar-src>` render
   syntax-tinted `.mar` sources.
 

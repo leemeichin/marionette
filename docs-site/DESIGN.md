@@ -117,9 +117,10 @@ link, one `h1`, labelled buttons, `lang`, alt text).
 ## Playground
 
 `/playground` runs the real compiler and walker in the browser: the tsc
-output ships under `/lib`, `node:crypto` is shimmed by an import map
-(`public/vendor/node_crypto.js`, a sync SHA-256 verified against Node's),
-and the graph view is Three.js (vendored, loaded only on that page). The
+output ships under `/lib` and runs unmodified — the compiler hashes with
+WebCrypto (`globalThis.crypto.subtle`), the same code path on Node ≥ 20
+and in browsers. The graph view is Three.js (vendored, loaded only on
+that page). The
 DOM controls are the accessible interface — the canvas is `aria-hidden`
 garnish. Refusals are the walker's own (`human-checkpoint`, gate blocks,
 once-exhaustion); nothing is simulated.

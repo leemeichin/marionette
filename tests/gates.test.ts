@@ -16,7 +16,7 @@ function ctx(partial: Partial<GateContext> = {}): GateContext {
   };
 }
 
-test('expression parsing and evaluation', () => {
+test('expression parsing and evaluation', async () => {
   assert.equal(evalExpr(parseExpr('1 + 2 * 3'), {}), 7);
   assert.equal(evalExpr(parseExpr('(1 + 2) * 3'), {}), 9);
   assert.equal(evalExpr(parseExpr('!(x > 2) || y == "a"'), { x: 1, y: 'b' }), true);
@@ -27,17 +27,17 @@ test('expression parsing and evaluation', () => {
   assert.throws(() => parseExpr('1 +'));
 });
 
-test('constant gates are decidable', () => {
+test('constant gates are decidable', async () => {
   assert.equal(analyzeGate(gate('2 > 1'), ctx()).status, 'satisfiable');
   assert.equal(analyzeGate(gate('false'), ctx()).status, 'unsatisfiable');
 });
 
-test('never-mutated variables evaluate against initials', () => {
+test('never-mutated variables evaluate against initials', async () => {
   assert.equal(analyzeGate(gate('flag'), ctx()).status, 'unsatisfiable');
   assert.equal(analyzeGate(gate('i == 0'), ctx()).status, 'satisfiable');
 });
 
-test('monotonic direction detection', () => {
+test('monotonic direction detection', async () => {
   assert.equal(monotonicDirection('i', new Map([['i', [action('i', '+=', '1')]]])), 'inc');
   assert.equal(monotonicDirection('i', new Map([['i', [action('i', '-=', '2')]]])), 'dec');
   assert.equal(monotonicDirection('i', new Map([['i', [action('i', '+=', '1'), action('i', '-=', '1')]]])), 'unknown');
@@ -45,7 +45,7 @@ test('monotonic direction detection', () => {
   assert.equal(monotonicDirection('i', new Map()), 'none');
 });
 
-test('increasing counter: >= gate eventually satisfiable; < gate eventually false', () => {
+test('increasing counter: >= gate eventually satisfiable; < gate eventually false', async () => {
   const mutations = new Map([['i', [action('i', '+=', '1')]]]);
   const c = ctx({ mutations });
   assert.equal(analyzeGate(gate('i >= 3'), c).status, 'satisfiable');
@@ -55,12 +55,12 @@ test('increasing counter: >= gate eventually satisfiable; < gate eventually fals
   assert.ok(!eventuallyFalse(gate('i > 3'), c));
 });
 
-test('non-monotonic or reassigned counters stay unknown (no false verified claims)', () => {
+test('non-monotonic or reassigned counters stay unknown (no false verified claims)', async () => {
   const mutations = new Map([['i', [action('i', '=', 'i + 1')]]]);
   assert.equal(analyzeGate(gate('i >= 3'), ctx({ mutations })).status, 'unknown');
 });
 
-test('loop-scope monotonicity is invalidated by conflicting mutations elsewhere', () => {
+test('loop-scope monotonicity is invalidated by conflicting mutations elsewhere', async () => {
   const scopeMutations = new Map([['i', [action('i', '+=', '1')]]]);
   const mutations = new Map([['i', [action('i', '+=', '1'), action('i', '-=', '1')]]]);
   assert.equal(analyzeGate(gate('i >= 3'), ctx({ mutations, scopeMutations })).status, 'unknown');

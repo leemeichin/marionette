@@ -11,14 +11,14 @@ import { RUNTIME_PROTOCOL_VERSION, type RuntimePrincipal } from '../src/runtime-
 
 const AT = '2026-07-23T22:00:00.000Z';
 const AGENT: RuntimePrincipal = { id: 'agent-stdio', role: 'agent' };
-const trajectory = compile(`
+const trajectory = (await compile(`
 === a ===
 Alpha.
 * [Go] -> b
 === b ===
 Beta.
 -> END
-`).trajectory!;
+`)).trajectory!;
 
 const collect = () => {
   let value = '';
@@ -42,7 +42,7 @@ const withStore = async (fn: (root: string) => Promise<void>) => {
 
 test('stdio runtime processes correlated requests serially and emits lifecycle events', async () =>
   withStore(async (root) => {
-    const snapshot = initializeRuntimeStore(root, trajectory, {
+    const snapshot = await initializeRuntimeStore(root, trajectory, {
       runId: 'stdio-1', at: AT, principal: AGENT,
     });
     const service = new RuntimeService(trajectory, snapshot, root, AGENT);
@@ -93,7 +93,7 @@ test('stdio runtime processes correlated requests serially and emits lifecycle e
 
 test('stdio runtime requires initialization and returns errors without mutation', async () =>
   withStore(async (root) => {
-    const snapshot = initializeRuntimeStore(root, trajectory, { runId: 'stdio-2', at: AT });
+    const snapshot = await initializeRuntimeStore(root, trajectory, { runId: 'stdio-2', at: AT });
     const service = new RuntimeService(trajectory, snapshot, root, AGENT);
     const output = collect();
     await serveRuntimeLines(service, {

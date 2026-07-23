@@ -12,14 +12,14 @@ const AT = '2026-07-23T20:00:00.000Z';
 const AGENT: RuntimePrincipal = { id: 'agent-7', role: 'agent', uri: 'pibarm://session/s7' };
 const HUMAN: RuntimePrincipal = { id: 'lee', role: 'human' };
 
-const trajectory = compile(`
+const trajectory = (await compile(`
 VAR n = 0
 === build ===
 Build it.
 ~ n += 1
 * [Ship] @human -> END
 + {n < 2} [Retry] ~loop~ -> build
-`).trajectory!;
+`)).trajectory!;
 
 const request = (overrides: Record<string, unknown> = {}) => ({
   protocol: RUNTIME_PROTOCOL_VERSION,
@@ -32,10 +32,10 @@ const request = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-test('runtime command engine is immutable and emits graph-bound lifecycle events', () => {
+test('runtime command engine is immutable and emits graph-bound lifecycle events', async () => {
   const initial = createRuntimeSnapshot(trajectory, { runId: 'run-1', at: AT });
   const before = structuredClone(initial);
-  const result = executeRuntimeRequest(trajectory, initial, AGENT, request(), { at: AT });
+  const result = await executeRuntimeRequest(trajectory, initial, AGENT, request(), { at: AT });
 
   assert.deepEqual(initial, before, 'input snapshot must remain unchanged');
   assert.equal(result.snapshot.revision, 1);
@@ -45,9 +45,9 @@ test('runtime command engine is immutable and emits graph-bound lifecycle events
   assert.equal(result.events[0].principal?.uri, 'pibarm://session/s7');
 });
 
-test('runtime binds human authority to the principal rather than request data', () => {
+test('runtime binds human authority to the principal rather than request data', async () => {
   const initial = createRuntimeSnapshot(trajectory, { runId: 'run-2', at: AT });
-  assert.throws(
+  await assert.rejects(
     () => executeRuntimeRequest(trajectory, initial, AGENT, request({
       id: 2,
       choiceId: 'build#0',
@@ -57,7 +57,7 @@ test('runtime binds human authority to the principal rather than request data', 
     (error: unknown) => error instanceof ProtocolError && error.code === 'forbidden',
   );
 
-  const approved = executeRuntimeRequest(trajectory, initial, HUMAN, request({
+  const approved = await executeRuntimeRequest(trajectory, initial, HUMAN, request({
     id: 3,
     choiceId: 'build#0',
     rationale: 'reviewed and approved',
@@ -67,14 +67,14 @@ test('runtime binds human authority to the principal rather than request data', 
   assert.deepEqual(approved.events.map((item) => item.kind), ['decision.committed', 'run.completed']);
 });
 
-test('runtime rejects stale writes and replays matching idempotent writes once', () => {
+test('runtime rejects stale writes and replays matching idempotent writes once', async () => {
   const initial = createRuntimeSnapshot(trajectory, { runId: 'run-3', at: AT });
-  const first = executeRuntimeRequest(trajectory, initial, AGENT, request(), { at: AT });
-  const replay = executeRuntimeRequest(trajectory, first.snapshot, AGENT, request(), { at: AT });
+  const first = await executeRuntimeRequest(trajectory, initial, AGENT, request(), { at: AT });
+  const replay = await executeRuntimeRequest(trajectory, first.snapshot, AGENT, request(), { at: AT });
   assert.equal(replay.replayed, true);
   assert.equal(replay.snapshot.events.length, first.snapshot.events.length);
 
-  assert.throws(
+  await assert.rejects(
     () => executeRuntimeRequest(trajectory, first.snapshot, AGENT, request({
       id: 4,
       idempotencyKey: 'other',
@@ -83,7 +83,7 @@ test('runtime rejects stale writes and replays matching idempotent writes once',
   );
 });
 
-test('runtime projections progressively disclose context and enforce budgets', () => {
+test('runtime projections progressively disclose context and enforce budgets', async () => {
   const initial = createRuntimeSnapshot(trajectory, { runId: 'run-4', at: AT });
   const signal = buildRuntimeProjection(trajectory, initial, { profile: 'signal' });
   assert.equal(signal.node?.body, undefined);
@@ -104,9 +104,9 @@ test('runtime projections progressively disclose context and enforce budgets', (
   assert.ok(debug.progress);
 });
 
-test('runtime can attach a graph-linked record without advancing the walker', () => {
+test('runtime can attach a graph-linked record without advancing the walker', async () => {
   const initial = createRuntimeSnapshot(trajectory, { runId: 'run-5', at: AT });
-  const result = executeRuntimeRequest(trajectory, initial, AGENT, {
+  const result = await executeRuntimeRequest(trajectory, initial, AGENT, {
     protocol: RUNTIME_PROTOCOL_VERSION,
     id: 5,
     op: 'record',

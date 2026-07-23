@@ -39,8 +39,8 @@ Second phase.
 * [Ship] @human -> END
 `;
 
-test('refs: well-known namespaces normalise with plan-level context', () => {
-  const { trajectory, diagnostics } = compile(PLAN);
+test('refs: well-known namespaces normalise with plan-level context', async () => {
+  const { trajectory, diagnostics } = await compile(PLAN);
   assert.ok(trajectory);
   assert.equal(diagnostics.length, 0, diagnostics.map((d) => d.message).join('; '));
 
@@ -59,8 +59,8 @@ test('refs: well-known namespaces normalise with plan-level context', () => {
   ]);
 });
 
-test('refs: missing context degrades to url:null; malformed values warn MAR018', () => {
-  const { trajectory, diagnostics } = compile(`
+test('refs: missing context degrades to url:null; malformed values warn MAR018', async () => {
+  const { trajectory, diagnostics } = await compile(`
 # github:issue: 5
 # jira: not a key
 === a ===
@@ -75,8 +75,8 @@ Alpha.
   assert.match(mar018[0].message, /jira/);
 });
 
-test('refs: repeated metadata tags accumulate instead of overwriting', () => {
-  const { trajectory } = compile(`
+test('refs: repeated metadata tags accumulate instead of overwriting', async () => {
+  const { trajectory } = await compile(`
 === a ===
 Alpha.
 # ref: https://one.example
@@ -87,20 +87,20 @@ Alpha.
     ['https://one.example', 'https://two.example']);
 });
 
-test('delivery: node tags override plan tags; {phase} expands; unknown values warn MAR019', () => {
-  const { trajectory } = compile(PLAN);
+test('delivery: node tags override plan tags; {phase} expands; unknown values warn MAR019', async () => {
+  const { trajectory } = await compile(PLAN);
   const [a, b] = trajectory!.nodes;
   assert.deepEqual(resolveDelivery(trajectory!.meta, a.meta, a.id),
     { mode: 'pr-per-phase', report: 'at-checkpoints', branch: 'work/a' });
   assert.deepEqual(resolveDelivery(trajectory!.meta, b.meta, b.id),
     { mode: 'single-pr', report: 'at-checkpoints', branch: null });
 
-  const { diagnostics } = compile('# delivery: yolo\n# report: sometimes\n=== a ===\nAlpha.\n-> END\n');
+  const { diagnostics } = await compile('# delivery: yolo\n# report: sometimes\n=== a ===\nAlpha.\n-> END\n');
   assert.equal(diagnostics.filter((d) => d.code === 'MAR019').length, 2);
 });
 
-test('brief: active packet carries node, refs, delivery, evaluated frontier and protocol', () => {
-  const { trajectory } = compile(PLAN, { file: 'plan.mar' });
+test('brief: active packet carries node, refs, delivery, evaluated frontier and protocol', async () => {
+  const { trajectory } = await compile(PLAN, { file: 'plan.mar' });
   const state = initState(trajectory!, 'system', AT);
   const brief = buildBrief(trajectory!, state, { file: 'plan.mar' });
 
@@ -122,8 +122,8 @@ test('brief: active packet carries node, refs, delivery, evaluated frontier and 
   assert.match(text, /unavailable/);
 });
 
-test('brief: awaiting-human when every available choice is @human, with escalation', () => {
-  const { trajectory } = compile(PLAN, { file: 'plan.mar' });
+test('brief: awaiting-human when every available choice is @human, with escalation', async () => {
+  const { trajectory } = await compile(PLAN, { file: 'plan.mar' });
   const state = initState(trajectory!, 'system', AT);
   takeChoice(trajectory!, state, 'Again', { actor: 'agent', rationale: 'iterate', at: AT });
   takeChoice(trajectory!, state, 'Done', { actor: 'agent', rationale: 'n reached 2', at: AT });
@@ -136,8 +136,8 @@ test('brief: awaiting-human when every available choice is @human, with escalati
   assert.match(renderBrief(brief), /escalation required/);
 });
 
-test('brief: stranded when nothing is available and there is no divert', () => {
-  const { trajectory } = compile(`
+test('brief: stranded when nothing is available and there is no divert', async () => {
+  const { trajectory } = await compile(`
 VAR go = false
 === a ===
 Alpha.
@@ -150,8 +150,8 @@ Alpha.
   assert.match(renderBrief(brief), /stuck/);
 });
 
-test('brief: completed packet has null node and empty frontier', () => {
-  const { trajectory } = compile('=== a ===\nAlpha.\n* [Ship] -> END\n');
+test('brief: completed packet has null node and empty frontier', async () => {
+  const { trajectory } = await compile('=== a ===\nAlpha.\n* [Ship] -> END\n');
   const state = initState(trajectory!, 'system', AT);
   takeChoice(trajectory!, state, '0', { actor: 'agent', rationale: 'shipped', at: AT });
   const brief = buildBrief(trajectory!, state);
@@ -161,14 +161,14 @@ test('brief: completed packet has null node and empty frontier', () => {
   assert.match(renderBrief(brief), /reached END/);
 });
 
-test('rebind: migrates state across a plan edit, keeping the log', () => {
-  const v1 = compile('VAR n = 0\n=== a ===\nAlpha.\n~ n += 1\n* [Go] -> b\n=== b ===\nBeta.\n* [Ship] -> END\n').trajectory!;
+test('rebind: migrates state across a plan edit, keeping the log', async () => {
+  const v1 = (await compile('VAR n = 0\n=== a ===\nAlpha.\n~ n += 1\n* [Go] -> b\n=== b ===\nBeta.\n* [Ship] -> END\n')).trajectory!;
   const state = initState(v1, 'system', AT);
   takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
 
-  const v2 = compile(
+  const v2 = (await compile(
     'VAR added = true\n=== a ===\nAlpha.\n-> b\n=== b ===\nBeta, reworded.\n* [Ship] -> END\n* [Hold] @human -> END\n',
-  ).trajectory!;
+  )).trajectory!;
   assert.notEqual(v1.hash, v2.hash);
 
   const report = rebindState(v2, state);
@@ -180,12 +180,12 @@ test('rebind: migrates state across a plan edit, keeping the log', () => {
   assert.equal(state.current, 'b');
 });
 
-test('rebind: refuses when the current phase no longer exists', () => {
-  const v1 = compile('=== a ===\nAlpha.\n* [Go] -> b\n=== b ===\nBeta.\n* [Ship] -> END\n').trajectory!;
+test('rebind: refuses when the current phase no longer exists', async () => {
+  const v1 = (await compile('=== a ===\nAlpha.\n* [Go] -> b\n=== b ===\nBeta.\n* [Ship] -> END\n')).trajectory!;
   const state = initState(v1, 'system', AT);
   takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
 
-  const v2 = compile('=== a ===\nAlpha.\n* [Ship] -> END\n').trajectory!;
+  const v2 = (await compile('=== a ===\nAlpha.\n* [Ship] -> END\n')).trajectory!;
   assert.throws(
     () => rebindState(v2, state),
     (e: unknown) => e instanceof WalkError && e.code === 'migration-blocked',

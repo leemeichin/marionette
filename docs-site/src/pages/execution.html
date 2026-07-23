@@ -63,6 +63,17 @@ refuses <code>--actor agent</code> on <code>@human</code> choices with the
 <code>human-checkpoint</code> error code — so escalation is enforced, not
 advisory.</p>
 
+<p>The answer can come back through the same channel. When the human states
+an explicit, unambiguous decision in-session, the executor records it
+<strong>as their proxy</strong> — <code>state choose &lt;plan&gt;
+&lt;choice&gt; --actor &lt;their-name&gt; --rationale "&lt;their stated
+reasoning&gt;"</code> — no leaving the conversation for a terminal. The
+contract at an <code>@human</code> gate is <em>attribution and
+evidence</em>, not ceremony: the walker refuses only the
+<code>agent</code> actor, and the log carries the human's name and their
+words. Inferred intent, ambiguous replies and silence are never
+recordable — the executor asks instead.</p>
+
 <h2 id="runtime">The local runtime: <code>marionette start</code></h2>
 
 <p>The CLI loop above is one executor shape. The other is a

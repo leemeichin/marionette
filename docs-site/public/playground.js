@@ -1,5 +1,5 @@
 // The playground: the real compiler + walker (tsc output under /lib,
-// node:crypto shimmed via the page's import map) with a Three.js view of
+// hashing via WebCrypto so the modules run unmodified) with a Three.js view of
 // the graph. The DOM controls are the accessible interface; the canvas is
 // aria-hidden garnish. No autoplay; reduced motion = no tweens.
 import * as THREE from 'three';
@@ -43,6 +43,7 @@ Ramp the flag to 100% and retire the old flow.
   let trajectory = null;
   let state = null;
   let refusal = null;
+  let compileSeq = 0;
   const viz = makeViz(canvasHost, reduced);
 
   srcEl.value = STARTER;
@@ -60,8 +61,10 @@ Ramp the flag to 100% and retire the old flow.
 
   recompile();
 
-  function recompile() {
-    const result = compile(srcEl.value, { file: 'playground.mar' });
+  async function recompile() {
+    const seq = ++compileSeq;
+    const result = await compile(srcEl.value, { file: 'playground.mar' });
+    if (seq !== compileSeq) return; // a newer keystroke superseded this compile
     renderDiagnostics(result.diagnostics);
     if (!result.trajectory || !result.ok) {
       trajectory = null;

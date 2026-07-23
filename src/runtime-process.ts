@@ -54,7 +54,7 @@ export class RuntimeService {
     return this.snapshot;
   }
 
-  handleLine(line: string): RuntimeLineResult {
+  async handleLine(line: string): Promise<RuntimeLineResult> {
     if (Buffer.byteLength(line) > MAX_REQUEST_BYTES) {
       return {
         response: failure(null, 'invalid-request',
@@ -83,7 +83,7 @@ export class RuntimeService {
       }
 
       const before = this.snapshot;
-      const executed = executeRuntimeRequest(
+      const executed = await executeRuntimeRequest(
         this.trajectory,
         before,
         this.principal,
@@ -141,7 +141,7 @@ export async function serveRuntimeLines(
   const lines = createInterface({ input: streams.input, crlfDelay: Infinity });
   for await (const line of lines) {
     if (!line.trim()) continue;
-    const result = service.handleLine(line);
+    const result = await service.handleLine(line);
     streams.output.write(`${JSON.stringify(result.response)}\n`);
     for (const notification of result.notifications) {
       streams.output.write(`${JSON.stringify(notification)}\n`);

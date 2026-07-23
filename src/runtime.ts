@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import { buildBrief } from './brief.js';
+import { sha256Hex } from './hash.js';
 import { advance, initState, takeChoice, WalkError } from './state.js';
 import type { PlanState, Ref, Trajectory } from './types.js';
 import {
@@ -39,12 +39,12 @@ const clone = <T>(value: T): T => structuredClone(value);
 const title = (body: string, fallback: string): string =>
   body.split('\n')[0] || fallback;
 
-const requestFingerprint = (request: RuntimeRequest): string => {
+const requestFingerprint = async (request: RuntimeRequest): Promise<string> => {
   const semantic = { ...request } as Record<string, unknown>;
   delete semantic['id'];
   delete semantic['profile'];
   delete semantic['budget'];
-  return createHash('sha256').update(JSON.stringify(semantic)).digest('hex');
+  return sha256Hex(JSON.stringify(semantic));
 };
 
 const isWrite = (request: RuntimeRequest): request is Extract<RuntimeRequest, {
@@ -209,14 +209,14 @@ function checkRevision(snapshot: RuntimeSnapshot, expected: number, requestId: s
   }
 }
 
-function checkIdempotency(
+async function checkIdempotency(
   snapshot: RuntimeSnapshot,
   request: Extract<RuntimeRequest, { op: 'choose' | 'advance' | 'record' }>,
-): RuntimeIdempotencyRecord | null {
+): Promise<RuntimeIdempotencyRecord | null> {
   if (!request.idempotencyKey) return null;
   const prior = snapshot.idempotency[request.idempotencyKey];
   if (!prior) return null;
-  if (prior.fingerprint !== requestFingerprint(request)) {
+  if (prior.fingerprint !== await requestFingerprint(request)) {
     throw new ProtocolError(
       `idempotency key "${request.idempotencyKey}" was already used for a different command`,
       'invalid-request',
@@ -242,13 +242,13 @@ function exactChoice(trajectory: Trajectory, state: PlanState, choiceId: string)
   return { node: node!, choice };
 }
 
-export function executeRuntimeRequest(
+export async function executeRuntimeRequest(
   trajectory: Trajectory,
   input: RuntimeSnapshot,
   principal: RuntimePrincipal,
   request: RuntimeRequest,
   options: RuntimeCommandOptions = {},
-): RuntimeCommandResult {
+): Promise<RuntimeCommandResult> {
   if (request.op === 'initialize') {
     return {
       snapshot: input,
@@ -295,7 +295,7 @@ export function executeRuntimeRequest(
     };
   }
 
-  const prior = checkIdempotency(input, request);
+  const prior = await checkIdempotency(input, request);
   if (prior) {
     return {
       snapshot: input,
@@ -338,7 +338,7 @@ export function executeRuntimeRequest(
         rationale: request.rationale,
         evidence: request.evidence ?? [],
         idempotencyKey: request.idempotencyKey ?? null,
-        commandFingerprint: requestFingerprint(request),
+        commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: node.id, choiceId: choice.id }));
     } else if (request.op === 'advance') {
       const from = snapshot.state.current;
@@ -356,7 +356,7 @@ export function executeRuntimeRequest(
         rationale: request.rationale,
         evidence: request.evidence ?? [],
         idempotencyKey: request.idempotencyKey ?? null,
-        commandFingerprint: requestFingerprint(request),
+        commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: from }));
     } else {
       emitted.push(event(snapshot, trajectory, 'record.attached', at, {
@@ -365,7 +365,7 @@ export function executeRuntimeRequest(
         rationale: request.rationale ?? null,
         refs: request.refs ?? [],
         idempotencyKey: request.idempotencyKey ?? null,
-        commandFingerprint: requestFingerprint(request),
+        commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: snapshot.state.status === 'completed' ? undefined : snapshot.state.current }));
     }
   } catch (error) {
@@ -397,7 +397,7 @@ export function executeRuntimeRequest(
   snapshot.revision++;
   if (request.idempotencyKey) {
     snapshot.idempotency[request.idempotencyKey] = {
-      fingerprint: requestFingerprint(request),
+      fingerprint: await requestFingerprint(request),
       revision: snapshot.revision,
       eventSeqs: emitted.map((item) => item.seq),
     };

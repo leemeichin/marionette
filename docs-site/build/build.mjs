@@ -118,9 +118,10 @@ export function build() {
   }
 
   // Stage the real compiler/walker (tsc output) for in-browser use on the
-  // playground. node:crypto is shimmed via an import map on that page.
+  // playground. Hashing is WebCrypto (globalThis.crypto), so the same
+  // modules run on Node and in the browser with no shims.
   const repoDist = join(root, '..', 'dist');
-  const LIB = ['types.js', 'expr.js', 'gates.js', 'refs.js', 'suggest.js', 'parser.js', 'validate.js', 'compile.js', 'state.js', 'term.js'];
+  const LIB = ['types.js', 'hash.js', 'expr.js', 'gates.js', 'refs.js', 'suggest.js', 'parser.js', 'validate.js', 'compile.js', 'state.js', 'term.js'];
   mkdirSync(join(dist, 'lib'), { recursive: true });
   for (const f of LIB) {
     const src = join(repoDist, f);

@@ -165,41 +165,41 @@ export function readRuntimeEvents(path: string): RuntimeEvent[] {
   return events;
 }
 
-export function archiveTrajectory(root: string, trajectory: Trajectory): string {
+export async function archiveTrajectory(root: string, trajectory: Trajectory): Promise<string> {
   const path = join(root, 'graphs', graphFileName(trajectory.hash));
   if (!existsSync(path)) {
     atomicWrite(path, `${JSON.stringify(trajectory, null, 2)}\n`);
   } else {
     const archived = JSON.parse(readFileSync(path, 'utf8')) as Trajectory;
-    if (archived.hash !== trajectory.hash || trajectoryHash(archived) !== trajectory.hash) {
+    if (archived.hash !== trajectory.hash || await trajectoryHash(archived) !== trajectory.hash) {
       throw new RuntimeStoreError(`archived graph at ${path} has the wrong hash`, 'graph-mismatch');
     }
   }
   return path;
 }
 
-export function resolveArchivedTrajectory(root: string, hash: string): Trajectory {
+export async function resolveArchivedTrajectory(root: string, hash: string): Promise<Trajectory> {
   const path = join(root, 'graphs', graphFileName(hash));
   if (!existsSync(path)) {
     throw new RuntimeStoreError(`no archived trajectory for ${hash}`, 'run-not-found');
   }
   const trajectory = JSON.parse(readFileSync(path, 'utf8')) as Trajectory;
-  if (trajectory.hash !== hash || trajectoryHash(trajectory) !== hash) {
+  if (trajectory.hash !== hash || await trajectoryHash(trajectory) !== hash) {
     throw new RuntimeStoreError(`archived graph at ${path} has the wrong hash`, 'graph-mismatch');
   }
   return trajectory;
 }
 
-export function initializeRuntimeStore(
+export async function initializeRuntimeStore(
   root: string,
   trajectory: Trajectory,
   options: { runId: string; at?: string; principal?: RuntimePrincipal },
-): RuntimeSnapshot {
+): Promise<RuntimeSnapshot> {
   const paths = runtimePaths(root, options.runId, trajectory.hash);
   if (existsSync(paths.run)) {
     throw new RuntimeStoreError(`runtime run "${options.runId}" already exists`, 'run-exists');
   }
-  archiveTrajectory(root, trajectory);
+  await archiveTrajectory(root, trajectory);
   mkdirSync(paths.run, { recursive: true });
   const snapshot = createRuntimeSnapshot(trajectory, options);
   appendEvents(paths.events, snapshot.events);

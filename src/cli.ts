@@ -121,7 +121,7 @@ class UsageError extends Error {}
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
 
-function readSource(file: string): { trajectory: Trajectory; diagnostics: Diagnostic[]; ok: boolean; source?: string } {
+async function readSource(file: string): Promise<{ trajectory: Trajectory; diagnostics: Diagnostic[]; ok: boolean; source?: string }> {
   const text = readTextFile(file);
   if (file.endsWith('.json')) {
     let trajectory: Trajectory;
@@ -133,7 +133,7 @@ function readSource(file: string): { trajectory: Trajectory; diagnostics: Diagno
     if (!trajectory.hash || !trajectory.nodes) throw new UsageError(`${file} is not a trajectory document`);
     return { trajectory, diagnostics: [], ok: true };
   }
-  const result = compile(text, { file });
+  const result = await compile(text, { file });
   if (!result.trajectory) {
     process.stderr.write(formatDiagnostics(result.diagnostics, file, { source: text, style: err }) + '\n');
     throw new UsageError(`${file} did not compile`);
@@ -209,7 +209,7 @@ export async function run(argv: string[]): Promise<number> {
         const file = positional[0];
         if (!file) throw new UsageError('compile: missing <plan.mar>');
         const text = readTextFile(file);
-        const result = compile(text, { file });
+        const result = await compile(text, { file });
         if (result.diagnostics.length > 0) {
           process.stderr.write(formatDiagnostics(result.diagnostics, file, { source: text, style: err }) + '\n');
         }
@@ -229,7 +229,7 @@ export async function run(argv: string[]): Promise<number> {
         const file = positional[0];
         if (!file) throw new UsageError('validate: missing <plan.mar>');
         const text = readTextFile(file);
-        const result = compile(text, { file });
+        const result = await compile(text, { file });
         if (result.diagnostics.length > 0) {
           process.stderr.write(formatDiagnostics(result.diagnostics, file, { source: text, style: err }) + '\n');
         }
@@ -251,7 +251,7 @@ export async function run(argv: string[]): Promise<number> {
         const { positional, flags } = parseArgs(rest);
         const file = positional[0];
         if (!file) throw new UsageError('render: missing <plan.mar|.json>');
-        const { trajectory, ok, diagnostics, source } = readSource(file);
+        const { trajectory, ok, diagnostics, source } = await readSource(file);
         if (!ok) {
           process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
           return 1;
@@ -269,7 +269,7 @@ export async function run(argv: string[]): Promise<number> {
         const { positional, flags } = parseArgs(rest);
         const file = positional[0];
         if (!file) throw new UsageError('summarize: missing <plan.mar|.json>');
-        const { trajectory, diagnostics } = readSource(file);
+        const { trajectory, diagnostics } = await readSource(file);
         let state: PlanState | null = null;
         const sf = stateFileFor(file, flags);
         if ((typeof flags['state'] === 'string' || existsSync(sf)) && existsSync(sf)) {
@@ -283,7 +283,7 @@ export async function run(argv: string[]): Promise<number> {
         const { positional, flags } = parseArgs(rest);
         const file = positional[0];
         if (!file) throw new UsageError('brief: missing <plan.mar|.json>');
-        const { trajectory, ok, diagnostics, source } = readSource(file);
+        const { trajectory, ok, diagnostics, source } = await readSource(file);
         if (!ok) {
           process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
           process.stderr.write('refusing to brief on a plan that does not validate\n');
@@ -316,7 +316,7 @@ export async function run(argv: string[]): Promise<number> {
           role,
           uri: typeof flags['principal-uri'] === 'string' ? flags['principal-uri'] : undefined,
         };
-        const { trajectory, ok, diagnostics, source } = readSource(file);
+        const { trajectory, ok, diagnostics, source } = await readSource(file);
         if (!ok) {
           process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
           process.stderr.write('refusing to start: the plan does not validate\n');
@@ -329,14 +329,14 @@ export async function run(argv: string[]): Promise<number> {
         let created = false;
         try {
           if (flags['create']) {
-            snapshot = initializeRuntimeStore(store, trajectory, { runId, principal });
+            snapshot = await initializeRuntimeStore(store, trajectory, { runId, principal });
             created = true;
           } else {
             try {
               snapshot = loadRuntimeStore(store, runId, trajectory);
             } catch (error) {
               if (!(error instanceof RuntimeStoreError) || error.code !== 'run-not-found') throw error;
-              snapshot = initializeRuntimeStore(store, trajectory, { runId, principal });
+              snapshot = await initializeRuntimeStore(store, trajectory, { runId, principal });
               created = true;
             }
           }
@@ -377,7 +377,7 @@ export async function run(argv: string[]): Promise<number> {
         if (!file) throw new UsageError('stop: missing <plan.mar|.json>');
         const runId = typeof flags['run'] === 'string' ? flags['run'] : undefined;
         if (!runId) throw new UsageError('stop: missing required --run <id>');
-        const { trajectory, ok, diagnostics, source } = readSource(file);
+        const { trajectory, ok, diagnostics, source } = await readSource(file);
         if (!ok) {
           process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
           return 1;
@@ -404,7 +404,7 @@ export async function run(argv: string[]): Promise<number> {
         const { positional, flags } = parseArgs(stateRest);
         const file = positional[0];
         if (!sub || !file) throw new UsageError('state: expected "state <init|show|choose|advance> <plan>"');
-        const { trajectory, ok, diagnostics, source } = readSource(file);
+        const { trajectory, ok, diagnostics, source } = await readSource(file);
         if (!ok) {
           process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
           process.stderr.write('refusing to walk a plan that does not validate\n');
