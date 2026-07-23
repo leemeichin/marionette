@@ -1,0 +1,32 @@
+flowchart TD
+  data_audit["<b>data_audit</b><br/>Audit the labeled fraud history: volume, class balance, l…"]
+  labeling_sprint["<b>labeling_sprint</b><br/>Spend a month labeling historical transactions before any…"]
+  train_model["<b>train_model</b><br/>Train the fraud model and evaluate on the holdout set aga…"]
+  keep_rules_writeup["<b>keep_rules_writeup</b><br/>Keep the rules engine. Write up why the model could not b…"]
+  shadow_scoring["<b>shadow_scoring</b><br/>Shadow-score live traffic for a month: the model runs alo…"]
+  risk_review["<b>risk_review</b><br/>Risk team reviews the shadow month. They own fraud losses,"]
+  production_model["<b>production_model</b><br/>Model makes live fraud decisions; auto-retrains weekly."]
+  fallback_to_rules["<b>fallback_to_rules</b><br/>Automatic fallback: rules engine resumes making decisions…"]
+  data_audit -- "Labeled history is deep enough {labels_sufficient}" --> train_model
+  data_audit -- "Labeled history too thin {!labels_sufficient}" --> labeling_sprint
+  labeling_sprint -- "Labeling month complete, dataset ready" --> train_model
+  train_model -- "Model beats rules on precision and recall {model_beats_rules}" --> shadow_scoring
+  train_model -. "↻ Not there yet, iterate again {train_attempts &lt; 5}" .-> train_model
+  train_model -- "✋ Several serious attempts, still losing {train_attempts &gt;= 5}" --> keep_rules_writeup
+  keep_rules_writeup -- "Write-up published, project closed" --> END
+  shadow_scoring -- "Shadow month complete, results compiled" --> risk_review
+  risk_review -- "✋ Risk team approves the switch" --> production_model
+  risk_review -. "✋ ↻ Not convinced, more model work first" .-> train_model
+  risk_review -- "✋ Risk team rejects, keep the rules engine" --> keep_rules_writeup
+  production_model -- "Drift alert or losses above threshold, auto-fallback {drift_or_losses}" --> fallback_to_rules
+  production_model -- "✋ Model stable long-term, decommission the rules engine" --> END
+  fallback_to_rules -. "↻ Fallback complete, restart evaluation" .-> data_audit
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 5 stroke:#c62828,stroke-width:3px;
+  linkStyle 8 stroke:#c62828,stroke-width:3px;
+  linkStyle 9 stroke:#c62828,stroke-width:3px;
+  linkStyle 10 stroke:#c62828,stroke-width:3px;
+  linkStyle 12 stroke:#c62828,stroke-width:3px;

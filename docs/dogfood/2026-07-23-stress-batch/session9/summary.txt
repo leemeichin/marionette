@@ -1,0 +1,52 @@
+# Plan summary: plan.mar
+
+Starts at **await_window**. 6 phases, 5 decision points (phases with 2+ choices), 13 choices overall.
+
+- **Human checkpoints:** "Retire the release train" (at await_window)
+- **Declared loops:** await_window → await_window ("Nothing to ship tonight, idle until tomorrow"); build → await_window ("Build failed, changes ride tomorrow's train"); test → await_window ("Tests failed, release requeued for tomorrow night"); deploy → deploy ("Deploy failed, retry now"); deploy → await_window ("Deploy persistently stuck, release rides tomorrow's train instead"); monitor → await_window ("Release healthy, keep monitoring until the next window"); rollback → await_window ("Rolled back, release back on the train")
+- **Gates:** 0 gated choices, of which 0 unverified (review manually)
+- **Variables:** none
+- **Contract hash:** `sha256:69326e2af88b…`
+
+## Walkthrough
+
+### await_window (start)
+Nightly departure window: the train leaves every night, weekends included, carrying whatever changes are queued.
+Done when tonight's window opens and the ship-or-idle call is made autonomously.
+- **Changes queued, train departs** → build (repeatable)
+- **Nothing to ship tonight, idle until tomorrow** → await_window (loops back; repeatable)
+- **Retire the release train** → END (**requires a human decision**; repeatable)
+
+### build
+Build tonight's release artifact from the queued changes.
+Done when a versioned, reproducible artifact exists.
+- **Build succeeded** → test (repeatable)
+- **Build failed, changes ride tomorrow's train** → await_window (loops back; repeatable)
+
+### test
+Run the full automated test suite against tonight's artifact.
+Done when every suite is green; no human review of results.
+- **All tests green** → deploy (repeatable)
+- **Tests failed, release requeued for tomorrow night** → await_window (loops back; repeatable)
+
+### deploy
+Deploy tonight's artifact to production, fully unattended.
+Done when the new release is serving live traffic.
+- **Deploy is live** → monitor (repeatable)
+- **Deploy failed, retry now** → deploy (loops back; repeatable)
+- **Deploy persistently stuck, release rides tomorrow's train instead** → await_window (loops back; repeatable)
+
+### monitor
+Watch production health signals for the new release; monitoring is continuous and the train never stops on its own.
+Done for this cycle when the release is judged healthy or an incident is traced to it.
+- **Incident traced to this release** → rollback (repeatable)
+- **Release healthy, keep monitoring until the next window** → await_window (loops back; repeatable)
+
+### rollback
+Automatically roll back to the previous known-good release, no human sign-off.
+Done when the rollback is live and the failed release is requeued for the next night's train.
+- **Rolled back, release back on the train** → await_window (loops back; repeatable)
+
+## Compiler report
+
+No defects, no warnings. The plan is structurally sound: every phase is reachable, every path has an exit, and all declared loops have a verified exit.

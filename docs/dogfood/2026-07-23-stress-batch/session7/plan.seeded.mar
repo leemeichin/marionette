@@ -1,0 +1,25 @@
+# project: nightly-pipeline
+VAR retry_count = 0
+VAR audited = false
+VAR freshness_sla = 24
+
+-> ingest
+
+=== ingest ===
+Pull the nightly dumps from the vendor SFTP drop.
+* [Dump retrieved] -> transform
++ [Vendor outage, retry tomorrow night] ~loop~ -> ingest
+
+=== transform ===
+Normalize the dumps into the warehouse schema; mapping bugs surface here.
+~ retry_count += 1
+* [Mapping bugs found] ~loop~ -> reconcile
+
+=== reconcile ===
+Reconcile row counts against the source and patch the mapping.
++ [Patched, run the transform again] -> transform
+
+=== publish ===
+Publish the curated tables and notify downstream consumers.
+~ audited = true
+* {audited} [Audit trail written] -> END

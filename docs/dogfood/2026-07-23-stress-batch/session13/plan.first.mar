@@ -1,0 +1,65 @@
+# project: gdpr-retention-cleanup
+VAR chase_rounds = 0
+VAR remediation_rounds = 0
+
+-> data_inventory
+
+=== data_inventory ===
+Inventory personal data across all eleven teams: each team fills in the
+data map. Done when every team has submitted a complete data map.
++ [All eleven data maps received] -> draft_schedule
++ [Some teams have not responded] -> chase_stragglers
+
+=== chase_stragglers ===
+Legal chases the teams that have not yet filled in their data map.
+~ chase_rounds += 1
++ {chase_rounds < 6} [Chased — re-check responses] ~loop~ -> data_inventory
++ {chase_rounds >= 6} [Inventory stalled, human decides how to proceed] @human ~loop~ -> data_inventory
+
+=== draft_schedule ===
+Legal drafts the data-retention schedule from the completed inventory.
++ [Draft ready for DPO review] -> dpo_schedule_review
+
+=== dpo_schedule_review ===
+The DPO reviews the retention schedule and either approves it or bounces
+it back to legal for redrafting, as often as needed.
++ [DPO approves the schedule] @human -> implement_deletion
++ [DPO bounces it for redrafting] @human ~loop~ -> draft_schedule
+
+=== implement_deletion ===
+Teams implement deletion jobs against the approved retention schedule.
+Done when every team has deletion jobs ready for compliance review.
+* [Deletion jobs implemented across teams] -> compliance_review
+
+=== compliance_review ===
+Per-team compliance review of the deletion jobs. Teams pass, fail for the
+first time, or fail for a second time.
++ [All teams pass review] -> external_audit
++ [Some teams failed their first review] -> remediation
++ [A team has failed review twice] -> dpo_escalation
+
+=== remediation ===
+Failing teams (and any external-audit findings) get remediation tasks,
+then go back for re-review.
+~ remediation_rounds += 1
++ {remediation_rounds < 4} [Remediation done — re-review the teams] ~loop~ -> compliance_review
++ {remediation_rounds >= 4} [Remediation not converging] @human -> dpo_escalation
+
+=== dpo_escalation ===
+Teams that failed review twice go on the escalation list for the DPO,
+who decides how to unblock them.
++ [DPO resolves the escalation — back to re-review] @human ~loop~ -> compliance_review
+
+=== external_audit ===
+External counsel performs the final audit once all teams have passed
+compliance review.
++ [Audit clean, no findings] -> program_close
++ [Audit findings raised] ~loop~ -> remediation
+
+=== program_close ===
+The DPO formally closes the GDPR data-retention cleanup program.
+* [DPO formally closes the program] @human -> file_report
+
+=== file_report ===
+Legal files the compliance report with the board.
+* [Compliance report filed with the board] -> END

@@ -1,0 +1,92 @@
+# Plan summary: plan.mar
+
+Starts at **greybox_prototype**. 12 phases, 7 decision points (phases with 2+ choices), 20 choices overall.
+
+- **Human checkpoints:** "Creative director calls it fun" (at core_loop_iteration); "Publisher approves the new scope" (at scope_change_pitch); "Publisher declines, proceed with the best current loop" (at scope_change_pitch); "Gauntlet is not converging, leadership decides to submit as-is" (at gauntlet_reset); "Pass, funding continues" (at publisher_review); "Notes, one rework round granted" (at publisher_review); "Hard fail, cure period triggered" (at publisher_review); "Spend our runway to fix it" (at cure_period); "Negotiate an exit with the publisher" (at cure_period)
+- **Declared loops:** core_loop_iteration → core_loop_iteration ("Not fun yet, iterate another week"); scope_change_pitch → greybox_prototype ("Publisher approves the new scope"); gauntlet_streak → playtest_gauntlet ("Streak alive, run the next session"); gauntlet_reset → polish_pass ("Fold feedback into another polish round"); rework → publisher_review ("Resubmit the revised slice")
+- **Gates:** 5 gated choices, of which 5 unverified (review manually)
+- **Variables:** playtest_weeks: number = 0, positive_streak: number = 0, rework_rounds: number = 0
+- **Contract hash:** `sha256:ec46b78e8d45…`
+
+## Walkthrough
+
+### greybox_prototype (start)
+Greybox the core loop prototype: playable mechanics, placeholder art, nothing else.
+Done when the loop can be played end to end in a weekly playtest build.
+- on entry: `playtest_weeks = 0`
+- **Core loop playable in greybox** → core_loop_iteration (repeatable)
+
+### core_loop_iteration
+Weekly playtest and iteration on the core loop.
+Each week we playtest, read the room, and adjust; the creative director alone decides when it is actually fun.
+- on entry: `playtest_weeks += 1`
+- **Creative director calls it fun** → production_art_audio (**requires a human decision**; repeatable)
+- **Not fun yet, iterate another week** → core_loop_iteration (only if `playtest_weeks < 8`; loops back; repeatable)
+- **Eight weeks in, still not fun** → scope_change_pitch (only if `playtest_weeks >= 8`; repeatable)
+
+### scope_change_pitch
+Pitch the publisher a scope change instead of grinding on a loop that is not landing.
+Done when the publisher gives a clear yes or no on the revised scope.
+- **Publisher approves the new scope** → greybox_prototype (**requires a human decision**; loops back; repeatable)
+- **Publisher declines, proceed with the best current loop** → production_art_audio (**requires a human decision**; repeatable)
+
+### production_art_audio
+Production art and audio for the vertical slice, replacing greybox assets.
+Done when every asset in the slice is production quality.
+- **Slice content complete** → polish_pass
+
+### polish_pass
+Polish pass across the slice: feel, transitions, bugs, performance.
+Done when the slice is presentable to fresh internal players.
+- **Polish bar met, start the gauntlet** → playtest_gauntlet (repeatable)
+
+### playtest_gauntlet
+Run one internal playtest session and measure the positivity score.
+The submission bar is three consecutive sessions above 80 percent positive.
+- **Session above 80 percent positive** → gauntlet_streak (repeatable)
+- **Session at or below 80 percent positive** → gauntlet_reset (repeatable)
+
+### gauntlet_streak
+Record the positive session and check the streak.
+- on entry: `positive_streak += 1`
+- **Three consecutive wins, submit the slice** → submit_milestone (only if `positive_streak >= 3`; repeatable)
+- **Streak alive, run the next session** → playtest_gauntlet (only if `positive_streak < 3`; loops back; repeatable)
+
+### gauntlet_reset
+A session missed the bar, so the streak resets to zero.
+Fold the session feedback into the slice before running again.
+- on entry: `positive_streak = 0`
+- **Fold feedback into another polish round** → polish_pass (loops back; repeatable)
+- **Gauntlet is not converging, leadership decides to submit as-is** → submit_milestone (**requires a human decision**; repeatable)
+
+### submit_milestone
+Package and submit the vertical slice milestone to the publisher.
+- otherwise → publisher_review
+
+### publisher_review
+The publisher reviews the milestone against the contract.
+Outcomes: pass, notes, or hard fail.
+- **Pass, funding continues** → END (**requires a human decision**; repeatable)
+- **Notes, one rework round granted** → rework (only if `rework_rounds < 1`; **requires a human decision**; repeatable)
+- **Hard fail, cure period triggered** → cure_period (**requires a human decision**; repeatable)
+
+### rework
+Address the publisher's notes on the slice.
+Done when every note is resolved or explicitly answered.
+- on entry: `rework_rounds += 1`
+- **Resubmit the revised slice** → publisher_review (loops back; repeatable)
+
+### cure_period
+The contract's cure period: do-or-die.
+Leadership decides whether to spend our own runway fixing the slice or negotiate an exit.
+- **Spend our runway to fix it** → rework (**requires a human decision**; repeatable)
+- **Negotiate an exit with the publisher** → END (**requires a human decision**; repeatable)
+
+## Compiler report
+
+0 errors, 5 warnings.
+- warning [MAR014] (line 20): unverified gate — review manually: {playtest_weeks < 8} on choice "Not fun yet, iterate another week"
+- warning [MAR014] (line 21): unverified gate — review manually: {playtest_weeks >= 8} on choice "Eight weeks in, still not fun"
+- warning [MAR014] (line 48): unverified gate — review manually: {positive_streak >= 3} on choice "Three consecutive wins, submit the slice"
+- warning [MAR014] (line 49): unverified gate — review manually: {positive_streak < 3} on choice "Streak alive, run the next session"
+- warning [MAR014] (line 66): unverified gate — review manually: {rework_rounds < 1} on choice "Notes, one rework round granted"

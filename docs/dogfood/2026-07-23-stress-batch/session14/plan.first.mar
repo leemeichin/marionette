@@ -1,0 +1,79 @@
+# project: vertical-slice-milestone
+
+VAR playtest_weeks = 0
+VAR positive_streak = 0
+VAR rework_rounds = 0
+
+-> greybox_prototype
+
+=== greybox_prototype ===
+Greybox the core loop prototype: playable mechanics, placeholder art, nothing else.
+Done when the loop can be played end to end in a weekly playtest build.
+~ playtest_weeks = 0
++ [Core loop playable in greybox] -> core_loop_iteration
+
+=== core_loop_iteration ===
+Weekly playtest and iteration on the core loop.
+Each week we playtest, read the room, and adjust; the creative director alone decides when it is actually fun.
+~ playtest_weeks += 1
++ [Creative director calls it fun] @human -> production_art_audio
++ {playtest_weeks < 8} [Not fun yet, iterate another week] ~loop~ -> core_loop_iteration
++ {playtest_weeks >= 8} [Eight weeks in, still not fun] -> scope_change_pitch
+
+=== scope_change_pitch ===
+Pitch the publisher a scope change instead of grinding on a loop that is not landing.
+Done when the publisher gives a clear yes or no on the revised scope.
++ [Publisher approves the new scope] @human ~loop~ -> greybox_prototype
++ [Publisher declines, proceed with the best current loop] @human -> production_art_audio
+
+=== production_art_audio ===
+Production art and audio for the vertical slice, replacing greybox assets.
+Done when every asset in the slice is production quality.
+* [Slice content complete] -> polish_pass
+
+=== polish_pass ===
+Polish pass across the slice: feel, transitions, bugs, performance.
+Done when the slice is presentable to fresh internal players.
++ [Polish bar met, start the gauntlet] -> playtest_gauntlet
+
+=== playtest_gauntlet ===
+Run one internal playtest session and measure the positivity score.
+The submission bar is three consecutive sessions above 80 percent positive.
++ [Session above 80 percent positive] -> gauntlet_streak
++ [Session at or below 80 percent positive] -> gauntlet_reset
+
+=== gauntlet_streak ===
+Record the positive session and check the streak.
+~ positive_streak += 1
++ {positive_streak >= 3} [Three consecutive wins, submit the slice] -> submit_milestone
++ {positive_streak < 3} [Streak alive, run the next session] ~loop~ -> playtest_gauntlet
+
+=== gauntlet_reset ===
+A session missed the bar, so the streak resets to zero.
+Fold the session feedback into the slice before running again.
+~ positive_streak = 0
++ [Fold feedback into another polish round] ~loop~ -> polish_pass
++ [Gauntlet is not converging, leadership decides to submit as-is] @human -> submit_milestone
+
+=== submit_milestone ===
+Package and submit the vertical slice milestone to the publisher.
+-> publisher_review
+
+=== publisher_review ===
+The publisher reviews the milestone against the contract.
+Outcomes: pass, notes, or hard fail.
++ [Pass, funding continues] @human -> END
++ {rework_rounds < 1} [Notes, one rework round granted] @human -> rework
++ [Hard fail, cure period triggered] @human -> cure_period
+
+=== rework ===
+Address the publisher's notes on the slice.
+Done when every note is resolved or explicitly answered.
+~ rework_rounds += 1
++ [Resubmit the revised slice] ~loop~ -> publisher_review
+
+=== cure_period ===
+The contract's cure period: do-or-die.
+Leadership decides whether to spend our own runway fixing the slice or negotiate an exit.
++ [Spend our runway to fix it] @human -> rework
++ [Negotiate an exit with the publisher] @human -> END

@@ -1,0 +1,12 @@
+plan.mar:20: warning[MAR014]: unverified gate — review manually: {playtest_weeks < 8} on choice "Not fun yet, iterate another week"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:21: warning[MAR014]: unverified gate — review manually: {playtest_weeks >= 8} on choice "Eight weeks in, still not fun"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:48: warning[MAR014]: unverified gate — review manually: {positive_streak >= 3} on choice "Three consecutive wins, submit the slice"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:49: warning[MAR014]: unverified gate — review manually: {positive_streak < 3} on choice "Streak alive, run the next session"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:66: warning[MAR014]: unverified gate — review manually: {rework_rounds < 1} on choice "Notes, one rework round granted"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 5 warning(s)
+exit=1

@@ -1,0 +1,8 @@
+plan.mar:14: warning[MAR014]: unverified gate — review manually: {respins < 2} on choice "Hardware fault needs a board respin"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:20: warning[MAR014]: unverified gate — review manually: {respins < 2} on choice "EMC failure, respin the board"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:26: warning[MAR014]: unverified gate — review manually: {respins < 2} on choice "Certification failure, respin the board"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 3 warning(s)
+exit=1

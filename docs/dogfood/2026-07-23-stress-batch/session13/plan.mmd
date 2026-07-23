@@ -1,0 +1,40 @@
+flowchart TD
+  data_inventory["<b>data_inventory</b><br/>Inventory personal data across all eleven teams: each tea…"]
+  chase_stragglers["<b>chase_stragglers</b><br/>Legal chases the teams that have not yet filled in their …"]
+  draft_schedule["<b>draft_schedule</b><br/>Legal drafts the data-retention schedule from the complet…"]
+  dpo_schedule_review["<b>dpo_schedule_review</b><br/>The DPO reviews the retention schedule and either approve…"]
+  implement_deletion["<b>implement_deletion</b><br/>Teams implement deletion jobs against the approved retent…"]
+  compliance_review["<b>compliance_review</b><br/>Per-team compliance review of the deletion jobs. Teams pa…"]
+  remediation["<b>remediation</b><br/>Failing teams (and any external-audit findings) get remed…"]
+  dpo_escalation["<b>dpo_escalation</b><br/>Teams that failed review twice go on the escalation list …"]
+  external_audit["<b>external_audit</b><br/>External counsel performs the final audit once all teams …"]
+  program_close["<b>program_close</b><br/>The DPO formally closes the GDPR data-retention cleanup p…"]
+  file_report["<b>file_report</b><br/>Legal files the compliance report with the board."]
+  data_inventory -- "All eleven data maps received" --> draft_schedule
+  data_inventory -- "Some teams have not responded" --> chase_stragglers
+  chase_stragglers -. "↻ Chased — re-check responses {chase_rounds &lt; 6}" .-> data_inventory
+  chase_stragglers -. "✋ ↻ Inventory stalled, human decides how to proceed {chase_rounds &gt;= 6}" .-> data_inventory
+  draft_schedule -- "Draft ready for DPO review" --> dpo_schedule_review
+  dpo_schedule_review -- "✋ DPO approves the schedule" --> implement_deletion
+  dpo_schedule_review -. "✋ ↻ DPO bounces it for redrafting" .-> draft_schedule
+  implement_deletion -- "Deletion jobs implemented across teams" --> compliance_review
+  compliance_review -- "All teams pass review" --> external_audit
+  compliance_review -- "Some teams failed their first review" --> remediation
+  compliance_review -- "A team has failed review twice" --> dpo_escalation
+  remediation -. "↻ Remediation done — re-review the teams {remediation_rounds &lt; 4}" .-> compliance_review
+  remediation -- "✋ Remediation not converging {remediation_rounds &gt;= 4}" --> dpo_escalation
+  dpo_escalation -. "✋ ↻ DPO resolves the escalation — back to re-review" .-> compliance_review
+  external_audit -- "Audit clean, no findings" --> program_close
+  external_audit -. "↻ Audit findings raised" .-> remediation
+  program_close -- "✋ DPO formally closes the program" --> file_report
+  file_report -- "Compliance report filed with the board" --> END
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 3 stroke:#c62828,stroke-width:3px;
+  linkStyle 5 stroke:#c62828,stroke-width:3px;
+  linkStyle 6 stroke:#c62828,stroke-width:3px;
+  linkStyle 12 stroke:#c62828,stroke-width:3px;
+  linkStyle 13 stroke:#c62828,stroke-width:3px;
+  linkStyle 16 stroke:#c62828,stroke-width:3px;

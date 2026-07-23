@@ -1,0 +1,64 @@
+# project: sensor-board-production
+// Take the sensor board from prototype (Rev B in hand) to a 500-unit
+// production run. Respins cost ~6 weeks each; after two, the hardware
+// lead gates further spend. BOM/CM work runs in parallel with EMC in
+// practice, but is sequenced after certification in this traversal.
+
+VAR respins = 0
+
+-> bench_validation
+
+=== bench_validation ===
+Bench-validate the Rev B PCB: power rails, sensor readings, interfaces, firmware bring-up. Done when the board meets the bench test checklist with no open hardware faults.
++ [Bench validation passes] -> emc_precompliance
++ {respins < 2} [Hardware fault needs a board respin] -> board_respin
++ {respins >= 2} [Fault found but respin budget is spent] -> respin_review
+
+=== emc_precompliance ===
+EMC pre-compliance testing at the lab: radiated and conducted emissions, immunity scans. Done when the board passes with margin to spare.
++ [Pre-compliance passes] -> emc_certification
++ {respins < 2} [EMC failure, respin the board] -> board_respin
++ {respins >= 2} [EMC failure but respin budget is spent] -> respin_review
+
+=== emc_certification ===
+Full EMC certification at the accredited lab. Done when the certificate is issued.
++ [Certification passes] -> bom_finalization
++ {respins < 2} [Certification failure, respin the board] -> board_respin
++ {respins >= 2} [Certification failure but respin budget is spent] -> respin_review
+
+=== board_respin ===
+Respin the PCB: incorporate fixes, re-layout, fabricate and assemble a new rev. Each respin is about six weeks and real money.
+~ respins += 1
++ [New rev in hand, back to the bench] ~loop~ -> bench_validation
+
+=== respin_review ===
+Two respins have been spent. Sit down with the hardware lead to decide whether another respin is worth the time and money before committing more.
++ [Hardware lead funds another respin] @human ~loop~ -> board_respin
++ [Halt the production effort] @human -> END
+
+=== bom_finalization ===
+Firm up the bill of materials: lock part selections, confirm sourcing and lead times for every line item. In practice this runs in parallel with the EMC track. Done when the BOM is complete and the main MCU lead time is known.
++ [MCU lead time is within twelve weeks] -> cm_quotes
++ [MCU lead time slips past twelve weeks] -> alternate_mcu_redesign
+
+=== alternate_mcu_redesign ===
+Redesign the board around the alternate MCU instead of waiting out the lead time. The new rev must re-enter bench validation and the EMC track.
++ [Redesign complete, new rev in hand] ~loop~ -> bench_validation
+
+=== cm_quotes ===
+Request and compare quotes from two contract manufacturers for the 500-unit run: unit cost, NRE, tooling, lead time, quality terms. Done when both quotes are in hand and compared.
++ [Quotes in hand and compared] -> final_approval
+
+=== final_approval ===
+The hardware lead reviews and approves the final BOM and the contract manufacturer choice.
++ [BOM and CM approved] @human -> place_production_order
++ [Changes requested, rework the BOM or quotes] @human ~loop~ -> bom_finalization
+
+=== place_production_order ===
+Place the 500-unit production order with the chosen CM. This is the point of no return: once placed, the spend is committed.
++ [Place the production order] @human -> production_run
++ [Hold, revisit the BOM and quotes first] @human ~loop~ -> bom_finalization
+
+=== production_run ===
+The CM builds and delivers the 500-unit production run. Done when units are received and accepted against the acceptance criteria.
+-> END
