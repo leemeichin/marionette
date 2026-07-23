@@ -1,0 +1,118 @@
+# The rule base: a plan as a database of facts
+
+A compiled plan is a directed graph of state machines — which makes it a
+database of facts, and makes the structural validators queries over that
+database. This directory states them as such: `marionette.pl` is the
+graph-level validator suite from `src/validate.ts` + `src/gates.ts` rewritten
+as SWI-Prolog rules, where each MAR code is a clause that reads like its spec:
+
+```prolog
+%% MAR006 — a phase with no effective exit is a dead end.
+finding('MAR006', Line) :-
+    node(N, Line, _), \+ eff_edge(N, _).
+```
+
+It serves two purposes:
+
+1. **An independent oracle.** `tests/oracle.test.ts` runs both validators over
+   every `.mar` in the repo (the dogfood corpus, examples, live plans,
+   fixtures) plus a batch of deterministically seeded defects per plan, and
+   fails on any disagreement. A validator bug now has to be made twice, in two
+   paradigms, to slip through.
+2. **A question surface.** Load a plan's facts into the toplevel and ask it
+   things no CLI subcommand answers.
+
+## Getting a fact base
+
+```console
+$ marionette facts plan.mar > plan.pl        # or: -o plan.pl
+```
+
+Schema (all terms ground; `Expr` mirrors the `Expr` AST in `src/types.ts`):
+
+```prolog
+plan_start(Node).                    % start node id
+node(Node, Line, Ord).               % Ord: source order
+variable(Name, Type, Initial, Line). % Type: number|boolean|string; Initial: num(N)|bool(B)|str(S)
+action(Node, Var, Op, Expr, Line).   % Op: assign|inc|dec — applied on node entry
+choice(Id, Node, Target, Line, Ord). % Ord: global source order across the plan
+label(Id, Label).                    % the human-legible claim on the choice
+sticky(Id).                          % "+" repeatable (absent → "*" once-only)
+human(Id).                           % @human checkpoint
+loop_marked(Id).                     % ~loop~ declared cycle edge
+gate(Id, Expr, Source).              % {gate} as AST + original text
+divert(Node, Target, Line).          % unconditional fallthrough
+```
+
+`Expr` terms: `lit(num(N))`, `lit(bool(B))`, `lit(str(S))`, `var(Name)`,
+`un(not|neg, E)`, `bin(Op, L, R)` with `Op` one of `or and eq ne lt le gt ge
+add sub mul div mod`.
+
+## Running the oracle
+
+```console
+$ swipl -q -g report -t halt spec/rules/marionette.pl plan.pl
+MAR006	19
+STRAND	25
+```
+
+One finding per line, tab-separated. `MAR006`–`MAR017` carry the source line
+and match `marionette validate` exactly. Two kinds go beyond it:
+
+- `MAR008 <a->b->c>` — an undeclared cycle, stated in its semantic form:
+  *every simple cycle in the effective graph must carry a `~loop~` edge*. The
+  TypeScript validator approximates this with DFS back edges, so the two are
+  diffed on presence, not per-cycle; a cycle the rules find that the DFS pass
+  missed is a gap in the approximation, not a false positive.
+- `STRAND <line>` — a once-only (`*`) choice anywhere on a cycle
+  ([#8](https://github.com/leemeichin/marionette/issues/8) item 2): if the
+  traversal comes back around, that exit is exhausted, and a runtime stranding
+  is possible. Not (yet) a compiler diagnostic — often the once-only-ness is
+  the point — so the oracle surfaces it for review instead of the compiler
+  warning on it.
+
+## Questioning a plan
+
+```console
+$ swipl spec/rules/marionette.pl plan.pl
+```
+
+```prolog
+% Can the agent finish this plan without a human ever deciding anything?
+?- unattended_completion.
+
+% Which phases can be entered *and* completed with no human on the path?
+?- unattended_phase(P).
+
+% Every human checkpoint, with the claim a human must sign off on:
+?- human_gate(Choice, Phase, Label).
+
+% What can "beta_launch" still lead to?
+?- reaches(beta_launch, X).
+
+% Which phases sit inside loops?
+?- cyclic(P).
+
+% Which gates can provably never open? (rhetorical — the compiler already
+% told you, but now you can ask *why* interactively)
+?- false_gate(C), gate(C, E, Src), gate_status(E, all, unsat).
+```
+
+The building blocks (`preach/2` reachability, `same_cycle_eff/2`,
+`gate_status/3`, `direction/3` monotonicity, `eval/3`) are all queryable, so
+ad-hoc questions compose without touching TypeScript.
+
+## Equivalence discipline
+
+The rules deliberately reproduce the TS validator's *decisions*, not its
+algorithms: effective edges exclude provably-false gates before dead-end /
+reachability / cycle analysis; per-gate verdicts use global mutations while
+loop-exit verdicts scope monotonicity to the cycle's SCC (with global
+agreement); MAR009/MAR010 report once per SCC at the first triggering
+`~loop~` choice in source order. When the TS validator's semantics change, the
+oracle test fails until the matching clause here is updated — which is the
+point: the change has to be legible enough to state twice.
+
+SWI-Prolog ≥ 9 is required (tabling). The oracle test skips loudly when
+`swipl` is not on `PATH`; CI installs it, so agreement is enforced on every
+push.
