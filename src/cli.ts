@@ -23,14 +23,15 @@ import {
 } from './state.js';
 import { RuntimeService, serveRuntimeLines } from './runtime-process.js';
 import {
-  RuntimeStoreError, initializeRuntimeStore, loadRuntimeStore,
+  RuntimeStoreError, claimRuntimeProcess, initializeRuntimeStore, loadRuntimeStore,
+  releaseRuntimeProcess, stopRuntimeProcess,
 } from './runtime-store.js';
 import type { RuntimePrincipal, RuntimeRole } from './runtime-protocol.js';
 
 const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
-const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'state', 'runtime', 'help', 'version'];
+const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'start', 'stop', 'state', 'help', 'version'];
 const STATE_SUBCOMMANDS = ['init', 'show', 'choose', 'advance', 'rebind'];
 
 function readTextFile(file: string, what = 'plan'): string {
@@ -60,8 +61,9 @@ Usage:
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
-  marionette runtime   <plan.mar|.json> --run <id> [--store dir] [--create]
+  marionette start     <plan.mar|.json> --run <id> [--store dir]
                        [--principal id] [--role agent|human] [--principal-uri uri]
+  marionette stop      <plan.mar|.json> --run <id> [--store dir]
   marionette state init    <plan.mar|.json> [--state f] [--force]
   marionette state show    <plan.mar|.json> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
@@ -77,9 +79,9 @@ Options:
   --force             Overwrite an existing state file on init
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
   --rationale <text>  Why the step was taken (required for choices)
-  --run <id>           Runtime run id (required by runtime)
-  --store <dir>        Runtime store (default: <plan-dir>/.marionette)
-  --create             Create the runtime run; otherwise resume it
+  --run <id>           Run id (required by start/stop)
+  --store <dir>        Run store (default: <plan-dir>/.marionette)
+  --create             Start a new run; error if it already exists
   --principal <id>     Connection principal id (default: agent)
   --role <role>        Bound connection role: agent or human (default: agent)
   --principal-uri <u>  Optional provenance URI for decision records
@@ -298,15 +300,16 @@ export async function run(argv: string[]): Promise<number> {
         return 0;
       }
 
-      case 'runtime': {
+      case 'start':
+      case 'runtime': { // compatibility alias for pre-0.2 callers
         const { positional, flags } = parseArgs(rest);
         const file = positional[0];
-        if (!file) throw new UsageError('runtime: missing <plan.mar|.json>');
+        if (!file) throw new UsageError('start: missing <plan.mar|.json>');
         const runId = typeof flags['run'] === 'string' ? flags['run'] : undefined;
-        if (!runId) throw new UsageError('runtime: missing required --run <id>');
+        if (!runId) throw new UsageError('start: missing required --run <id>');
         const role = (typeof flags['role'] === 'string' ? flags['role'] : 'agent') as RuntimeRole;
         if (role !== 'agent' && role !== 'human') {
-          throw new UsageError('runtime: --role must be agent or human');
+          throw new UsageError('start: --role must be agent or human');
         }
         const principal: RuntimePrincipal = {
           id: typeof flags['principal'] === 'string' ? flags['principal'] : role,
@@ -316,32 +319,84 @@ export async function run(argv: string[]): Promise<number> {
         const { trajectory, ok, diagnostics, source } = readSource(file);
         if (!ok) {
           process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
-          process.stderr.write('refusing to start a runtime for a plan that does not validate\n');
+          process.stderr.write('refusing to start: the plan does not validate\n');
           return 1;
         }
         const store = typeof flags['store'] === 'string'
           ? resolve(flags['store'])
           : join(dirname(resolve(file)), '.marionette');
         let snapshot;
+        let created = false;
         try {
-          snapshot = flags['create']
-            ? initializeRuntimeStore(store, trajectory, { runId, principal })
-            : loadRuntimeStore(store, runId, trajectory);
+          if (flags['create']) {
+            snapshot = initializeRuntimeStore(store, trajectory, { runId, principal });
+            created = true;
+          } else {
+            try {
+              snapshot = loadRuntimeStore(store, runId, trajectory);
+            } catch (error) {
+              if (!(error instanceof RuntimeStoreError) || error.code !== 'run-not-found') throw error;
+              snapshot = initializeRuntimeStore(store, trajectory, { runId, principal });
+              created = true;
+            }
+          }
+          claimRuntimeProcess(store, runId, trajectory.hash);
         } catch (error) {
           if (error instanceof RuntimeStoreError) {
-            throw new UsageError(`runtime: ${error.message}`);
+            throw new UsageError(`start: ${error.message}`);
           }
           throw error;
         }
         process.stderr.write(
-          `runtime ${flags['create'] ? 'created' : 'resumed'}: ${runId} ` +
-          `at revision ${snapshot.revision} (${role}:${principal.id})\n`,
+          `✓ Marionette ${created ? 'started' : 'resumed'} · ${runId} · ` +
+          `revision ${snapshot.revision} · ${role}:${principal.id}\n` +
+          '  listening on stdin/stdout · press Ctrl-C to stop\n',
         );
-        await serveRuntimeLines(
-          new RuntimeService(trajectory, snapshot, store, principal),
-          { input: process.stdin, output: process.stdout, diagnostics: process.stderr },
-        );
+        const stopOnSignal = () => {
+          releaseRuntimeProcess(store, runId, trajectory.hash);
+          process.exit(0);
+        };
+        process.once('SIGINT', stopOnSignal);
+        process.once('SIGTERM', stopOnSignal);
+        try {
+          await serveRuntimeLines(
+            new RuntimeService(trajectory, snapshot, store, principal),
+            { input: process.stdin, output: process.stdout, diagnostics: process.stderr },
+          );
+        } finally {
+          process.off('SIGINT', stopOnSignal);
+          process.off('SIGTERM', stopOnSignal);
+          releaseRuntimeProcess(store, runId, trajectory.hash);
+        }
         return 0;
+      }
+
+      case 'stop': {
+        const { positional, flags } = parseArgs(rest);
+        const file = positional[0];
+        if (!file) throw new UsageError('stop: missing <plan.mar|.json>');
+        const runId = typeof flags['run'] === 'string' ? flags['run'] : undefined;
+        if (!runId) throw new UsageError('stop: missing required --run <id>');
+        const { trajectory, ok, diagnostics, source } = readSource(file);
+        if (!ok) {
+          process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
+          return 1;
+        }
+        const store = typeof flags['store'] === 'string'
+          ? resolve(flags['store'])
+          : join(dirname(resolve(file)), '.marionette');
+        try {
+          const result = stopRuntimeProcess(store, runId, trajectory.hash);
+          if (result.status === 'not-running') {
+            process.stderr.write(`· ${runId} is already stopped\n`);
+          } else {
+            process.stderr.write(`✓ stop requested · ${runId} · pid ${result.pid}\n`);
+          }
+          return 0;
+        } catch (error) {
+          if (error instanceof RuntimeStoreError) throw new UsageError(`stop: ${error.message}`);
+          throw error;
+        }
       }
 
       case 'state': {

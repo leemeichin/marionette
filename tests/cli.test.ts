@@ -99,10 +99,9 @@ test('runtime CLI exposes a clean NDJSON process surface', () => {
     process.execPath,
     [
       '--import', 'tsx', join(root, 'src/cli.ts'),
-      'runtime', join(dir, 'plan.mar'),
+      'start', join(dir, 'plan.mar'),
       '--run', 'cli-run',
       '--store', join(dir, 'store'),
-      '--create',
       '--principal', 'test-agent',
       '--role', 'agent',
     ],
@@ -114,5 +113,10 @@ test('runtime CLI exposes a clean NDJSON process surface', () => {
   assert.equal(messages[0].id, 1);
   assert.equal(messages[1].result.projection.node.id, 'a');
   assert.doesNotMatch(result.stdout, /runtime created/);
-  assert.match(result.stderr, /runtime created: cli-run/);
+  assert.match(result.stderr, /Marionette started · cli-run/);
+  const help = cli(['help'], dir);
+  assert.match(help.stdout, /marionette start/);
+  assert.match(help.stdout, /marionette stop/);
+  const stopped = cli(['stop', 'plan.mar', '--run', 'cli-run', '--store', join(dir, 'store')], dir);
+  assert.equal(stopped.code, 0);
 });

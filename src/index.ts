@@ -36,7 +36,8 @@ export {
   RUNTIME_STORE_VERSION, MAX_EVENT_BYTES, RuntimeStoreError, runtimePaths,
   archiveTrajectory, resolveArchivedTrajectory, initializeRuntimeStore,
   loadRuntimeStore, commitRuntimeStore, readRuntimeEvents, runtimeStoreSize,
-  type RuntimePaths,
+  claimRuntimeProcess, readRuntimeProcess, releaseRuntimeProcess, stopRuntimeProcess,
+  type RuntimePaths, type RuntimeProcessRecord, type StopRuntimeResult,
 } from './runtime-store.js';
 export {
   MAX_REQUEST_BYTES, RuntimeService, serveRuntimeLines,

@@ -1,6 +1,6 @@
-# Marionette local runtime
+# Marionette start/stop
 
-`marionette runtime` turns the existing compiled graph and walker into a
+`marionette start` turns the existing compiled graph and walker into a
 single-writer local process. It is deliberately not an MCP server: an agent
 host communicates with it over newline-delimited JSON (NDJSON), consumes most
 lifecycle events programmatically, and injects only the compact projection the
@@ -14,20 +14,34 @@ validated trajectory JSON as `brief` and `state`.
 Create a run whose connection is bound to an agent principal:
 
 ```console
-marionette runtime plan.mar --run implementation --create \
+marionette start plan.mar --run implementation \
   --principal coding-agent --role agent \
   --principal-uri pibarm://session/example
 ```
 
-Resume it after the process or host restarts:
+If the run does not exist, `start` creates it. If it already exists, `start`
+resumes it. Use `--create` when you want creation to fail if the run exists.
+
+Stop a registered foreground/background process from another terminal:
 
 ```console
-marionette runtime plan.mar --run implementation \
+marionette stop plan.mar --run implementation
+```
+
+Or press Ctrl-C in the terminal running `start`.
+
+`marionette runtime` remains accepted as a compatibility alias for hosts that
+adopted the initial spike spelling.
+
+Resume it explicitly after the process or host restarts:
+
+```console
+marionette start plan.mar --run implementation \
   --principal coding-agent --role agent
 ```
 
 The default store is `.marionette` beside the plan. `--store <dir>` overrides
-it. Standard output contains protocol messages only; startup, shutdown and
+it. Standard output contains protocol messages only; friendly start/stop and
 diagnostic text goes to standard error.
 
 `--role human` is for a trusted user-facing host connection. Role is fixed

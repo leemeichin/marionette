@@ -1,6 +1,6 @@
 import {
   closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync,
-  renameSync, statSync, writeFileSync, writeSync,
+  renameSync, statSync, unlinkSync, writeFileSync, writeSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { trajectoryHash } from './compile.js';
@@ -34,6 +34,14 @@ export interface RuntimePaths {
   run: string;
   snapshot: string;
   events: string;
+  process: string;
+}
+
+export interface RuntimeProcessRecord {
+  pid: number;
+  runId: string;
+  graphHash: string;
+  startedAt: string;
 }
 
 export class RuntimeStoreError extends Error {
@@ -44,7 +52,8 @@ export class RuntimeStoreError extends Error {
     | 'graph-mismatch'
     | 'corrupt-journal'
     | 'event-too-large'
-    | 'stale-revision') {
+    | 'stale-revision'
+    | 'run-active') {
     super(message);
     this.name = 'RuntimeStoreError';
   }
@@ -72,6 +81,7 @@ export function runtimePaths(root: string, runId: string, graphHash: string): Ru
     run,
     snapshot: join(run, 'snapshot.json'),
     events: join(run, 'events.jsonl'),
+    process: join(run, 'process.json'),
   };
 }
 
@@ -195,6 +205,101 @@ export function initializeRuntimeStore(
   appendEvents(paths.events, snapshot.events);
   writeStoredSnapshot(paths.snapshot, snapshot, trajectory.hash);
   return snapshot;
+}
+
+function processIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+export function readRuntimeProcess(
+  root: string,
+  runId: string,
+  graphHash: string,
+): RuntimeProcessRecord | null {
+  const path = runtimePaths(root, runId, graphHash).process;
+  if (!existsSync(path)) return null;
+  try {
+    const record = JSON.parse(readFileSync(path, 'utf8')) as RuntimeProcessRecord;
+    if (record.runId !== runId || record.graphHash !== graphHash || !Number.isSafeInteger(record.pid)) {
+      unlinkSync(path);
+      return null;
+    }
+    return record;
+  } catch {
+    unlinkSync(path);
+    return null;
+  }
+}
+
+export function claimRuntimeProcess(
+  root: string,
+  runId: string,
+  graphHash: string,
+  options: { pid?: number; at?: string } = {},
+): RuntimeProcessRecord {
+  const paths = runtimePaths(root, runId, graphHash);
+  const prior = readRuntimeProcess(root, runId, graphHash);
+  if (prior && processIsAlive(prior.pid)) {
+    throw new RuntimeStoreError(
+      `run "${runId}" is already running (pid ${prior.pid})`,
+      'run-active',
+    );
+  }
+  const record: RuntimeProcessRecord = {
+    pid: options.pid ?? process.pid,
+    runId,
+    graphHash,
+    startedAt: options.at ?? new Date().toISOString(),
+  };
+  atomicWrite(paths.process, `${JSON.stringify(record, null, 2)}\n`);
+  return record;
+}
+
+export function releaseRuntimeProcess(
+  root: string,
+  runId: string,
+  graphHash: string,
+  pid = process.pid,
+): void {
+  const paths = runtimePaths(root, runId, graphHash);
+  const record = readRuntimeProcess(root, runId, graphHash);
+  if (record?.pid === pid && existsSync(paths.process)) unlinkSync(paths.process);
+}
+
+export type StopRuntimeResult =
+  | { status: 'not-running' }
+  | { status: 'requested'; pid: number };
+
+export function stopRuntimeProcess(
+  root: string,
+  runId: string,
+  graphHash: string,
+): StopRuntimeResult {
+  const paths = runtimePaths(root, runId, graphHash);
+  const record = readRuntimeProcess(root, runId, graphHash);
+  if (!record) return { status: 'not-running' };
+  if (!processIsAlive(record.pid)) {
+    if (existsSync(paths.process)) unlinkSync(paths.process);
+    return { status: 'not-running' };
+  }
+  try {
+    process.kill(record.pid, 'SIGTERM');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') {
+      if (existsSync(paths.process)) unlinkSync(paths.process);
+      return { status: 'not-running' };
+    }
+    throw new RuntimeStoreError(
+      `could not stop run "${runId}" (pid ${record.pid}): ${(error as Error).message}`,
+      'run-active',
+    );
+  }
+  return { status: 'requested', pid: record.pid };
 }
 
 function replayRuntimeEvents(

@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { compile } from '../src/compile.js';
 import { executeRuntimeRequest } from '../src/runtime.js';
 import {
   MAX_EVENT_BYTES, RuntimeStoreError, commitRuntimeStore, initializeRuntimeStore,
-  loadRuntimeStore, readRuntimeEvents, resolveArchivedTrajectory, runtimePaths,
+  claimRuntimeProcess, loadRuntimeStore, readRuntimeEvents, releaseRuntimeProcess,
+  resolveArchivedTrajectory, runtimePaths,
 } from '../src/runtime-store.js';
 import { RUNTIME_PROTOCOL_VERSION, type RuntimePrincipal } from '../src/runtime-protocol.js';
 
@@ -91,4 +92,13 @@ test('runtime store bounds individual journal records', () => withStore((root) =
     () => commitRuntimeStore(root, trajectory, snapshot, snapshot, [oversized]),
     (error: unknown) => error instanceof RuntimeStoreError && error.code === 'event-too-large',
   );
+}));
+
+test('runtime process registration cleans up stale ownership records', () => withStore((root) => {
+  initializeRuntimeStore(root, trajectory, { runId: 'run-6', at: AT });
+  const record = claimRuntimeProcess(root, 'run-6', trajectory.hash, { pid: 999_999, at: AT });
+  assert.equal(record.pid, 999_999);
+  assert.equal(JSON.parse(readFileSync(runtimePaths(root, 'run-6', trajectory.hash).process, 'utf8')).runId, 'run-6');
+  releaseRuntimeProcess(root, 'run-6', trajectory.hash, 999_999);
+  assert.equal(existsSync(runtimePaths(root, 'run-6', trajectory.hash).process), false);
 }));

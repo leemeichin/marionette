@@ -148,6 +148,6 @@ export async function serveRuntimeLines(
     }
   }
   streams.diagnostics?.write(
-    `runtime input closed at revision ${service.currentSnapshot().revision}\n`,
+    `Marionette stopped · revision ${service.currentSnapshot().revision}\n`,
   );
 }
