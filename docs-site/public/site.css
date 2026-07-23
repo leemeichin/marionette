@@ -444,3 +444,77 @@ th { background: var(--bg-elev); }
 .pg-tut-text { margin: 0 0 var(--s1); max-width: 80ch; }
 .pg-tut-goal { margin: 0; color: var(--fg-dim); }
 .pg-tut-status { color: var(--green); font-weight: 700; }
+
+/* ---- playground: full-width 50/50 workspace ---- */
+
+main.wide { max-width: none; padding-top: var(--s2); }
+
+main.wide .pg {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: start;
+}
+@media (max-width: 64rem) { main.wide .pg { grid-template-columns: minmax(0, 1fr); } }
+
+.pg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-bottom: var(--s1);
+}
+.pg-example-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: 0.8125rem;
+}
+.pg-example-row[hidden] { display: none; }
+.pg-example-row select {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-code);
+  border: 1px solid var(--fg-faint);
+  border-radius: 3px;
+  padding: 0.25rem var(--s1);
+  max-width: 26rem;
+}
+.pg-tut-enter {
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.75rem;
+  background: var(--bg-code);
+  color: var(--fg);
+  border: 1px solid var(--fg-faint);
+  border-radius: 3px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.pg-tut-enter:hover { border-color: var(--accent); }
+.pg-tut-enter[hidden] { display: none; }
+
+main.wide .pg textarea { min-height: 62vh; height: 62vh; }
+main.wide .pg-canvas { height: 44vh; }
+main.wide .pg-diagnostics { min-height: 2.5rem; }
+
+.pg-walk-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin: var(--s2) 0 var(--s1);
+}
+.pg-walk-controls .pg-actor { margin: 0; }
+.pg-rationale-row {
+  flex: 1;
+  min-width: 14rem;
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--fg-dim);
+  font-size: 0.8125rem;
+}
+.pg-rationale-row input { margin: 0 !important; }
+main.wide .pg-choices { min-height: 0; }
+main.wide .pg-log { max-height: 9rem; overflow-y: auto; margin-top: var(--s1); }

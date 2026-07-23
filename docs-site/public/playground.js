@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { compile } from '/lib/compile.js';
 import { initState, frontier, takeChoice, advance, WalkError } from '/lib/state.js';
+import { EXAMPLES } from '/examples-data.js';
 
 
 function boot(el) {
@@ -18,26 +19,6 @@ function boot(el) {
   const canvasHost = el.querySelector('[data-canvas]');
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  const STARTER = `# project: checkout-revamp
-VAR attempts = 0
-
-=== build_checkout ===
-Rebuild the checkout flow behind a feature flag.
-~ attempts += 1
-* [Cohort converts] @human -> rollout
-+ {attempts < 5} [Conversion flat — iterate] ~loop~ -> build_checkout
-* {attempts >= 5} [Not converging — rethink] @human -> rethink
-
-=== rethink ===
-Five iterations without lift: take the flow back to research.
-+ [New direction agreed] @human ~loop~ -> build_checkout
-* [Park the revamp] @human -> END
-
-=== rollout ===
-Ramp the flag to 100% and retire the old flow.
--> END
-`;
-
   let trajectory = null;
   let state = null;
   let refusal = null;
@@ -46,7 +27,21 @@ Ramp the flag to 100% and retire the old flow.
 
   let refusalSeen = false;
   const tut = makeTutorial(el, srcEl, () => { refusalSeen = false; recompile(); });
-  if (!tut.active) srcEl.value = STARTER;
+
+  const exampleSel = el.querySelector('[data-examples]');
+  for (const [i, ex] of EXAMPLES.entries()) {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = ex.label;
+    exampleSel.append(opt);
+  }
+  exampleSel.addEventListener('change', () => {
+    srcEl.value = EXAMPLES[Number(exampleSel.value)].source;
+    refusalSeen = false;
+    tut.exitToFreePlay();
+    recompile();
+  });
+  if (!tut.active) srcEl.value = EXAMPLES[0].source;
   srcEl.addEventListener('input', debounce(recompile, 250));
   resetEl.addEventListener('click', () => {
     if (!trajectory) return;
@@ -530,7 +525,7 @@ function makeViz(host, reduced) {
 
 function makeTutorial(root, srcEl, onLessonLoad) {
   const panel = root.ownerDocument.querySelector('[data-tutorial]');
-  if (!panel) return { active: false, judge() {} };
+  if (!panel) return { active: false, judge() {}, exitToFreePlay() {} };
   const els = {
     where: panel.querySelector('[data-tut-where]'),
     title: panel.querySelector('[data-tut-title]'),
@@ -567,9 +562,14 @@ function makeTutorial(root, srcEl, onLessonLoad) {
     onLessonLoad();
   }
 
+  const examplesRow = root.querySelector('[data-examples-row]');
+  const enterBtn = root.querySelector('[data-tut-enter]');
+
   function show() {
     panel.hidden = free;
     els.toggle.textContent = free ? 'tutorial' : 'free play';
+    if (examplesRow) examplesRow.hidden = !free;
+    if (enterBtn) enterBtn.hidden = !free;
   }
 
   els.prev.addEventListener('click', () => { if (idx > 0) { idx--; persist(); load(); } });
@@ -583,12 +583,24 @@ function makeTutorial(root, srcEl, onLessonLoad) {
     show();
     if (!free) load();
   });
+  enterBtn?.addEventListener('click', () => {
+    free = false;
+    persist();
+    show();
+    load();
+  });
 
   show();
   if (!free) load();
 
   return {
     active: !free,
+    exitToFreePlay() {
+      if (free) return;
+      free = true;
+      persist();
+      show();
+    },
     judge(ctx) {
       if (panel.hidden) return;
       const ok = LESSONS[idx].check(ctx);
