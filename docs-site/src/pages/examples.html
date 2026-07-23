@@ -1,13 +1,13 @@
 <h1>examples</h1>
-<p class="lede">Worked plans from the repo, with real compiler output — and
-the use-cases they stand in for.</p>
+<p class="lede">See how complete Marionette plans handle repeated attempts,
+human approval, fallback options, and large projects. All command output
+comes from the real tool.</p>
 
 <h2 id="build-mvp">The MVP loop</h2>
 
-<p>The canonical small plan: ship the smallest testable slice, iterate up
-to three times on the evidence, and force the pivot-or-kill conversation
-instead of letting attempt four happen by inertia. The human holds both the
-launch gate and the kill switch.</p>
+<p>This small plan ships the smallest useful version and allows up to three
+attempts to improve it. After that, a person must decide whether to change
+direction or stop. A person also makes the launch decision.</p>
 
 <mar-file src="build_mvp.mar" title="examples/build_mvp.mar"></mar-file>
 
@@ -31,37 +31,31 @@ end, and it exercises every DSL v0 construct plus refs
 (<code>github:</code>/<code>jira:</code>/<code>linear:</code>) and
 per-phase delivery overrides.</p>
 
-<h2 id="meta">This site is a traversal</h2>
+<h2 id="meta">Marionette built this site</h2>
 
-<p>Dogfood, all the way down: the site you're reading was built by an agent
-walking a Marionette plan — capture real transcripts first, rewrite the
-README against them, design under an accessibility constraint, build,
-audit, and stop at an <code>@human</code> review gate before anything
-merges. The rationale log of that traversal is in the repo next to the
-plan.</p>
+<p>An agent built this documentation site by following a Marionette plan.
+It recorded the real command output, rewrote the README, designed and built
+the site, checked accessibility, and then stopped for a person's review
+before merging. The repository contains both the plan and the record of
+its decisions.</p>
 
 <mar-file src="docs-site.mar" title="plans/docs-site.mar"></mar-file>
 
-<h2 id="use-cases">Where this shape of plan earns its keep</h2>
+<h2 id="use-cases">Projects that suit Marionette</h2>
 
 <ul>
-  <li><strong>Agent-run projects with real stakes.</strong> The plan is the
-    agent's operating envelope: it can only take edges that exist, gates
-    compute availability from live variables, and your sign-offs are
-    walker-enforced <code>@human</code> checkpoints — autonomy boundaries
-    as versioned artifacts instead of prompt-soup.</li>
-  <li><strong>Migrations and cutovers.</strong> Contingencies
-    ("what if parity drifts?", "what if the freeze window gets pulled?")
-    become phases with exits, not hopes. The compiler proves every fallback
-    path actually leads somewhere.</li>
-  <li><strong>Iteration with a budget.</strong> "Try up to N times, then
-    escalate" is the native loop shape: a monotonic counter, a gated exit,
-    and a human decision when the budget runs dry.</li>
-  <li><strong>Decision records that write themselves.</strong> Every taken
-    edge logs actor, timestamp and rationale; <code>render</code> shows the
-    taken path; <code>summarize</code> is the status report. The plan file
-    and its state are the audit trail.</li>
+  <li><strong>Agent-run projects with important decisions.</strong> The
+    agent can only use choices in the plan, and choices marked
+    <code>@human</code> always require your approval.</li>
+  <li><strong>Migrations and launches.</strong> Write down fallback plans
+    for problems such as mismatched data or a cancelled launch window.
+    Marionette checks that every fallback leads somewhere.</li>
+  <li><strong>Work with a retry limit.</strong> Express rules such as “try
+    up to three times, then ask a person” directly in the plan.</li>
+  <li><strong>Projects that need a decision record.</strong> Every choice
+    stores who made it, when, and why. <code>render</code> shows the route
+    taken, while <code>summarize</code> creates a status report.</li>
   <li><strong>Anything you'd sketch as a flowchart and then ignore.</strong>
-    Here the flowchart compiles, drifts loudly (exit 3) when reality
-    diverges, and migrates (<code>state rebind</code>) instead of rotting.</li>
+    Marionette checks the flowchart, notices when it changes during a run,
+    and lets you accept the update without losing the project history.</li>
 </ul>

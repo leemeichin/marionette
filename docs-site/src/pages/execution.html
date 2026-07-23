@@ -1,12 +1,15 @@
 <h1>execution</h1>
-<p class="lede">Phase 1 answers <em>"is this plan sound?"</em>. Execution
-answers <em>"an agent is holding this plan — what exactly does it do next,
-and how does the work come back?"</em> Everything here is
-executor-agnostic: a Claude session running the execution skill, a host
-driving the local runtime process, and a CI job all consume the same
-contract.</p>
+<p class="lede">This guide is for people connecting an AI agent or another
+program to Marionette. It explains how to ask what should happen next,
+record the result, pause for a person's decision, and report completed
+work.</p>
 
-<h2 id="loop">The executor loop</h2>
+<p>We use <em>executor</em> to mean the tool carrying out the plan. That
+could be a Claude session using the execution skill, your own agent
+software, or an automated job. They all use the same commands and receive
+the same information.</p>
+
+<h2 id="loop">Ask, work, and record</h2>
 
 <pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>┌─────────────────────────────────────────────────────────────┐
 │  marionette brief plan.mar --json      ← "what now?"        │
@@ -25,45 +28,39 @@ contract.</p>
 │      └─ status: completed      → final report; done         │
 └──────────────── repeat until completed ─────────────────────┘</code></pre>
 
-<p>The brief is the single source of "what now". The executor never picks a
-target node directly — it only takes choices the frontier says are
-available, and every step records an actor and a rationale. Gates,
-once-only exhaustion, <code>@human</code> refusal and drift detection are
-enforced by the walker, not by prompt discipline: an out-of-graph action is
-an <em>error</em>, not a temptation.</p>
+<p>The brief is the answer to “what should happen now?” The executor can
+only use choices that the brief lists as available. Every choice records
+who made it and why. Marionette itself enforces choice conditions,
+one-time choices, <code>@human</code> decisions, and checks for edits to a
+running plan. These rules do not depend on instructions in an AI prompt.</p>
 
-<h2 id="brief">The brief, as a machine sees it</h2>
+<h2 id="brief">The agent's assignment, as JSON</h2>
 
-<p>This is the same walk as the <a href="/walkthrough">walkthrough</a>,
-mid-traversal, in the machine form
-(<code>spec/brief.schema.json</code>) — plan identity, hash and
-<code>intent</code> (the plan's <code>summary</code>/<code>prompt</code>
-metadata — the original ask travels with the packet), the node prose (the
-author's instruction to the executor), live variables, the
-frontier with per-choice availability and blocking reasons, progress, and
-the protocol block that spells out exactly how to record an outcome:</p>
+<p>This is the checkout example from the
+<a href="/walkthrough">walkthrough</a>, partway through the project. The
+JSON contains the original request, the current stage and its instructions,
+useful values, progress so far, every possible choice and why it is
+available or blocked, and the command needed to record a result. Its exact
+format is defined in <code>spec/brief.schema.json</code>.</p>
 
-<demo-cast id="17-brief-json" title="brief --json — the machine work packet"></demo-cast>
+<demo-cast id="17-brief-json" title="brief --json — the agent's assignment"></demo-cast>
 
-<h2 id="escalation">@human escalation</h2>
+<h2 id="escalation">Pause for a person's decision</h2>
 
-<p>When every <em>available</em> choice at the current node is
-<code>@human</code>, the brief's status becomes
-<code>awaiting-human</code> and it carries a structured escalation payload
-— everything a human needs to decide without opening the repo. Here the
-checkout plan has spent its five iteration attempts; the only moves left
-belong to a person:</p>
+<p>When all available choices are marked <code>@human</code>, the brief's
+status changes to <code>awaiting-human</code>. It includes the context a
+person needs to decide without opening the repository. In this example,
+the checkout project has used all five attempts, so only a person can
+choose what happens next:</p>
 
 <demo-cast id="18-brief-awaiting" title="brief — status: awaiting human decision"></demo-cast>
 
-<p>The escalation <em>channel</em> is executor-specific (a chat message to
-the primary session, a PR comment, a ping); the <em>payload</em> is this
-object. There is no timeout or fallback: an unanswered escalation leaves
-the plan parked at the checkpoint, visible in <code>brief</code>,
-<code>render</code> and <code>summarize</code>. And separately, the walker
-refuses <code>--actor agent</code> on <code>@human</code> choices with the
-<code>human-checkpoint</code> error code — so escalation is enforced, not
-advisory.</p>
+<p>How you contact that person is up to your software: it could send a chat
+message, add a pull-request comment, or create a notification. Until the
+person answers, the plan remains paused and visible in
+<code>brief</code>, <code>render</code>, and <code>summarize</code>.
+Marionette also refuses any attempt to record an agent as the decision
+maker for an <code>@human</code> choice.</p>
 
 <p>The answer can come back through the same channel. When the human states
 an explicit, unambiguous decision in-session, the executor records it

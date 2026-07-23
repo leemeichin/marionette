@@ -14,14 +14,14 @@ const dist = join(root, 'dist');
 const transcripts = join(root, 'transcripts');
 
 export const PAGES = [
-  { slug: 'index', nav: 'readme', title: 'Marionette — compiled project trajectories for AI agents', desc: 'A plain-text trajectory language: humans author and gate the plan, a compiler proves it sound, an AI agent walks it.' },
+  { slug: 'index', nav: 'readme', title: 'Marionette — clear project plans for AI agents', desc: 'Write a plain-text project plan, let an AI agent follow it, and keep important decisions with people.' },
   { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI and skills, write and validate your first plan.' },
-  { slug: 'syntax', nav: 'syntax', title: 'Syntax reference — Marionette', desc: 'The .mar language: phases, choices, gates, loops, human checkpoints, variables, metadata.' },
-  { slug: 'walkthrough', slugAliases: [], nav: 'walkthrough', title: 'Walkthrough — Marionette', desc: 'An end-to-end session: author a plan, fix compile errors, walk it with an agent, gate it as a human. Every frame is real CLI output.' },
-  { slug: 'playground', nav: 'playground', wide: true, title: 'Playground — Marionette', desc: 'Guided tutorial + sandbox: write .mar plans, compile them in your browser with the real compiler, and walk them with the real walker.' },
-  { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'How agents ingest and traverse a plan: state, briefs, escalation, drift and rebind, delivery metadata.' },
-  { slug: 'examples', nav: 'examples', title: 'Examples & use-cases — Marionette', desc: 'Worked plans: product iteration loops, replatforms, and Marionette planning its own development.' },
-  { slug: 'reference', nav: 'reference', title: 'CLI reference — Marionette', desc: 'Commands, exit codes, and the full compiler diagnostic table (MAR001–MAR019).' },
+  { slug: 'syntax', nav: 'syntax', title: 'Syntax reference — Marionette', desc: 'Look up each part of a .mar plan, with examples of stages, choices, conditions, retries, and human decisions.' },
+  { slug: 'walkthrough', slugAliases: [], nav: 'walkthrough', title: 'Walkthrough — Marionette', desc: 'Follow one project from first draft to completion: fix missing steps, let an AI agent do the work, and keep launch approval with a person.' },
+  { slug: 'playground', nav: 'playground', wide: true, title: 'Playground — Marionette', desc: 'Write a .mar plan, check it in your browser, view its flowchart, and try each choice.' },
+  { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'Connect an AI agent or another program to Marionette, record results, pause for human decisions, and report completed work.' },
+  { slug: 'examples', nav: 'examples', title: 'Examples & use-cases — Marionette', desc: 'Complete project plans showing retries, fallback options, human approval, and larger migrations.' },
+  { slug: 'reference', nav: 'reference', title: 'CLI reference — Marionette', desc: 'Look up commands, exit codes, and every Marionette error message (MAR001–MAR019).' },
   { slug: '404', nav: null, title: 'Not found — Marionette', desc: 'No such page.' },
 ];
 
