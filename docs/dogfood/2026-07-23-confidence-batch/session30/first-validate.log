@@ -1,0 +1,12 @@
+plan.mar:59: warning[MAR014]: unverified gate — review manually: {rollout_stage == 10} on choice "Hotfix out, restart the 10% stage"
+  59 | + {rollout_stage == 10} [Hotfix out, restart the 10% stage] ~loop~ -> rollout_10
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:60: warning[MAR014]: unverified gate — review manually: {rollout_stage == 50} on choice "Hotfix out, restart the 50% stage"
+  60 | + {rollout_stage == 50} [Hotfix out, restart the 50% stage] ~loop~ -> rollout_50
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:61: warning[MAR014]: unverified gate — review manually: {rollout_stage == 100} on choice "Hotfix out, restart the 100% stage"
+  61 | + {rollout_stage == 100} [Hotfix out, restart the 100% stage] ~loop~ -> rollout_100
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 3 warnings
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1

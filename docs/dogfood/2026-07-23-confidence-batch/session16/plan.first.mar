@@ -1,0 +1,55 @@
+# project: technical-book-contract
+VAR structural_revisions = 0
+
+=== outline ===
+Draft the full book outline: chapter list, scope, and audience framing.
+Done when the outline is complete enough for the editor to judge the book's shape.
++ [Outline ready for the editor] -> outline_approval
+
+=== outline_approval ===
+The editor reviews the outline against the contract.
+* [Editor approves the outline] @human -> draft_batch
++ [Editor requests outline changes] @human ~loop~ -> outline
+
+=== draft_batch ===
+Draft the next batch of chapters against the approved outline.
+Done when the batch is coherent enough to hand to tech reviewers.
++ [Batch ready for tech review] -> tech_review
+
+=== tech_review ===
+Tech reviewers read the current batch and return findings.
+A batch may take as many review rounds as it needs.
++ [Reviewers request fixes] ~loop~ -> fix_batch
++ [Batch passes; more batches remain] ~loop~ -> draft_batch
+* [All chapters are through review] -> manuscript_review
+
+=== fix_batch ===
+Apply the tech reviewers' fixes to the current batch.
++ [Fixes applied; resubmit to reviewers] ~loop~ -> tech_review
+
+=== manuscript_review ===
+The full manuscript goes to the editor for acceptance.
+The contract allows at most one structural-revision round.
++ [Editor accepts the manuscript] @human -> production
++ {structural_revisions < 1} [Editor requests structural revision] @human -> structural_revision
++ {structural_revisions >= 1} [Still not landing after revision] @human -> walk_away_decision
+
+=== structural_revision ===
+Rework the manuscript's structure per the editor's notes.
+~ structural_revisions += 1
++ [Revision complete; resubmit to editor] ~loop~ -> manuscript_review
+
+=== walk_away_decision ===
+Joint call between author and agent: exercise the contract's walk-away clause
+with the advance split, or find a path forward with the editor.
+* [Walk away; split the advance] @human -> END
++ [Keep working with the editor] @human ~loop~ -> manuscript_review
+
+=== production ===
+Copyedit, typesetting, and proofs.
+Done when final proofs are ready for author sign-off.
+* [Proofs approved] @human -> publication
+
+=== publication ===
+The book is published and the contract is fulfilled.
+-> END

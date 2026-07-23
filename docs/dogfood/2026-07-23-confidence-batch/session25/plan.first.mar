@@ -1,0 +1,57 @@
+# project: acme-to-bolt-payment-migration
+VAR dual_run_attempts = 0
+
+=== sandbox_integration ===
+Integrate Bolt as a payment provider in the sandbox environment.
+Done means auth, capture, refund and webhook flows all work end to end in sandbox.
+* [Sandbox integration complete] -> certification
+
+=== certification ===
+Certify the integration with Bolt's team: they review our sandbox implementation and sign off.
++ [Certification issues found; fix and resubmit] ~loop~ -> certification
+* [Certified; approve go-live at 5%] @human -> dual_run
+
+=== dual_run ===
+Route 5% of live traffic through Bolt while Acme handles the rest.
+Watch auth rates and chargebacks for two weeks; done means Bolt matches or beats Acme on both metrics.
+~ dual_run_attempts += 1
++ [Bolt matches or beats Acme on both metrics] -> finance_signoff
++ {dual_run_attempts < 3} [Bolt underperforms on a metric] -> remediate_with_bolt
+* {dual_run_attempts >= 3} [Three failed dual-runs; walk away] @human -> stay_on_acme
+
+=== remediate_with_bolt ===
+Work with Bolt's team on the underperforming metric and land fixes before re-running the two-week window.
++ [Fixes in place; re-run the two weeks] ~loop~ -> dual_run
+
+=== finance_signoff ===
+Finance reviews and signs off on Bolt's fee structure before any ramp past 5%.
++ [Fee structure approved] @human -> ramp_25
+* [Fees unacceptable; stay on Acme] @human -> stay_on_acme
+
+=== ramp_25 ===
+Route 25% of live traffic through Bolt, watching auth rates and chargebacks at the new volume.
++ [Metrics hold at 25%] -> ramp_50
++ [Metrics regress; drop back to 5% dual-run] ~loop~ -> dual_run
+
+=== ramp_50 ===
+Route 50% of live traffic through Bolt, watching the same metrics.
++ [Metrics hold at 50%] -> ramp_100
++ [Metrics regress; drop back to 25%] ~loop~ -> ramp_25
+
+=== ramp_100 ===
+Route 100% of live traffic through Bolt, watching the same metrics; Acme stays contracted as fallback.
++ [Metrics hold at 100%] -> full_billing_cycle
++ [Metrics regress; drop back to 50%] ~loop~ -> ramp_50
+
+=== full_billing_cycle ===
+Run one full billing cycle at 100% on Bolt with the Acme contract still active as a safety net.
+* [Billing cycle clean] -> cancel_acme
++ [Problems at full volume; drop back to 50%] ~loop~ -> ramp_50
+
+=== cancel_acme ===
+Cancel the Acme contract and complete the migration to Bolt.
+* [Cancel Acme contract] @human -> END
+
+=== stay_on_acme ===
+Wind down the Bolt integration and remain on Acme.
+-> END

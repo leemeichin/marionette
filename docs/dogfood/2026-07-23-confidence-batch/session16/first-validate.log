@@ -1,0 +1,4 @@
+plan.mar:34: warning[MAR014]: unverified gate — review manually: {structural_revisions < 1} on choice "Editor requests structural revision"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 1 warning(s)
+exit=1

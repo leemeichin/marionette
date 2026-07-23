@@ -1,0 +1,54 @@
+# project: wcag-2.2-aa-conformance
+// Get the web app to WCAG 2.2 AA before the regulatory deadline.
+// weeks_to_deadline models the runway legal tracks; each re-audit round
+// consumes roughly four weeks of it.
+VAR weeks_to_deadline = 16
+
+=== external_audit ===
+External auditors assess the web app against WCAG 2.2 AA and deliver the
+violation inventory, tiered critical / serious / moderate. Done when the
+inventory is in hand and triaged.
+* [Violation inventory delivered] -> ci_guardrails
+
+=== ci_guardrails ===
+Automated accessibility checks wired into CI so fixed violations cannot
+regress. Done when the checks block merges on regressions.
+* [CI blocks accessibility regressions] -> fix_critical
+
+=== fix_critical ===
+Teams work the critical tier of the violation inventory first. Done when
+every critical finding is fixed and passing the CI checks.
++ [Critical tier resolved] -> fix_serious
+
+=== fix_serious ===
+Teams work the serious tier next. Done when every serious finding is fixed
+and passing the CI checks.
++ [Serious tier resolved] -> re_audit
+
+=== re_audit ===
+External auditors re-assess after the critical and serious tiers. New
+findings go back into the fix queue; legal tracks the remaining runway.
+~ weeks_to_deadline -= 4
++ [Clean on critical and serious] -> fix_moderate
++ {weeks_to_deadline >= 8} [New findings, runway remains] ~loop~ -> fix_critical
++ {weeks_to_deadline < 8} [Serious issues with under eight weeks left] @human -> vp_escalation
+
+=== vp_escalation ===
+The VP of engineering decides whether to pull people from other teams to
+protect the deadline. Fix work resumes with the reinforced roster.
++ [Reinforcements assigned, resume fixes] @human ~loop~ -> fix_critical
+
+=== fix_moderate ===
+Teams work the moderate tier. Done when moderate findings are fixed and the
+CI checks stay green.
++ [Moderate tier resolved] -> legal_signoff
+
+=== legal_signoff ===
+Legal reviews the final conformance statement and signs it.
++ [Legal signs the conformance statement] @human -> publish_statement
++ [Legal requests changes] @human ~loop~ -> fix_moderate
+
+=== publish_statement ===
+Publish the accessibility statement page with the signed conformance
+statement. Done when the page is live.
+-> END

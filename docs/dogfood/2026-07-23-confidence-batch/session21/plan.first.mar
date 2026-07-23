@@ -1,0 +1,53 @@
+# project: framework-2.0-release
+VAR rc = 0
+
+-> land_breaking_changes
+
+=== land_breaking_changes ===
+Land the 2.0 breaking changes on main, each covered by the migration guide.
+Done when every breaking change has a documented migration path.
+* [Breaking changes and migration guide landed] -> cut_rc
+
+=== cut_rc ===
+Cut the next release candidate and announce it to the community.
+~ rc += 1
++ [RC published to the community] -> community_soak
+
+=== community_soak ===
+The RC soaks with the community for two weeks: collect regression reports
+and test the top-50 ecosystem plugins against it.
++ [Regressions reported] -> fix_regressions
++ [More than a handful of top-50 plugins broke] -> add_compat_shims
++ [Two weeks clean] -> maintainer_vote
+
+=== fix_regressions ===
+Fix the reported regressions; fixes land in the next RC.
++ [Fixes ready for next RC] ~loop~ -> cut_rc
+
+=== add_compat_shims ===
+Add compatibility shims for the broken plugins before the next RC is cut.
++ [Shims in place] ~loop~ -> cut_rc
+
+=== maintainer_vote ===
+The maintainer group votes on the clean RC. Majority ships it; no majority
+means one more RC cycle; past RC5 the vote becomes ship-or-abandon-2.0.
++ [Majority: ship 2.0] @human -> publish_2_0
++ {rc <= 5} [No majority: one more RC cycle] @human ~loop~ -> cut_rc
++ {rc > 5} [Past RC5, ship-or-abandon: ship it] @human -> publish_2_0
++ {rc > 5} [Past RC5, ship-or-abandon: abandon 2.0] @human -> abandon_2_0
+
+=== publish_2_0 ===
+Publish the 2.0 release and the migration blog post.
+* [Published and announced] -> deprecation_window
+
+=== deprecation_window ===
+The 1.x branch stays supported for one quarter after 2.0 ships.
+* [One quarter elapsed] -> deprecate_1x
+
+=== deprecate_1x ===
+Deprecate the 1.x branch.
+* [1.x deprecated] -> END
+
+=== abandon_2_0 ===
+2.0 is abandoned; document the decision and wind down the RC line.
+* [Wound down] -> END

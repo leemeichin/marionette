@@ -1,0 +1,58 @@
+# project: feature-store-rollout
+// Roll the central feature store out to the five ML teams: pilot with the
+// recommendations team, then volunteer-order migration, then decommission
+// the legacy feature pipelines.
+
+VAR pilot_weeks = 0
+VAR teams_migrated = 0
+
+=== pilot_migration ===
+Pilot with the recommendations team: migrate their top features into the central feature store.
+Done when their models can read those features from the store.
+* [Top features migrated] -> pilot_shadow
+
+=== pilot_shadow ===
+Run the recommendations models against the store in shadow mode and compare offline metrics with their legacy pipeline. Iterate on the store until metrics match.
+~ pilot_weeks += 1
++ [Offline metrics match the legacy pipeline] -> migrate_next_team
++ {pilot_weeks < 6} [Not at parity yet, keep iterating] ~loop~ -> pilot_shadow
++ {pilot_weeks >= 6} [Six weeks without parity, escalate] -> review_board_pilot
+
+=== review_board_pilot ===
+The platform review board decides whether the store needs rework before anyone else migrates.
++ [Store needs rework first] @human -> store_rework
++ [Gap is acceptable, proceed with the rollout] @human -> migrate_next_team
++ [Halt the rollout] @human -> END
+
+=== store_rework ===
+Rework the store per the review board's findings, then re-verify against the pilot team's shadow comparison.
++ [Rework done, re-run the pilot comparison] ~loop~ -> pilot_shadow
+
+=== migrate_next_team ===
+The next volunteer team migrates its features and runs its models against the store in shadow mode until offline metrics match its legacy pipeline — the same parity bar as the pilot.
++ [Team reaches parity and goes live] -> team_live
++ [Team raises a blocking issue] @human -> review_board_migration
+
+=== team_live ===
+The team now serves features from the store; count it toward the fleet of four post-pilot migrations.
+~ teams_migrated += 1
++ {teams_migrated < 4} [More teams still to migrate] ~loop~ -> migrate_next_team
++ {teams_migrated >= 4} [All five teams are on the store] -> decommission_legacy
+
+=== review_board_migration ===
+The platform review board rules on the blocking issue raised mid-migration.
++ [Issue resolved, migration resumes] @human ~loop~ -> migrate_next_team
++ [Rollout paused for store rework] @human -> store_rework
+
+=== decommission_legacy ===
+All five teams serve from the store. Each team lead confirms their old feature pipeline is safe to delete before it is decommissioned.
++ [All five team leads confirm, delete the legacy pipelines] @human -> rollout_complete
++ [A lead flags a remaining dependency] @human -> resolve_dependency
+
+=== resolve_dependency ===
+Clear the dependency blocking a legacy pipeline's deletion.
++ [Dependency cleared, resume confirmations] ~loop~ -> decommission_legacy
+
+=== rollout_complete ===
+The central feature store is the single source of features; the legacy pipelines are gone.
+-> END

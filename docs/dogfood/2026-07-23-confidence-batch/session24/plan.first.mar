@@ -1,0 +1,53 @@
+# project: new_elective_course
+// Launch a new elective course at the university next academic year.
+
+-> draft_syllabus
+
+=== draft_syllabus ===
+Draft the syllabus for the new elective course.
+Done when a complete syllabus is ready to submit to the curriculum committee.
++ [Submit syllabus to the committee] -> committee_review
+
+=== committee_review ===
+The department curriculum committee reviews the syllabus.
+It can send it back for revision as many times as needed.
++ [Send back for revision] @human ~loop~ -> draft_syllabus
++ [Committee endorses the syllabus] @human -> dean_approval
+
+=== dean_approval ===
+The dean gives final approval of the committee-endorsed syllabus.
++ [Dean approves the course] @human -> enrollment_listing
++ [Dean requires changes] @human ~loop~ -> draft_syllabus
+
+=== enrollment_listing ===
+The approved course is listed for enrollment.
+At the registration deadline, check how many students have enrolled.
+* [Twelve or more students enrolled by the deadline] -> prepare_materials
+* [Fewer than twelve students enrolled by the deadline] -> low_enrollment_decision
+
+=== low_enrollment_decision ===
+Enrollment came in under twelve; the department head decides how to proceed.
+* [Run it anyway as a seminar] @human -> prepare_materials
+* [Defer the course a year] @human -> deferred
+
+=== deferred ===
+The course is deferred to the following academic year; the approved syllabus stays on file.
+-> END
+
+=== prepare_materials ===
+Prepare course materials over the summer.
+Done when lectures, assignments and assessments are ready for the semester.
+* [Materials ready for the semester] -> teach_semester
+
+=== teach_semester ===
+Teach the course for the semester and collect student evaluations.
+* [Semester complete, evaluations collected] -> course_review_board
+
+=== course_review_board ===
+The course review board examines the evaluations and decides the course's future.
+* [Make it a permanent offering] @human -> permanent_offering
+* [Do not continue the course] @human -> END
+
+=== permanent_offering ===
+The course joins the catalogue as a permanent elective offering.
+-> END

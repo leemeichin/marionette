@@ -1,0 +1,6 @@
+plan.mar:29: warning[MAR014]: unverified gate — review manually: {re_edits < 1} on choice "Guest requests their one re-edit"
+  29 | + {re_edits < 1} [Guest requests their one re-edit] @human -> re_edit
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 1 warning
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1

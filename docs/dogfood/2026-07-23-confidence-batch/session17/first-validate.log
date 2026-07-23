@@ -1,0 +1,4 @@
+plan.mar:18: warning[MAR014]: unverified gate — review manually: {tabletops < 6} on choice "Gaps surfaced"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 1 warning(s)
+exit=1

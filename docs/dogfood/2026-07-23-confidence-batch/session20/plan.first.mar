@@ -1,0 +1,67 @@
+# project: dc-exit-to-cloud
+VAR wave = 0
+VAR rollbacks = 0
+
+-> wave_planning
+
+=== wave_planning ===
+Sequence the 30 applications into three migration waves, easiest first.
+Done when the wave assignments are agreed and the steering committee approves the sequencing.
+* [Steering committee approves wave sequencing] @human -> wave_kickoff
+
+=== wave_kickoff ===
+The current wave formally starts: teams, change windows and rollback criteria for this wave are locked in.
+~ wave += 1
+~ rollbacks = 0
++ [Wave underway] -> replatform_wave
+
+=== replatform_wave ===
+Replatform every application in the current wave onto the cloud target.
+Done when each app is deployed to the cloud environment and passing its build and smoke checks.
++ [Wave replatformed] -> parallel_run
+
+=== parallel_run ===
+Run the replatformed wave in parallel against production for two weeks, comparing outputs and data.
++ [Two weeks clean, no data divergence] -> cutover
++ [Parallel run shows data divergence] -> rollback_wave
+
+=== rollback_wave ===
+Roll the whole wave back to the data center and diagnose the divergence.
+~ rollbacks += 1
++ {rollbacks < 2} [Fix and retry the wave] ~loop~ -> replatform_wave
++ {rollbacks >= 2} [Second rollback on this wave — escalate] -> steering_review
+
+=== steering_review ===
+The steering committee reviews the wave's approach before a third try is permitted.
++ [Revised approach approved, retry the wave] @human ~loop~ -> replatform_wave
+* [Approach not viable, halt the programme] @human -> END
+
+=== cutover ===
+Cut the wave over app by app during agreed change windows until every app in the wave serves from the cloud.
++ [All apps in the wave cut over] -> wave_stability
+
+=== wave_stability ===
+The wave runs in production from the cloud; monitor until it is judged stable.
++ {wave < 3} [Wave stable, seek go-ahead for the next wave] -> next_wave_gate
++ {wave >= 3} [Final wave stable] -> final_stability_watch
+
+=== next_wave_gate ===
+The steering committee gates the start of the next wave on the previous wave's stability.
++ [Committee approves the next wave] @human ~loop~ -> wave_kickoff
++ [Hold — stability concerns to resolve first] @human ~loop~ -> wave_stability
+
+=== final_stability_watch ===
+The last wave runs stably; the clock runs on 30 consecutive days of stability.
+* [30 days of stability reached] -> exit_negotiation
+
+=== exit_negotiation ===
+Negotiate the data center contract exit: notice, terms and exit timeline.
+* [Exit terms agreed] @human -> decommission
+
+=== decommission ===
+Physically decommission the data center: wipe, remove and dispose of hardware, and vacate the space.
+* [Decommission complete] -> final_termination
+
+=== final_termination ===
+Facilities and finance jointly review and sign the final contract termination.
+* [Facilities and finance sign the termination] @human -> END

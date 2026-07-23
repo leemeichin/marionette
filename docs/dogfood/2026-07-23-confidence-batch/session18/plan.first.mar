@@ -1,0 +1,51 @@
+# project: api-v1-deprecation
+
+=== announce ===
+Announce the deprecation of public API v1 with a 12-month sunset date.
+Done when the announcement is published and the sunset clock is running.
+* [Announcement published, sunset clock started] -> wave_small
+
+=== wave_small ===
+Migrate the small-customer wave: notify the cohort, provide migration tooling, chase stragglers.
+Done when small-cohort v1 traffic is under 1% of baseline.
++ [Small-cohort traffic under 1% of baseline] -> wave_medium
++ [Stragglers remain, keep chasing] ~loop~ -> wave_small
++ [Wave stalled, human decides whether to proceed] @human -> wave_medium
+
+=== wave_medium ===
+Migrate the medium-customer wave: notify the cohort, provide migration tooling, chase stragglers.
+Done when medium-cohort v1 traffic is under 1% of baseline.
++ [Medium-cohort traffic under 1% of baseline] -> wave_enterprise
++ [Stragglers remain, keep chasing] ~loop~ -> wave_medium
++ [Wave stalled, human decides whether to proceed] @human -> wave_enterprise
+
+=== wave_enterprise ===
+Migrate the enterprise wave: notify the cohort, provide migration tooling, chase stragglers.
+Each enterprise may request one extension; done when enterprise v1 traffic is under 1% of baseline.
++ [Enterprise-cohort traffic under 1% of baseline] -> brownouts
++ [An enterprise requests its one extension] -> extension_review
++ [Stragglers remain, keep chasing] ~loop~ -> wave_enterprise
++ [Wave stalled, human decides whether to proceed] @human -> brownouts
+
+=== extension_review ===
+The VP of Product personally reviews an enterprise extension request (one per customer).
++ [VP approves the extension] @human ~loop~ -> wave_enterprise
++ [VP denies the extension] @human ~loop~ -> wave_enterprise
+
+=== brownouts ===
+Run scheduled brownouts of API v1 for one month to flush out remaining traffic.
+* [Brownout month complete] -> legal_check
+
+=== legal_check ===
+Legal reviews contracts to confirm no contractual commitments block the shutoff date.
++ [Legal confirms shutoff is clear] @human -> hard_shutoff
++ [Legal finds a contractual blocker] @human -> handle_blocker
+
+=== handle_blocker ===
+Extend the shutoff for the blocked customer and keep their access alive while the blocker stands.
+Re-check with legal monthly until the blocker clears.
++ [Monthly re-check with legal] ~loop~ -> legal_check
+
+=== hard_shutoff ===
+Flip the switch: hard shutoff of API v1 for all remaining traffic, then decommission.
+-> END

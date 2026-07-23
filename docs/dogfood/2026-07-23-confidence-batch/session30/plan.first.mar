@@ -1,0 +1,61 @@
+# project: mobile-os-compat-update
+
+VAR rejections = 0
+VAR rollout_stage = 0
+
+=== bump_sdk ===
+Bump the target SDK and upgrade dependencies for the annual mobile OS compatibility update.
+Done when the project builds against the new SDK with updated dependency versions.
+* [SDK and dependencies bumped] -> fix_issues
+
+=== fix_issues ===
+Fix whatever the bump broke, plus any issues cycled back from regression or QA.
+Done when known breakage is addressed and the build is ready for the regression suite.
++ [Fixes in, run the suite] -> regression_suite
+
+=== regression_suite ===
+Run the full regression suite against the new SDK build; repeat until green.
++ [Suite green] -> qa_exploratory
++ [Failures found] ~loop~ -> fix_issues
+
+=== qa_exploratory ===
+QA does an exploratory pass on the new OS beta build.
+Issues found here cycle back to the fix stage.
++ [QA signs off, no blocking issues] @human -> submit_to_store
++ [Issues found] ~loop~ -> fix_issues
+
+=== submit_to_store ===
+Submit the compatibility build for store review.
++ [Store approved; release manager green-lights the 10% stage] @human -> rollout_10
++ [Store rejected the build] -> address_rejection
+
+=== address_rejection ===
+Address the store review feedback and prepare a resubmission.
+~ rejections += 1
++ {rejections < 2} [Fixed, resubmit] ~loop~ -> submit_to_store
++ {rejections >= 2} [Two rejections: release manager weighs in before the next attempt] @human ~loop~ -> submit_to_store
+
+=== rollout_10 ===
+Staged rollout at 10% for a week, watching crash rates.
+Any spike halts the rollout for a hotfix and the stage restarts.
+~ rollout_stage = 10
++ [Week clean; release manager approves 50%] @human -> rollout_50
++ [Crash rate spike: halt the stage] -> hotfix
+
+=== rollout_50 ===
+Rollout expanded to 50%, still watching crash rates.
+~ rollout_stage = 50
++ [Stable; release manager approves 100%] @human -> rollout_100
++ [Crash rate spike: halt the stage] -> hotfix
+
+=== rollout_100 ===
+Full rollout at 100%, monitored until stable.
+~ rollout_stage = 100
++ [Rollout complete and stable] -> END
++ [Crash rate spike: halt] -> hotfix
+
+=== hotfix ===
+Rollout is halted; build and ship a hotfix, then restart the halted stage.
++ {rollout_stage == 10} [Hotfix out, restart the 10% stage] ~loop~ -> rollout_10
++ {rollout_stage == 50} [Hotfix out, restart the 50% stage] ~loop~ -> rollout_50
++ {rollout_stage == 100} [Hotfix out, restart the 100% stage] ~loop~ -> rollout_100

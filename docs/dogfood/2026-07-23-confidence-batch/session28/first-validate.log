@@ -1,0 +1,18 @@
+plan.mar:30: warning[MAR014]: unverified gate — review manually: {clean_closes >= 3} on choice "Three consecutive clean closes"
+  30 | + {clean_closes >= 3} [Three consecutive clean closes] -> audit_review
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:31: warning[MAR014]: unverified gate — review manually: {clean_closes < 3 and months_parallel < parallel_budget} on choice "Streak building, run next month"
+  31 | + {clean_closes < 3 and months_parallel < parallel_budget} [Streak building, run next month] ~loop~ -> month_end_close
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:32: warning[MAR014]: unverified gate — review manually: {clean_closes < 3 and months_parallel >= parallel_budget} on choice "Parallel running past budget"
+  32 | + {clean_closes < 3 and months_parallel >= parallel_budget} [Parallel running past budget] -> cfo_program_review
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:38: warning[MAR014]: unverified gate — review manually: {months_parallel < parallel_budget} on choice "Root cause fixed, resume parallel running"
+  38 | + {months_parallel < parallel_budget} [Root cause fixed, resume parallel running] ~loop~ -> month_end_close
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:39: warning[MAR014]: unverified gate — review manually: {months_parallel >= parallel_budget} on choice "Parallel running past budget"
+  39 | + {months_parallel >= parallel_budget} [Parallel running past budget] -> cfo_program_review
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 5 warnings
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1
