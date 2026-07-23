@@ -43,7 +43,18 @@ Below, `marionette` means whichever form resolved.
    fails, fix every diagnostic — each error carries a line number and a
    `help:` suggestion — and validate again. Budget one revision loop; if the
    second attempt still errors, show the user the remaining diagnostics
-   instead of silently iterating.
+   instead of silently iterating. Two things to know about that loop:
+   - **Reference errors mask graph diagnostics.** Undefined targets or
+     variables (MAR003/MAR004) stop the validator before dead-end, cycle
+     and loop analysis runs. When you fix them, don't just patch the listed
+     lines — re-check the whole draft against the conventions below
+     (exits, `~loop~`, sticky edges), or the next validate will surface a
+     second wave of structural errors and burn the budget.
+   - **Expected warnings still fail `--strict`.** Zero *errors* is the bar;
+     a plan whose only diagnostics are expected MAR014 dynamic-fact
+     warnings is a legitimate end state — surface those warnings to the
+     user and stop, even though the strict exit code is 1. Don't restructure
+     a correct plan just to silence them.
 4. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
    contract), `render` (Mermaid), and `summarize` (plain language). Present
    the summary and graph to the user, calling out every `@human` checkpoint
