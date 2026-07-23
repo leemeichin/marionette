@@ -1,20 +1,31 @@
 {
-  "hash": "sha256:aab9357d3021dc82aa1df6487fd6465daa3ee94a48e7d17e82d8f5267e3318c7",
+  "hash": "sha256:dec8b94ac5337e8d5ab5a5a23b79e229f79676ebb7f8b2de2786262621bde1eb",
   "status": "active",
-  "current": "phase1_toolchain",
+  "current": "authoring_skill",
   "variables": {
-    "skill_revisions": 0
+    "skill_revisions": 1
   },
-  "taken": [],
+  "taken": [
+    "phase1_toolchain#0"
+  ],
   "log": [
     {
-      "at": "2026-07-23T11:31:04.232Z",
+      "at": "2026-07-23T11:44:46.993Z",
       "actor": "system",
       "from": null,
       "choice": null,
       "label": null,
       "rationale": "plan started",
       "to": "phase1_toolchain"
+    },
+    {
+      "at": "2026-07-23T11:44:47.878Z",
+      "actor": "agent",
+      "from": "phase1_toolchain",
+      "choice": "phase1_toolchain#0",
+      "label": "PR merged, CI green",
+      "rationale": "PR #1 squash-merged as 646049f with CI green; toolchain landed on main",
+      "to": "authoring_skill"
     }
   ]
 }

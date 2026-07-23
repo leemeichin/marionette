@@ -59,3 +59,32 @@ exists in `src/state.ts`.
 - The spike script is preserved in this ADR's history; re-evaluating later is
   cheap because the trajectory contract — not the engine — is the seam (PRD
   §2, design decision 5).
+
+## Addendum (2026-07-23): does the compiled graph even need to be legible?
+
+Review asked the sharper question: if we depended on Ink directly, would
+compiled-artifact legibility matter at all? Honest answer: **legibility alone
+is not the blocker.** G3 is satisfied by the DSL script plus the rendered
+graph and summary, which could be produced from source. The compiled artifact
+could in principle be opaque.
+
+What it cannot be is **shapeless**. The hard requirements on the compiled
+contract are graph-shape and stable node identity, because they carry:
+
+- our differentiating validations (undeclared cycles, loop-exit
+  satisfiability, `@human` escalation) — none of which inklecate performs, so
+  they must be implemented against *some* graph model regardless;
+- semantic content-hashing and state binding (P0.7), and the Phase 2
+  migration report, which need node identity that survives recompilation —
+  Ink's nested-container layout is compiler-version-sensitive;
+- node-addressable metadata (`github:issue` per node) for tracker mapping;
+- cheap multi-runtime ingestion: computing "what can I do next" from graph
+  JSON is a page of code in any language, whereas Ink bytecode requires
+  embedding a full Ink runtime (ports: C#, JS, Java, Rust — no Go).
+
+So Ink-direct would not remove the need for a graph model; it would add a
+decompilation step in front of one. Once graph-shape exists, legible JSON is
+the same artifact at no extra cost. What Ink-direct genuinely offers —
+battle-tested weave semantics and gate reachability via "simulate all paths"
+— is available on our format too: the reference walker already exists, and
+simulation mode over it is the planned P1 feature. Decision unchanged.

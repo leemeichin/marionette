@@ -11,14 +11,14 @@ VAR skill_revisions = 0
 Land the Phase 1 toolchain: DSL compiler, structural validation, gate checking,
 Mermaid render, plan summaries, hash-bound state with drift detection, CLI and
 test suite. (P0.1–P0.4, P0.6–P0.8)
-# github:issue: pending
+# github:pr: 1
 * [PR merged, CI green] -> authoring_skill
 + [Review requested changes] ~loop~ -> phase1_toolchain
 
 === authoring_skill ===
 Build the NL → draft-script authoring skill (P0.5): project notes in, a
 compilable .mar out, with compiler errors surfaced for one revision loop.
-# github:issue: pending
+# github:issue: 2
 ~ skill_revisions += 1
 * [First-session compile success at or above 70%] -> dogfood_gate
 + {skill_revisions < 5} [Below the bar, iterate on prompts] ~loop~ -> authoring_skill
@@ -41,14 +41,14 @@ minutes.
 Reference runtime (P1): grow the minimal walker in src/state.ts into a full
 graph walker and gate evaluator consuming trajectory JSON, with a decision log
 recording actor, timestamp and rationale for every branch.
-# github:issue: pending
+# github:issue: 3
 * [Walker passes conformance tests] -> escalation_protocol
 
 === escalation_protocol ===
 Resolve OQ2 — the @human escalation protocol (channel, payload, timeout and
 fallback semantics) — then wire the pi agent proving ground to ingest and
 traverse compiled trajectories.
-# github:issue: pending
+# github:issue: 4
 * [Protocol decided and implemented] @human -> phase2_gate
 
 === phase2_gate ===
