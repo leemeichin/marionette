@@ -4,6 +4,23 @@
 // Phase 2 ingests: external refs (github/jira/linear/url) and delivery config.
 // The conformance suite (spec/conformance) walks this plan end to end.
 # project: paas-replatform
+# summary: Re-platform the monolith onto the PaaS by strangler-fig extraction — observability first, auth then billing cut over behind shadow-parity holds and SRE/Finance sign-offs, bounded cutback budgets with an architecture-board escape, then a freeze-window lift-and-shift of the remainder.
+# prompt: """
+Move us off the legacy estate onto the PaaS without a big-bang rewrite.
+Constraints from the programme brief:
+
+- nothing ships until the new observability stack is live — we've flown
+  blind before
+- extract auth first, then billing, strangler-fig style; shadow traffic
+  must hold parity for two weeks before any cutover, and billing must
+  reconcile a full ledger month to the penny
+- SRE signs off capacity before every cutover; a cutover that burns more
+  than 20% of its error budget in week one gets cut back
+- three cutbacks on one service means the approach goes to the
+  architecture board, not a fourth try
+- the remaining monolith moves as-is in a support-agreed freeze window,
+  and the old estate is only decommissioned when we choose to
+"""
 # github:repo: acme/platform
 # jira:site: https://acme.atlassian.net
 # linear:workspace: acme
