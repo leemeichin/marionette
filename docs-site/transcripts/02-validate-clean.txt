@@ -1,0 +1,1 @@
+[32m✓[39m checkout.mar: 0 errors, 0 warnings

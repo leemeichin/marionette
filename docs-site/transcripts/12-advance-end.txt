@@ -1,0 +1,2 @@
+current: [1mEND[22m[32m (completed)[39m
+variables: attempts=2

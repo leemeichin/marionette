@@ -1,0 +1,23 @@
+marionette — compiled project trajectories for AI agents
+
+Usage:
+  marionette compile   <plan.mar> [-o out.trajectory.json]   Compile to trajectory JSON
+  marionette validate  <plan.mar> [--strict]                 Check only; print diagnostics
+  marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
+  marionette summarize <plan.mar|.json> [--state f] [-o out.md]
+  marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
+  marionette state init    <plan.mar|.json> [--state f] [--force]
+  marionette state show    <plan.mar|.json> [--state f]
+  marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
+  marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
+  marionette state rebind  <plan.mar|.json> [--state f]         Migrate state onto an edited plan
+
+Options:
+  -o, --out <file>    Output file ('-' for stdout; default varies by command)
+  --state <file>      State file (default: <plan>.state.json)
+  --strict            Treat warnings as errors (exit 1)
+  --json              Emit the machine-readable form (brief)
+  --lr                Render left-to-right instead of top-down
+  --force             Overwrite an existing state file on init
+  --actor <name>      Who takes the step ("agent" may not pass @human gates)
+  --rationale <text>  Why the step was taken (required for choices)

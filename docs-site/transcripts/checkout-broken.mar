@@ -1,0 +1,11 @@
+# project: checkout-revamp
+VAR attempts = 0
+
+=== build_checkout ===
+Rebuild the checkout flow behind a feature flag.
+~ attempts += 1
+* [Cohort converts] @human -> rollout
++ [Conversion flat — iterate] -> build_checkout
+
+=== rollout ===
+Ramp the flag to 100% and retire the old flow.

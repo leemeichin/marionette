@@ -1,0 +1,1 @@
+[31merror:[39m choice "Cohort converts" is an @human checkpoint: an agent may not take it autonomously. Escalate to a human; a human records the decision with --actor <name>.

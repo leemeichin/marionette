@@ -1,0 +1,22 @@
+# project: checkout-revamp
+VAR attempts = 0
+
+=== build_checkout ===
+Rebuild the checkout flow behind a feature flag.
+~ attempts += 1
+* [Cohort converts] @human -> rollout
++ {attempts < 5} [Conversion flat — iterate] ~loop~ -> build_checkout
+* {attempts >= 5} [Not converging — rethink] @human -> rethink
+
+=== rethink ===
+Five iterations without lift: take the flow back to research.
++ [New direction agreed] @human ~loop~ -> build_checkout
+* [Park the revamp] @human -> END
+
+=== rollout ===
+Ramp the flag to 100% and retire the old flow.
+-> postmortem
+
+=== postmortem ===
+Write up what moved conversion and what did not.
+-> END

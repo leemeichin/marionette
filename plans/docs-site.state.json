@@ -1,0 +1,41 @@
+{
+  "hash": "sha256:ec2eaabc948a6182f4df7e59ee79a85c77f56e5b44e86112f703b1021460c6dc",
+  "status": "active",
+  "current": "design_system",
+  "variables": {
+    "readme_passes": 1,
+    "demo_passes": 0
+  },
+  "taken": [
+    "rewrite_readme#0"
+  ],
+  "log": [
+    {
+      "at": "2026-07-23T15:46:23.549Z",
+      "actor": "system",
+      "from": null,
+      "choice": null,
+      "label": null,
+      "rationale": "plan started",
+      "to": "capture_reality"
+    },
+    {
+      "at": "2026-07-23T15:49:47.126Z",
+      "actor": "agent",
+      "from": "capture_reality",
+      "choice": null,
+      "label": null,
+      "rationale": "16 verbatim pty transcripts captured (validate fail/clean, compile, summarize, render, walk with @human refusal, drift, rebind, help) plus the three demo .mar sources in docs-site/transcripts",
+      "to": "rewrite_readme"
+    },
+    {
+      "at": "2026-07-23T15:51:16.055Z",
+      "actor": "agent",
+      "from": "rewrite_readme",
+      "choice": "rewrite_readme#0",
+      "label": "Reads clean, examples verified",
+      "rationale": "README rewritten around the captured checkout story; every console block checked line-for-line against docs-site/transcripts (elisions marked with …)",
+      "to": "design_system"
+    }
+  ]
+}

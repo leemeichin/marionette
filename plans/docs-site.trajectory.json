@@ -1,0 +1,324 @@
+{
+  "spec": "0.2.0",
+  "hash": "sha256:ec2eaabc948a6182f4df7e59ee79a85c77f56e5b44e86112f703b1021460c6dc",
+  "source": {
+    "file": "plans/docs-site.mar"
+  },
+  "variables": {
+    "readme_passes": {
+      "type": "number",
+      "initial": 0,
+      "line": 7
+    },
+    "demo_passes": {
+      "type": "number",
+      "initial": 0,
+      "line": 8
+    }
+  },
+  "start": "capture_reality",
+  "nodes": [
+    {
+      "id": "capture_reality",
+      "body": "Run the real CLI against the worked examples and capture verbatim transcripts:\nvalidate (clean and failing), compile, render, summarize, state init/choose,\nand brief. These transcripts are the single source of truth — every terminal\nsnippet in the README and every interactive demo on the site must match them\nbyte-for-byte.",
+      "actions": [],
+      "choices": [],
+      "divert": {
+        "target": "rewrite_readme",
+        "line": 18
+      },
+      "line": 12,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "rewrite_readme",
+      "body": "Rewrite README.md to say what Marionette is and does: the one-line thesis,\nwhy it exists, the authoring-to-execution flow, with brief but illustrative\nexamples whose output is checked against the captured transcripts.",
+      "actions": [
+        {
+          "var": "readme_passes",
+          "op": "+=",
+          "value": {
+            "kind": "lit",
+            "value": 1
+          },
+          "source": "1",
+          "line": 24
+        }
+      ],
+      "choices": [
+        {
+          "id": "rewrite_readme#0",
+          "label": "Reads clean, examples verified",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "loop": false,
+          "target": "design_system",
+          "line": 25
+        },
+        {
+          "id": "rewrite_readme#1",
+          "label": "Tighten prose and examples",
+          "sticky": true,
+          "gate": {
+            "source": "readme_passes < 3",
+            "ast": {
+              "kind": "binary",
+              "op": "<",
+              "left": {
+                "kind": "var",
+                "name": "readme_passes"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 3
+              }
+            }
+          },
+          "human": false,
+          "loop": true,
+          "target": "rewrite_readme",
+          "line": 26
+        },
+        {
+          "id": "rewrite_readme#2",
+          "label": "Not landing after three passes",
+          "sticky": false,
+          "gate": {
+            "source": "readme_passes >= 3",
+            "ast": {
+              "kind": "binary",
+              "op": ">=",
+              "left": {
+                "kind": "var",
+                "name": "readme_passes"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 3
+              }
+            }
+          },
+          "human": true,
+          "loop": false,
+          "target": "design_system",
+          "line": 27
+        }
+      ],
+      "divert": null,
+      "line": 20,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "design_system",
+      "body": "Define the site's design system: full-viewport terminal aesthetic with\ndesign tokens (monospace type scale, phosphor palette at WCAG AA contrast,\nspacing grid), semantic HTML rules, keyboard focus and reduced-motion\nbehaviour. Accessibility is a constraint, not a variant.",
+      "actions": [],
+      "choices": [],
+      "divert": {
+        "target": "scaffold_site",
+        "line": 34
+      },
+      "line": 29,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "scaffold_site",
+      "body": "Scaffold the static site under docs-site/: dependency-free HTML/CSS/JS,\na Wrangler config for Cloudflare (static assets), and a local preview path.\nDone means the shell page deploy-ready and the design tokens rendering.",
+      "actions": [],
+      "choices": [],
+      "divert": {
+        "target": "write_content",
+        "line": 40
+      },
+      "line": 36,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "write_content",
+      "body": "Write the documentation pages: what-it-is overview, getting started, DSL\nsyntax reference, worked examples, use-cases, and the execution/state\nworkflow in practice. Content is distilled from docs/ and verified against\nthe real CLI, not paraphrased from memory.",
+      "actions": [],
+      "choices": [],
+      "divert": {
+        "target": "build_demos",
+        "line": 47
+      },
+      "line": 42,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "build_demos",
+      "body": "Build the interactive terminal demonstrations: replayable sessions that\ntype and stream the captured transcripts end-to-end (author, validate with\nerrors, fix, compile, traverse, escalate at @human). Fidelity rule: every\nframe shown is a captured byte, not a mock-up.",
+      "actions": [
+        {
+          "var": "demo_passes",
+          "op": "+=",
+          "value": {
+            "kind": "lit",
+            "value": 1
+          },
+          "source": "1",
+          "line": 54
+        }
+      ],
+      "choices": [
+        {
+          "id": "build_demos#0",
+          "label": "Demos faithful and interactive",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "loop": false,
+          "target": "accessibility_pass",
+          "line": 55
+        },
+        {
+          "id": "build_demos#1",
+          "label": "Fidelity or interaction gaps",
+          "sticky": true,
+          "gate": {
+            "source": "demo_passes < 3",
+            "ast": {
+              "kind": "binary",
+              "op": "<",
+              "left": {
+                "kind": "var",
+                "name": "demo_passes"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 3
+              }
+            }
+          },
+          "human": false,
+          "loop": true,
+          "target": "build_demos",
+          "line": 56
+        },
+        {
+          "id": "build_demos#2",
+          "label": "Demos not converging",
+          "sticky": false,
+          "gate": {
+            "source": "demo_passes >= 3",
+            "ast": {
+              "kind": "binary",
+              "op": ">=",
+              "left": {
+                "kind": "var",
+                "name": "demo_passes"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 3
+              }
+            }
+          },
+          "human": true,
+          "loop": false,
+          "target": "accessibility_pass",
+          "line": 57
+        }
+      ],
+      "divert": null,
+      "line": 49,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "accessibility_pass",
+      "body": "Audit the whole site: AA contrast on the terminal palette, full keyboard\noperability of the demos, visible focus, prefers-reduced-motion honoured,\nlandmarks and skip links, sensible screen-reader output for animated\nterminals.",
+      "actions": [],
+      "choices": [
+        {
+          "id": "accessibility_pass#0",
+          "label": "Audit clean",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "loop": false,
+          "target": "ship_review",
+          "line": 64
+        },
+        {
+          "id": "accessibility_pass#1",
+          "label": "Issues found — fix and re-audit",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "loop": true,
+          "target": "accessibility_pass",
+          "line": 65
+        }
+      ],
+      "divert": null,
+      "line": 59,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "ship_review",
+      "body": "Everything committed on the delivery branch and pushed, draft PR open with\nthe site preview story and deployment instructions. A human reviews the\nREADME and the site before anything merges or deploys.",
+      "actions": [],
+      "choices": [
+        {
+          "id": "ship_review#0",
+          "label": "Approved — merge and deploy",
+          "sticky": false,
+          "gate": null,
+          "human": true,
+          "loop": false,
+          "target": "END",
+          "line": 71
+        },
+        {
+          "id": "ship_review#1",
+          "label": "Changes requested",
+          "sticky": true,
+          "gate": null,
+          "human": true,
+          "loop": true,
+          "target": "address_feedback",
+          "line": 72
+        }
+      ],
+      "divert": null,
+      "line": 67,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "address_feedback",
+      "body": "Apply the review feedback across README, site or demos, re-verify affected\noutput against the transcripts, and return for review.",
+      "actions": [],
+      "choices": [],
+      "divert": {
+        "target": "ship_review",
+        "line": 77
+      },
+      "line": 74,
+      "meta": {},
+      "refs": []
+    }
+  ],
+  "meta": {
+    "project": "marionette-docs-site",
+    "github:repo": "leemeichin/marionette",
+    "delivery": "single-pr",
+    "delivery:branch": "claude/marionette-docs-site-zm5vzp",
+    "report": "at-checkpoints"
+  },
+  "refs": [
+    {
+      "provider": "github",
+      "kind": "repo",
+      "id": "leemeichin/marionette",
+      "url": "https://github.com/leemeichin/marionette"
+    }
+  ]
+}
