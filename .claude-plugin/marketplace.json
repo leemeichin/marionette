@@ -1,0 +1,11 @@
+{
+  "name": "marionette",
+  "owner": { "name": "Lee Meichin" },
+  "plugins": [
+    {
+      "name": "marionette",
+      "source": "./",
+      "description": "Author, validate and traverse Marionette project trajectories (.mar plans compiled into agent-traversable graphs)."
+    }
+  ]
+}

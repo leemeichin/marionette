@@ -13,8 +13,22 @@ description: >-
 You are drafting a **project trajectory**: a directed graph an AI agent will
 traverse and humans will gate. The deliverable is a `.mar` script that
 compiles cleanly, plus its rendered graph and summary for review. The full
-language reference is `docs/DSL.md`; the compiled contract is
-`spec/trajectory.schema.json`.
+language reference: https://github.com/leemeichin/marionette/blob/main/docs/DSL.md
+(in the marionette repo itself: `docs/DSL.md`); the compiled contract is
+`spec/trajectory.schema.json` there.
+
+## Locating the compiler
+
+Resolve the `marionette` CLI once, in this order, and reuse it:
+
+1. `marionette` already on PATH (installed via `npm link` or `npm install -g`) —
+   check with `marionette version`.
+2. Inside a marionette repo checkout: `node bin/marionette.js` (after
+   `npm install && npm run build`), or `npx tsx src/cli.ts` without a build.
+3. Anywhere else: `npx --yes github:leemeichin/marionette <command>` —
+   installs and builds transparently on first use.
+
+Below, `marionette` means whichever form resolved.
 
 ## Workflow
 
@@ -25,19 +39,20 @@ language reference is `docs/DSL.md`; the compiled contract is
    clarifying questions, and only for decisions that change the graph's
    shape.
 2. **Draft the `.mar` script** (conventions below).
-3. **Compile-check:** `node bin/marionette.js validate <plan>.mar --strict`
-   (or `npx tsx src/cli.ts validate …` if `dist/` isn't built). If it fails,
-   fix every diagnostic — each error carries a line number and a `help:`
-   suggestion — and validate again. Budget one revision loop; if the second
-   attempt still errors, show the user the remaining diagnostics instead of
-   silently iterating.
-4. **Produce the review artifacts:**
-   `node bin/marionette.js compile <plan>.mar` (the contract),
-   `render` (Mermaid), and `summarize` (plain language). Present the summary
-   and graph to the user, calling out every `@human` checkpoint and any
-   "unverified gate" warnings for manual review.
+3. **Compile-check:** `marionette validate <plan>.mar --strict`. If it
+   fails, fix every diagnostic — each error carries a line number and a
+   `help:` suggestion — and validate again. Budget one revision loop; if the
+   second attempt still errors, show the user the remaining diagnostics
+   instead of silently iterating.
+4. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
+   contract), `render` (Mermaid), and `summarize` (plain language). Present
+   the summary and graph to the user, calling out every `@human` checkpoint
+   and any "unverified gate" warnings for manual review.
 5. **Only if the user wants to start traversal:**
-   `node bin/marionette.js state init <plan>.mar`.
+   `marionette state init <plan>.mar`.
+6. **Log the outcome** (dogfood metric): tell the user whether the first
+   validate pass succeeded with zero errors — that is the "first-session
+   compile success" data point the Marionette project tracks.
 
 ## Drafting conventions
 

@@ -28,17 +28,30 @@ $ marionette state choose plan.mar 1 --actor agent --rationale "metrics red, ite
 ## Getting started
 
 ```console
-$ npm install && npm run build
-$ node bin/marionette.js validate examples/build_mvp.mar
+$ npm install && npm link      # builds and puts `marionette` on your PATH
+$ marionette validate examples/build_mvp.mar
 $ npm test
 ```
+
+Or zero-clone from anywhere: `npx --yes github:leemeichin/marionette validate plan.mar`.
+
+**Install the authoring skill** (drafts plans from natural-language notes) in
+any Claude Code session:
+
+```
+/plugin marketplace add leemeichin/marionette
+/plugin install marionette@marionette
+```
+
+Full install options and the dogfood kick-off protocol: [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md).
 
 ## Layout
 
 - `docs/PRD.md` — product requirements document
 - `docs/DSL.md` — DSL v0 language reference
 - `docs/decisions/` — ADRs (0001: Ink influence-only; 0002: TypeScript now, contract-first portability)
-- `.claude/skills/marionette-authoring/` — the P0.5 authoring skill: NL notes → validated `.mar`
+- `skills/marionette-authoring/` — the P0.5 authoring skill: NL notes → validated `.mar` (installable as a plugin; symlinked into `.claude/skills/` for sessions in this repo)
+- `docs/GETTING-STARTED.md` — install the CLI + skill, and the dogfood kick-off protocol
 - `docs/PARKING.md` — out-of-scope ideas parking lot
 - `spec/` — the trajectory JSON schema (the contract between authoring and execution)
 - `src/` — compiler, validators, gate analysis, renderer, summarizer, state engine, CLI
