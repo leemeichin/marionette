@@ -18,14 +18,26 @@ No dependencies to install; the build is plain Node (≥ 18).
 ## Deploy (Cloudflare)
 
 The site ships as [Workers static assets](https://developers.cloudflare.com/workers/static-assets/)
-— see `wrangler.jsonc`. With a Cloudflare account and `wrangler` logged in:
+— see `wrangler.jsonc`.
+
+**CI (default):** `.github/workflows/deploy-docs.yml` deploys on every push
+to `main` that touches `docs-site/` or `src/` (gates must pass first).
+Secrets flow through 1Password:
+
+- GitHub repo secret `OP_SERVICE_ACCOUNT_TOKEN` — a 1Password service
+  account token with read access to the vault below.
+- 1Password vault `marionette`, item `cloudflare`, fields `api-token`
+  (Cloudflare API token with Workers Scripts:Edit) and `account-id`.
+  Different vault/item names? Edit the `op://` refs in the workflow.
+
+**Manually:** with a Cloudflare account and `wrangler` logged in:
 
 ```console
 $ npm run deploy     # build + check + npx wrangler deploy
 ```
 
-First deploy will prompt to register the `marionette-docs` worker; add a
-custom domain from the Cloudflare dashboard afterwards if wanted.
+First deploy registers the `marionette-docs` worker; add a custom domain
+from the Cloudflare dashboard afterwards if wanted.
 
 ## How content works
 
