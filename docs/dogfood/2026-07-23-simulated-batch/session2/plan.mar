@@ -1,0 +1,50 @@
+# project: cli-plugin-system
+VAR beta_rounds = 0
+
+-> build_plugin_api
+
+=== build_plugin_api ===
+Build the plugin API behind a feature flag, off by default in releases.
+Done when hooks and extension points work end-to-end in dogfood tests without affecting stable users.
+* [API functional behind the flag] -> recruit_beta_authors
+
+=== recruit_beta_authors ===
+Recruit a small cohort of community plugin authors and give them flag access plus draft docs.
+Done when a handful of authors are actively building plugins against the API.
+* [Beta cohort onboarded] -> beta_round
+
+=== beta_round ===
+Run a beta feedback round: authors build against the API while we collect friction points and gaps.
+~ beta_rounds += 1
+* [Feedback is minor, API feels stable] -> maintainer_signoff
++ {beta_rounds < 3} [Iterate on the feedback] ~loop~ -> iterate_api
+* {beta_rounds >= 3} [Round budget exhausted] -> ship_or_cut
+
+=== iterate_api ===
+Revise the plugin API based on the round's feedback, still behind the feature flag.
++ [Changes ready for another round] ~loop~ -> beta_round
+
+=== ship_or_cut ===
+Three beta rounds are done; no more iteration.
+Decide whether to ship the full API surface as-is or cut it down to just the hook system.
+* [Ship what we have] @human -> maintainer_signoff
+* [Cut the surface down to hooks only] @human -> cut_to_hooks
+
+=== cut_to_hooks ===
+Reduce the public API to just hooks; everything else stays internal behind the flag.
+Done when the hooks-only surface passes the same dogfood tests.
+* [Hooks-only surface ready] -> maintainer_signoff
+
+=== maintainer_signoff ===
+Lead maintainer reviews the final API surface before it is tagged in a release.
+Once public, the API is supported indefinitely, so this approval is the last gate.
+* [Approved, tag it] @human -> tag_release
++ [Changes required first] @human ~loop~ -> address_signoff_feedback
+
+=== address_signoff_feedback ===
+Address the maintainer's requested changes to the final surface without reopening the beta.
++ [Revised surface ready for review] ~loop~ -> maintainer_signoff
+
+=== tag_release ===
+Enable the plugin API by default, tag the release, and publish the plugin author documentation.
+-> END

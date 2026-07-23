@@ -1,0 +1,59 @@
+# project: pivot-quarter
+// B2B analytics startup: one quarter to find a new direction or die.
+// Spike three pivots (six weeks total), board picks or kills, then MVP -> beta -> annual contract.
+
+VAR beta_rounds = 0
+
+-> spike_sdk
+
+=== spike_sdk ===
+Spike the embedded-analytics SDK: throwaway prototype plus five customer discovery calls, two weeks max.
+* [Prototype built and five discovery calls done] -> spike_logistics
+* [Two-week timebox expired, cut the spike] -> spike_logistics
+
+=== spike_logistics ===
+Spike the vertical product for logistics companies: throwaway prototype plus five customer discovery calls, two weeks max.
+* [Prototype built and five discovery calls done] -> spike_copilot
+* [Two-week timebox expired, cut the spike] -> spike_copilot
+
+=== spike_copilot ===
+Spike the AI-native reporting copilot: throwaway prototype plus five customer discovery calls, two weeks max. This closes out the six-week total spiking budget.
+* [Prototype built and five discovery calls done] -> board_direction
+* [Two-week timebox expired, cut the spike] -> board_direction
+
+=== board_direction ===
+The board reviews all three spike results and either picks a direction or kills the company.
+* [Board picks the embedded-analytics SDK] @human -> build_mvp
+* [Board picks the logistics vertical] @human -> build_mvp
++ [Board picks the AI reporting copilot] @human -> soc2_readiness
+* [Board kills the company] @human -> END
+
+=== soc2_readiness ===
+Copilot-only gate: complete a SOC 2 readiness review, since no design partner will touch the copilot without it.
+* [Readiness review passed] -> build_mvp
++ [Readiness unachievable this quarter, send the direction choice back to the board] @human ~loop~ -> board_direction
+
+=== build_mvp ===
+Build the MVP for the chosen direction. Done means a product that design partners can actually run.
+* [MVP ready for design partners] -> design_partner_beta
+
+=== design_partner_beta ===
+Run a six-week design-partner beta; the goal is at least three paying design partners. Each pass through this phase is one beta round, and two extensions are the limit.
+~ beta_rounds += 1
++ [Three or more paying design partners on board] -> contract_negotiation
++ {beta_rounds < 3} [Short of three partners, extend the beta] ~loop~ -> design_partner_beta
++ {beta_rounds >= 3} [Two extensions used and still short of three partners] -> board_kill_or_continue
+
+=== board_kill_or_continue ===
+After two beta extensions without three paying design partners, the board decides whether the company keeps going.
+* [Board kills the company] @human -> END
++ [Board continues, run another beta round] @human ~loop~ -> design_partner_beta
+
+=== contract_negotiation ===
+Convert paying design partners into a signed annual contract. The CEO signs every contract personally.
+* [CEO signs an annual contract] @human -> scale_up
++ [Deal falls through, work the beta cohort again] ~loop~ -> design_partner_beta
+
+=== scale_up ===
+A signed annual contract is the win condition: scale the chosen direction.
+-> END
