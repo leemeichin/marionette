@@ -1,7 +1,7 @@
 {
   "name": "marionette",
   "version": "0.1.0",
-  "description": "A compiled, plain-text project trajectory language \u2014 authored by humans, validated by a compiler, traversed by AI agents.",
+  "description": "A compiled, plain-text project trajectory language — authored by humans, validated by a compiler, traversed by AI agents.",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -28,5 +28,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "swipl-wasm": "^8.0.4"
   }
 }

@@ -51,6 +51,17 @@ add sub mul div mod`.
 ## Running the oracle
 
 ```console
+$ marionette oracle plan.mar          # bundled wasm engine, no setup
+MAR006	line 19
+STRAND	line 25	once-only choice on a cycle can strand a traversal
+✗ plan.mar: 2 findings from the rule base
+```
+
+Exit 1 on error-class findings (MAR006/007/009/010 and undeclared cycles);
+warnings and STRAND report but pass. With a native SWI-Prolog the same
+report comes straight from the rule base:
+
+```console
 $ swipl -q -g report -t halt spec/rules/marionette.pl plan.pl
 MAR006	19
 STRAND	25
@@ -72,6 +83,17 @@ and match `marionette validate` exactly. Two kinds go beyond it:
   warning on it.
 
 ## Questioning a plan
+
+One-shot, via the bundled engine:
+
+```console
+$ marionette query plan.mar 'human_gate(C, Phase, Label)'
+C = "dogfood_gate#0", Label = "Phase 1 exit approved", Phase = "dogfood_gate"
+$ marionette query plan.mar 'unattended_completion'
+false.
+```
+
+Or interactively, with a native toplevel:
 
 ```console
 $ swipl spec/rules/marionette.pl plan.pl
@@ -115,20 +137,25 @@ point: the change has to be legible enough to state twice.
 
 ## Dependency posture
 
-**Installing marionette requires no Prolog.** The npm package stays
-zero-runtime-dependency: nothing in `src/` or the CLI ever invokes a Prolog
-engine — `marionette facts` is pure TypeScript that prints text, and the
-`.pl` files ship in `spec/` as inert data. A missing `swipl` costs you
-nothing but the ability to run the oracle and the interactive queries.
+**The engine ships in the bundle.** Installing marionette resolves
+everything: the rule base runs on `swipl-wasm` — SWI-Prolog compiled to
+WebAssembly, an ordinary npm dependency (~13 MB installed) — loaded lazily
+in-process by `src/oracle.ts`. `marionette oracle` and `marionette query`
+therefore work on a machine with nothing but Node, which is what an agent
+install gets. No system package, no per-platform binaries.
 
-The engine, when you want those, is **SWI-Prolog ≥ 9** specifically (the
-rules use its tabling and string types) — `apt install swi-prolog-nox`,
-`brew install swi-prolog`. The oracle test skips loudly when `swipl` is not
-on `PATH`; CI installs it, so agreement is enforced on every push regardless
-of contributors' local setups.
+Why wasm over the alternatives a Prolog deployment usually reaches for:
 
-If the query surface ever needs to be first-class for every install (or in
-the browser playground), the path is `swipl-wasm` — SWI-Prolog compiled to
-WebAssembly, loadable from npm — rather than bundling platform binaries.
-Deliberately not done here: the oracle's value is CI-side, and a wasm engine
-is a real dependency to take on only when something user-facing wants it.
+- a **system SWI-Prolog** breaks self-containment — an agent installing the
+  npm package can't be asked to apt/brew anything first;
+- a **`qsave_program` saved state** compiles the program *plus the runtime*
+  into a native executable, but per platform — an npm bundle would need an
+  x64/arm64 × linux/macos/windows matrix and the maintenance that follows;
+- the **wasm build is that same compiled artifact, portable**: one binary
+  blob, runs wherever Node runs, and in the browser (the playground can get
+  "ask the plan" for free later, on the same code path).
+
+A native `swipl` (≥ 9, for tabling) remains the nicest way to use the
+interactive toplevel — the `.pl` files are plain Prolog and load unchanged —
+but nothing requires it: the bundled engine is the one the CLI, the tests
+and CI all use, so agreement is enforced on every push with no setup at all.

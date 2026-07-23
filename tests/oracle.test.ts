@@ -5,27 +5,26 @@
  * batch of graph mutations of each (seeded defects: dropped exits, unmarked
  * loops, false gates, retargeted edges).
  *
- * Exact-match codes are compared as (code, line) multisets. MAR008 is
- * compared on presence only: the rules state the semantic form (every simple
- * cycle carries a ~loop~ edge) while the TS validator approximates it with
- * DFS back edges, so per-cycle reports legitimately differ.
+ * The rules run on the bundled SWI-Prolog wasm engine (src/oracle.ts), so
+ * the suite is self-contained — no system Prolog required, anywhere.
  *
- * Skips (loudly) when SWI-Prolog is not installed.
+ * Exact-match codes are compared as (code, line) sets. MAR008 is compared
+ * on presence only: the rules state the semantic form (every simple cycle
+ * carries a ~loop~ edge) while the TS validator approximates it with DFS
+ * back edges, so per-cycle reports legitimately differ.
  */
 
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import type { Diagnostic } from '../src/types.js';
 import { parsePlan, type ParsedPlan } from '../src/parser.js';
 import { validatePlan } from '../src/validate.js';
 import { emitFacts } from '../src/facts.js';
+import { oracleReport } from '../src/oracle.js';
 
 const ROOT = join(import.meta.dirname, '..');
-const RULES = join(ROOT, 'spec', 'rules', 'marionette.pl');
 
 /** Codes the rule base implements with exact (code, line) agreement. */
 const EXACT = new Set(['MAR006', 'MAR007', 'MAR009', 'MAR010', 'MAR011', 'MAR013', 'MAR014', 'MAR017']);
@@ -34,10 +33,6 @@ const EXACT = new Set(['MAR006', 'MAR007', 'MAR009', 'MAR010', 'MAR011', 'MAR013
 const PRE_GRAPH = new Set(['MAR001', 'MAR002', 'MAR003', 'MAR004', 'MAR005', 'MAR012', 'MAR015']);
 
 const MUTANTS_PER_PLAN = 8;
-
-function hasSwipl(): boolean {
-  return spawnSync('swipl', ['--version'], { stdio: 'ignore' }).status === 0;
-}
 
 function corpus(): string[] {
   const files: string[] = [];
@@ -73,24 +68,13 @@ function tsVerdict(plan: ParsedPlan): Verdict | null {
   };
 }
 
-function prologVerdict(plan: ParsedPlan, dir: string, key: string): Verdict {
-  const factsFile = join(dir, `${key}.pl`);
-  writeFileSync(factsFile, emitFacts(plan));
-  const out = execFileSync('swipl', ['-q', '-g', 'report', '-t', 'halt', RULES, factsFile], {
-    encoding: 'utf8',
-    timeout: 30_000,
-  });
-  const exact: string[] = [];
-  let hasUndeclaredCycle = false;
-  const strandLines: number[] = [];
-  for (const line of out.split('\n')) {
-    if (!line.trim()) continue;
-    const [code, arg] = line.split('\t');
-    if (code === 'MAR008') hasUndeclaredCycle = true;
-    else if (code === 'STRAND') strandLines.push(Number(arg));
-    else exact.push(`${code}:${arg}`);
-  }
-  return { exact: [...new Set(exact)].sort(), hasUndeclaredCycle, strandLines };
+async function prologVerdict(plan: ParsedPlan): Promise<Verdict> {
+  const report = await oracleReport(emitFacts(plan));
+  return {
+    exact: report.findings.map((f) => `${f.code}:${f.line}`).sort(),
+    hasUndeclaredCycle: report.cycles.length > 0,
+    strandLines: report.strands,
+  };
 }
 
 /** Deterministic single-defect mutants of a plan, in a fixed operator order. */
@@ -147,22 +131,13 @@ function mutants(plan: ParsedPlan): Array<{ name: string; plan: ParsedPlan }> {
 }
 
 test('prolog oracle agrees with the TypeScript validator', async (t) => {
-  if (!hasSwipl()) {
-    console.warn('oracle: swipl not found on PATH — skipping differential oracle suite');
-    t.skip('swipl not installed');
-    return;
-  }
-
-  const dir = mkdtempSync(join(tmpdir(), 'marionette-oracle-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
   const novel: string[] = [];
   let compared = 0;
-  let key = 0;
 
-  const compare = (name: string, plan: ParsedPlan) => {
+  const compare = async (name: string, plan: ParsedPlan) => {
     const ts = tsVerdict(plan);
     if (ts === null) return; // validator bailed before graph analysis
-    const pl = prologVerdict(plan, dir, String(key++));
+    const pl = await prologVerdict(plan);
     assert.deepEqual(pl.exact, ts.exact,
       `${name}: exact diagnostics diverge\n  ts:     ${ts.exact.join(' ') || '(none)'}\n  prolog: ${pl.exact.join(' ') || '(none)'}`);
     if (ts.hasUndeclaredCycle && !pl.hasUndeclaredCycle) {
@@ -183,9 +158,9 @@ test('prolog oracle agrees with the TypeScript validator', async (t) => {
     const name = relative(ROOT, file);
     const plan = parsePlan(readFileSync(file, 'utf8'));
     if (plan.diagnostics.some((d) => d.severity === 'error')) continue;
-    await t.test(name, () => {
-      compare(name, plan);
-      for (const m of mutants(plan)) compare(`${name} [${m.name}]`, m.plan);
+    await t.test(name, async () => {
+      await compare(name, plan);
+      for (const m of mutants(plan)) await compare(`${name} [${m.name}]`, m.plan);
     });
   }
 

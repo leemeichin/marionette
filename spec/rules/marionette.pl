@@ -364,6 +364,24 @@ unattended_phase(N) :-
     plan_start(S), end_id(E), node(N, _, _),
     ( N == S ; agent_reach(S, N) ), agent_reach(N, E).
 
+/* ===================== engine reuse ===================== */
+
+%% reset_plan: retract the loaded plan's facts and drop memoized tables, so
+%% one engine (e.g. the bundled wasm build) can check many plans in sequence.
+reset_plan :-
+    retractall(plan_start(_)),
+    retractall(node(_, _, _)),
+    retractall(variable(_, _, _, _)),
+    retractall(action(_, _, _, _, _)),
+    retractall(choice(_, _, _, _, _)),
+    retractall(label(_, _)),
+    retractall(sticky(_)),
+    retractall(human(_)),
+    retractall(loop_marked(_)),
+    retractall(gate(_, _, _)),
+    retractall(divert(_, _, _)),
+    abolish_all_tables.
+
 /* ===================== report ===================== */
 
 report :-

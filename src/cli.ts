@@ -14,6 +14,7 @@ import type { Diagnostic, PlanState, Trajectory } from './types.js';
 import { compile, formatDiagnostics } from './compile.js';
 import { parsePlan } from './parser.js';
 import { emitFacts } from './facts.js';
+import { oracleQuery, oracleReport } from './oracle.js';
 import { renderMermaid } from './render.js';
 import { summarize } from './summarize.js';
 import { nearest } from './suggest.js';
@@ -71,6 +72,8 @@ Usage:
   marionette compile   <plan.mar> [-o out.trajectory.json]   Compile to trajectory JSON
   marionette validate  <plan.mar> [--strict]                 Check only; print diagnostics
   marionette facts     <plan.mar> [-o out.pl]                 Prolog fact base (see spec/rules/)
+  marionette oracle    <plan.mar>                             Check via the bundled rule engine
+  marionette query     <plan.mar> <goal> [--limit n]          Ask the plan a Prolog question
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
@@ -281,6 +284,57 @@ export async function run(argv: string[]): Promise<number> {
           return 1;
         }
         output(flags, null, emitFacts(parsed));
+        return 0;
+      }
+
+      case 'oracle': {
+        const { positional } = parseArgs(rest);
+        const file = positional[0];
+        if (!file) throw new UsageError('oracle: missing <plan.mar>');
+        const text = readTextFile(file);
+        const parsed = parsePlan(text);
+        const parseErrors = parsed.diagnostics.filter((d) => d.severity === 'error');
+        if (parseErrors.length > 0) {
+          process.stderr.write(formatDiagnostics(parseErrors, file, { source: text, style: err }) + '\n');
+          return 1;
+        }
+        const report = await oracleReport(emitFacts(parsed));
+        for (const f of report.findings) process.stdout.write(`${f.code}\tline ${f.line}\n`);
+        for (const cycle of report.cycles) process.stdout.write(`MAR008\t${cycle.join('->')}\n`);
+        for (const line of report.strands) {
+          process.stdout.write(`STRAND\tline ${line}\tonce-only choice on a cycle can strand a traversal\n`);
+        }
+        const errorCodes = new Set(['MAR006', 'MAR007', 'MAR009', 'MAR010']);
+        const failed = report.findings.some((f) => errorCodes.has(f.code)) || report.cycles.length > 0;
+        const total = report.findings.length + report.cycles.length + report.strands.length;
+        process.stderr.write((failed ? err.red('✗') : err.green('✓')) +
+          ` ${basename(file)}: ${count(total, 'finding')} from the rule base\n`);
+        return failed ? 1 : 0;
+      }
+
+      case 'query': {
+        const { positional, flags } = parseArgs(rest);
+        const [file, goal] = positional;
+        if (!file || !goal) throw new UsageError('query: usage: marionette query <plan.mar> <goal>');
+        const text = readTextFile(file);
+        const parsed = parsePlan(text);
+        const parseErrors = parsed.diagnostics.filter((d) => d.severity === 'error');
+        if (parseErrors.length > 0) {
+          process.stderr.write(formatDiagnostics(parseErrors, file, { source: text, style: err }) + '\n');
+          return 1;
+        }
+        const limit = typeof flags['limit'] === 'string' ? Number(flags['limit']) : 200;
+        const solutions = await oracleQuery(emitFacts(parsed), goal, limit);
+        if (solutions.length === 0) {
+          process.stdout.write('false.\n');
+          return 1;
+        }
+        for (const bindings of solutions) {
+          const entries = Object.entries(bindings);
+          process.stdout.write(entries.length === 0
+            ? 'true.\n'
+            : entries.map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ') + '\n');
+        }
         return 0;
       }
 
