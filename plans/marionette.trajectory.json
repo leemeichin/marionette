@@ -1,6 +1,6 @@
 {
-  "spec": "0.1.0",
-  "hash": "sha256:dec8b94ac5337e8d5ab5a5a23b79e229f79676ebb7f8b2de2786262621bde1eb",
+  "spec": "0.2.0",
+  "hash": "sha256:4275ff5eb0b139495a611d08685511824278041e8040b775f0b05b0fdb02751c",
   "source": {
     "file": "plans/marionette.mar"
   },
@@ -43,7 +43,15 @@
       "line": 10,
       "meta": {
         "github:pr": "1"
-      }
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "pr",
+          "id": "leemeichin/marionette#1",
+          "url": "https://github.com/leemeichin/marionette/pull/1"
+        }
+      ]
     },
     {
       "id": "authoring_skill",
@@ -124,7 +132,15 @@
       "line": 18,
       "meta": {
         "github:issue": "2"
-      }
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#2",
+          "url": "https://github.com/leemeichin/marionette/issues/2"
+        }
+      ]
     },
     {
       "id": "rethink_authoring",
@@ -154,7 +170,8 @@
       ],
       "divert": null,
       "line": 27,
-      "meta": {}
+      "meta": {},
+      "refs": []
     },
     {
       "id": "dogfood_gate",
@@ -184,7 +201,8 @@
       ],
       "divert": null,
       "line": 33,
-      "meta": {}
+      "meta": {},
+      "refs": []
     },
     {
       "id": "phase2_runtime",
@@ -206,7 +224,15 @@
       "line": 40,
       "meta": {
         "github:issue": "3"
-      }
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#3",
+          "url": "https://github.com/leemeichin/marionette/issues/3"
+        }
+      ]
     },
     {
       "id": "escalation_protocol",
@@ -228,7 +254,15 @@
       "line": 47,
       "meta": {
         "github:issue": "4"
-      }
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#4",
+          "url": "https://github.com/leemeichin/marionette/issues/4"
+        }
+      ]
     },
     {
       "id": "phase2_gate",
@@ -258,11 +292,20 @@
       ],
       "divert": null,
       "line": 54,
-      "meta": {}
+      "meta": {},
+      "refs": []
     }
   ],
   "meta": {
     "project": "marionette",
     "github:repo": "leemeichin/marionette"
-  }
+  },
+  "refs": [
+    {
+      "provider": "github",
+      "kind": "repo",
+      "id": "leemeichin/marionette",
+      "url": "https://github.com/leemeichin/marionette"
+    }
+  ]
 }

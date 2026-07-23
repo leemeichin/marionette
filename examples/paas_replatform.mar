@@ -1,0 +1,143 @@
+// Phase 2 execution baseline: the dogfood stress-batch PaaS re-platforming
+// plan (session 8, first-pass clean at 18 phases / 11 verified loops),
+// extended to cover every DSL v0 construct plus the execution metadata that
+// Phase 2 ingests: external refs (github/jira/linear/url) and delivery config.
+// The conformance suite (spec/conformance) walks this plan end to end.
+# project: paas-replatform
+# github:repo: acme/platform
+# jira:site: https://acme.atlassian.net
+# linear:workspace: acme
+# ref: https://wiki.acme.dev/replatform-brief
+# delivery: single-branch
+# report: per-phase
+
+VAR auth_cutbacks = 0
+VAR billing_cutbacks = 0
+VAR respin_budget = 6
+VAR freeze_window = "unbooked"
+VAR observability_live = false
+VAR approach = "strangler"
+
+-> observability_build
+
+=== observability_build ===
+Build the new observability stack: metrics, logs, traces, dashboards and alerting on the PaaS.
+Nothing else ships until this is live; without it we fly blind.
+# github:issue: 21
+# linear: OBS-104
+* [Stack live, dashboards and alerts verified] -> auth_extraction
+
+=== auth_extraction ===
+Extract the auth service from the monolith behind a strangler-fig facade.
+Done means the new service can take auth calls in shadow while the monolith stays authoritative.
+# github:issue: 22
+# delivery: pr-per-phase
+# delivery:branch: replatform/{phase}
+~ observability_live = true
++ {approach == "strangler"} [Extraction complete, start shadowing] -> auth_shadow
+
+=== auth_shadow ===
+Mirror production auth traffic to the new service and compare results.
+Parity metrics must hold for two full weeks before cutover is considered.
++ [Parity metrics held for two weeks] -> auth_capacity_signoff
++ [Parity drifting, rework the extraction] ~loop~ -> auth_extraction
+
+=== auth_capacity_signoff ===
+Platform SRE reviews capacity ahead of the auth cutover.
+# jira: SRE-311
++ [SRE signs off capacity] @human -> auth_cutover
++ [SRE flags gaps, remediate and re-shadow] @human ~loop~ -> auth_shadow
+
+=== auth_cutover ===
+Cut live auth traffic over to the new service and watch the error budget for one week.
+Burning more than 20 percent of the error budget in week one triggers a cutback.
++ [Week-one burn within error budget] -> billing_extraction
++ [Burned over 20 percent of error budget, cut back] -> auth_cutback_fix
+
+=== auth_cutback_fix ===
+Auth traffic is cut back to the monolith while the team fixes the regression.
+# critical-path
+~ auth_cutbacks += 1
+~ respin_budget -= 1
++ {auth_cutbacks < 3} [Fixed, re-run shadow parity] ~loop~ -> auth_shadow
++ {auth_cutbacks >= 3} [Third cutback, auth approach goes to the architecture board] @human -> arch_board_review
+
+=== billing_extraction ===
+Extract the billing service from the monolith behind a strangler-fig facade.
+Done means shadow ledger entries are being written alongside the monolith ledger.
+# github:issue: 23
+# delivery: pr-per-phase
+# delivery:branch: replatform/{phase}
++ [Extraction complete, start shadowing] -> billing_shadow
+
+=== billing_shadow ===
+Mirror production billing traffic, writing shadow ledger entries, and compare results.
+Parity metrics must hold for two full weeks before reconciliation begins.
++ [Parity metrics held for two weeks] -> billing_reconciliation
++ [Parity drifting, rework the extraction] ~loop~ -> billing_extraction
+
+=== billing_reconciliation ===
+Finance reconciles a full month of shadow ledger entries against the monolith ledger, to the penny.
+Billing cannot cut over until this reconciliation passes.
+# jira: FIN-208
++ [Finance confirms the month reconciles to the penny] @human -> billing_capacity_signoff
++ [Discrepancies found, fix and re-run a ledger month] @human ~loop~ -> billing_shadow
+
+=== billing_capacity_signoff ===
+Platform SRE reviews capacity ahead of the billing cutover.
++ [SRE signs off capacity] @human -> billing_cutover
++ [SRE flags gaps, remediate and re-shadow] @human ~loop~ -> billing_shadow
+
+=== billing_cutover ===
+Cut live billing traffic over to the new service and watch the error budget for one week.
+Burning more than 20 percent of the error budget in week one triggers a cutback.
++ [Week-one burn within error budget] -> monolith_freeze_booking
++ [Burned over 20 percent of error budget, cut back] -> billing_cutback_fix
+
+=== billing_cutback_fix ===
+Billing traffic is cut back to the monolith while the team fixes the regression.
+# critical-path
+~ billing_cutbacks += 1
+~ respin_budget -= 1
++ {billing_cutbacks < 3} [Fixed, re-run shadow parity] ~loop~ -> billing_shadow
++ {billing_cutbacks >= 3} [Third cutback, billing approach goes to the architecture board] @human -> arch_board_review
+
+=== monolith_freeze_booking ===
+Agree a change-freeze window with support for the monolith lift-and-shift.
+If the window gets pulled later, we come back here and rebook, as many times as it takes.
+# jira: SUP-77
+~ freeze_window = "booked"
++ [Freeze window agreed and booked] -> monolith_capacity_signoff
+
+=== monolith_capacity_signoff ===
+Platform SRE reviews capacity for moving the remaining monolith onto the PaaS as-is.
++ [SRE signs off capacity] @human -> monolith_migration
++ [SRE flags gaps, remediate and rebook the window] @human ~loop~ -> monolith_freeze_booking
+
+=== monolith_migration ===
+Lift-and-shift the remaining monolith onto the PaaS during the agreed freeze window.
+# linear: PLAT-590
++ [Freeze window pulled by support, rebook it] ~loop~ -> monolith_freeze_booking
++ [Monolith live on the PaaS] -> program_review
+
+=== arch_board_review ===
+The architecture board reviews the failing service's extraction approach after its third cutback.
+The board either approves a revised approach for another attempt or halts the programme.
++ [Board approves a revised auth approach, restart that extraction] @human ~loop~ -> auth_extraction
++ [Board approves a revised billing approach, restart that extraction] @human ~loop~ -> billing_extraction
++ [Board halts the programme] @human -> END
+
+=== program_review ===
+End-of-programme review of the old estate.
+Decide whether to decommission immediately or keep it warm for a quarter as insurance.
+# report: at-end
+* [Decommission the old estate] @human -> decommission
+* [Keep the old estate warm for a quarter] @human -> keep_warm
+
+=== keep_warm ===
+The old estate stays warm for one quarter as insurance while the PaaS beds in.
+* [Insurance quarter elapsed, decommission the old estate] @human -> decommission
+
+=== decommission ===
+Tear down the old estate: DNS records, data exports, hardware returns, licence cancellations.
+-> END

@@ -1,23 +1,33 @@
-# Trajectory JSON — the contract (v0.1.0)
+# Trajectory JSON — the contract (v0.2.0)
 
 The compiled contract between Phase 1 (authoring/validation) and Phase 2 (agent
 ingestion). `marionette compile plan.mar` produces a document conforming to
 [`trajectory.schema.json`](./trajectory.schema.json); the runtime/agent consumes
 it and never re-reads the DSL.
 
+Phase 2 adds two sibling contracts:
+
+- [`brief.schema.json`](./brief.schema.json) — the **work packet**
+  (`marionette brief --json`): the ingestion surface executors act on.
+- [`conformance/`](./conformance/README.md) — runtime-agnostic walk scripts
+  any walker implementation must pass.
+
 ## Top-level shape
 
 ```jsonc
 {
-  "spec": "0.1.0",                  // version of this document shape
+  "spec": "0.2.0",                  // version of this document shape
   "hash": "sha256:…",               // content hash — see below
   "source": { "file": "plan.mar" }, // provenance; NOT part of the hash
   "variables": {                    // typed declarations
     "iteration": { "type": "number", "initial": 0, "line": 3 }
   },
   "start": "build_mvp",             // entry node id
-  "nodes": [ /* phases: body, actions, choices, divert, meta */ ],
-  "meta": { "project": "…" }        // namespaced extension metadata
+  "nodes": [ /* phases: body, actions, choices, divert, meta, refs */ ],
+  "meta": { "project": "…" },       // namespaced extension metadata
+  "refs": [                         // 0.2.0: normalised external references
+    { "provider": "github", "kind": "repo", "id": "acme/platform", "url": "https://github.com/acme/platform" }
+  ]
 }
 ```
 
@@ -45,7 +55,11 @@ Key concepts, mapped to the PRD's requirements:
 - **Namespaced metadata** (P2 design insurance): `meta` objects at plan and
   node level carry `namespace:key` entries (e.g. `github:issue`) written as
   `# github:issue: 42` tag lines in the DSL. Extensions live here and cannot
-  collide with the core contract.
+  collide with the core contract. Repeated keys accumulate into arrays.
+- **External refs** (0.2.0): the well-known namespaces (`github:*`, `jira`,
+  `linear`, `ref`) are additionally normalised into structured `refs`
+  (`{provider, kind, id, url}`) at plan and node level — see
+  `docs/EXECUTION.md`. Unknown namespaces remain raw meta.
 
 ## State file (`plan.state.json`)
 

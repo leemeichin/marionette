@@ -4,7 +4,7 @@
   "title": "Marionette trajectory",
   "description": "The compiled contract between authoring/validation (Phase 1) and agent ingestion (Phase 2). Produced by `marionette compile`; consumed by the runtime/agent.",
   "type": "object",
-  "required": ["spec", "hash", "source", "variables", "start", "nodes", "meta"],
+  "required": ["spec", "hash", "source", "variables", "start", "nodes", "meta", "refs"],
   "additionalProperties": false,
   "properties": {
     "spec": {
@@ -49,7 +49,12 @@
       "description": "The phases of the trajectory, in authoring order.",
       "items": { "$ref": "#/$defs/node" }
     },
-    "meta": { "$ref": "#/$defs/meta" }
+    "meta": { "$ref": "#/$defs/meta" },
+    "refs": {
+      "type": "array",
+      "description": "External references normalised from the plan-level metadata (spec >= 0.2.0).",
+      "items": { "$ref": "#/$defs/ref" }
+    }
   },
   "$defs": {
     "value": {
@@ -65,9 +70,24 @@
         ]
       }
     },
+    "ref": {
+      "type": "object",
+      "description": "A structured external reference (issue tracker, PR, document) normalised from namespaced metadata tags — consumers never re-parse meta conventions.",
+      "required": ["provider", "kind", "id", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string", "description": "Source system: \"github\", \"jira\", \"linear\", \"url\", … (open set)." },
+        "kind": { "type": "string", "description": "What is referenced: \"issue\", \"pr\", \"repo\", \"link\", … (open set)." },
+        "id": { "type": "string", "description": "Canonical identifier, e.g. \"acme/platform#12\", \"PROJ-123\", or a URL." },
+        "url": {
+          "description": "Browsable URL when derivable from the available context, else null.",
+          "oneOf": [{ "type": "null" }, { "type": "string" }]
+        }
+      }
+    },
     "node": {
       "type": "object",
-      "required": ["id", "body", "actions", "choices", "divert", "meta"],
+      "required": ["id", "body", "actions", "choices", "divert", "meta", "refs"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
@@ -97,7 +117,12 @@
           ]
         },
         "line": { "type": "integer" },
-        "meta": { "$ref": "#/$defs/meta" }
+        "meta": { "$ref": "#/$defs/meta" },
+        "refs": {
+          "type": "array",
+          "description": "External references normalised from this node's metadata (spec >= 0.2.0).",
+          "items": { "$ref": "#/$defs/ref" }
+        }
       }
     },
     "choice": {

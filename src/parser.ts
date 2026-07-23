@@ -30,7 +30,11 @@ export interface ParsedPlan {
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-/** Strip a // comment that is not inside a string literal. */
+/**
+ * Strip a // comment that is not inside a string literal. A comment only
+ * starts at the beginning of the line or after whitespace, so URLs in
+ * metadata ("# ref: https://…") survive.
+ */
 function stripComment(line: string): string {
   let inString: string | null = null;
   for (let i = 0; i < line.length - 1; i++) {
@@ -41,7 +45,9 @@ function stripComment(line: string): string {
       continue;
     }
     if (ch === '"' || ch === "'") { inString = ch; continue; }
-    if (ch === '/' && line[i + 1] === '/') return line.slice(0, i);
+    if (ch === '/' && line[i + 1] === '/' && (i === 0 || /\s/.test(line[i - 1]))) {
+      return line.slice(0, i);
+    }
   }
   return line;
 }
@@ -54,7 +60,10 @@ function addTag(meta: Record<string, string | string[]>, raw: string): void {
     const key = kv[1].trim();
     const value = kv[2].trim();
     if (IDENT.test(key.replace(/[.:/-]/g, '_'))) {
-      meta[key] = value;
+      const prev = meta[key];
+      if (prev === undefined) meta[key] = value;
+      else if (Array.isArray(prev)) prev.push(value);
+      else meta[key] = [prev, value];
       return;
     }
   }
@@ -102,7 +111,7 @@ export function parsePlan(source: string): ParsedPlan {
         current = null;
         continue;
       }
-      current = { id: name, body: '', actions: [], choices: [], divert: null, line: lineNo, meta: {} };
+      current = { id: name, body: '', actions: [], choices: [], divert: null, line: lineNo, meta: {}, refs: [] };
       nodes.push(current);
       bodyLines.set(name, []);
       continue;

@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/leemeichin/marionette/spec/brief.schema.json",
+  "title": "Marionette brief (work packet)",
+  "description": "The Phase 2 ingestion contract: everything an executor agent needs to act on the current phase with zero plan-specific prompt engineering. Produced by `marionette brief --json` from a compiled trajectory plus its bound state.",
+  "type": "object",
+  "required": ["spec", "plan", "status", "variables", "node", "delivery", "frontier", "divert", "escalation", "progress", "protocol"],
+  "additionalProperties": false,
+  "properties": {
+    "spec": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "plan": {
+      "type": "object",
+      "required": ["file", "project", "hash", "refs"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "project": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
+        "hash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "refs": { "type": "array", "items": { "$ref": "#/$defs/ref" } }
+      }
+    },
+    "status": {
+      "enum": ["active", "awaiting-human", "stranded", "completed"],
+      "description": "active: at least one autonomous step is available. awaiting-human: only @human choices are available — escalate and pause. stranded: nothing available and no divert. completed: the plan reached END."
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": { "type": ["number", "boolean", "string"] }
+    },
+    "node": {
+      "description": "The current phase; null once the plan has completed.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["id", "title", "body", "meta", "refs"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string" },
+            "title": { "type": "string", "description": "First body line — the phase's display name." },
+            "body": { "type": "string" },
+            "meta": {
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+              }
+            },
+            "refs": { "type": "array", "items": { "$ref": "#/$defs/ref" } }
+          }
+        }
+      ]
+    },
+    "delivery": {
+      "type": "object",
+      "description": "Effective delivery config at this node: node tags override plan tags; defaults are mode \"none\", report \"per-phase\".",
+      "required": ["mode", "report", "branch"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["pr-per-phase", "branch-per-phase", "single-pr", "single-branch", "none"] },
+        "report": { "enum": ["per-phase", "at-checkpoints", "at-end"] },
+        "branch": {
+          "description": "Branch name with the {phase} template already expanded, or null when unset.",
+          "oneOf": [{ "type": "null" }, { "type": "string" }]
+        }
+      }
+    },
+    "frontier": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "id", "label", "target", "targetTitle", "sticky", "human", "loop", "gate", "available", "blocked", "blockedCode"],
+        "additionalProperties": false,
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "target": { "type": "string" },
+          "targetTitle": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
+          "sticky": { "type": "boolean" },
+          "human": { "type": "boolean" },
+          "loop": { "type": "boolean" },
+          "gate": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
+          "available": { "type": "boolean" },
+          "blocked": { "oneOf": [{ "type": "null" }, { "type": "string" }] },
+          "blockedCode": { "oneOf": [{ "type": "null" }, { "enum": ["once-exhausted", "gate-blocked"] }] }
+        }
+      }
+    },
+    "divert": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["target", "targetTitle"],
+          "additionalProperties": false,
+          "properties": {
+            "target": { "type": "string" },
+            "targetTitle": { "oneOf": [{ "type": "null" }, { "type": "string" }] }
+          }
+        }
+      ]
+    },
+    "escalation": {
+      "description": "Present exactly when status is \"awaiting-human\": the structured @human escalation (OQ2).",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["reason", "choices", "how"],
+          "additionalProperties": false,
+          "properties": {
+            "reason": { "type": "string" },
+            "choices": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+            "how": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "progress": {
+      "type": "object",
+      "required": ["steps", "nodesVisited", "nodesTotal", "path"],
+      "additionalProperties": false,
+      "properties": {
+        "steps": { "type": "integer", "minimum": 0 },
+        "nodesVisited": { "type": "integer", "minimum": 0 },
+        "nodesTotal": { "type": "integer", "minimum": 0 },
+        "path": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "protocol": {
+      "type": "object",
+      "required": ["choose", "advance", "rules"],
+      "additionalProperties": false,
+      "properties": {
+        "choose": { "type": "string" },
+        "advance": { "type": "string" },
+        "rules": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "required": ["provider", "kind", "id", "url"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string" },
+        "kind": { "type": "string" },
+        "id": { "type": "string" },
+        "url": { "oneOf": [{ "type": "null" }, { "type": "string" }] }
+      }
+    }
+  }
+}

@@ -8,6 +8,7 @@ import type { Diagnostic, Trajectory } from './types.js';
 import { SPEC_VERSION } from './types.js';
 import { parsePlan } from './parser.js';
 import { validatePlan } from './validate.js';
+import { analyzeMeta } from './refs.js';
 import { styleFor, type Style } from './term.js';
 
 export interface CompileResult {
@@ -27,6 +28,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
   const parsed = parsePlan(source);
   const diagnostics = [...parsed.diagnostics];
   validatePlan(parsed, diagnostics);
+  const planRefs = analyzeMeta(parsed.meta, parsed.nodes, diagnostics);
 
   const ok = !diagnostics.some((d) => d.severity === 'error');
   if (parsed.nodes.length === 0 || parsed.start === null) {
@@ -41,6 +43,7 @@ export function compile(source: string, options: CompileOptions = {}): CompileRe
     start: parsed.start,
     nodes: parsed.nodes,
     meta: parsed.meta,
+    refs: planRefs,
   };
   trajectory.hash = trajectoryHash(trajectory);
   return { trajectory, diagnostics, ok };

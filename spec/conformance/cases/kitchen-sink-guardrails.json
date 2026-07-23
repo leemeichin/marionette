@@ -1,0 +1,22 @@
+{
+  "case": "kitchen-sink-guardrails",
+  "description": "Guardrail behaviour on the kitchen-sink fixture: unknown references, gate opening as a counter climbs, loop-continue gate shutting, once-only exhaustion across a revisit, @human refusal and rationale enforcement, no-divert refusal, string gate, divert completion.",
+  "plan": "tests/fixtures/kitchen_sink.mar",
+  "steps": [
+    { "expect": { "current": "build_mvp", "variables": { "iteration": 1, "budget": 90, "title": "mvp" } } },
+    { "choose": "zzz", "actor": "agent", "rationale": "no such choice", "expect": { "error": "unknown-choice" } },
+    { "choose": "2", "actor": "agent", "rationale": "gate not yet open", "expect": { "error": "gate-blocked" } },
+    { "choose": "1", "actor": "agent", "rationale": "learnings, go again", "expect": { "current": "build_mvp", "variables": { "iteration": 2, "budget": 80 } } },
+    { "choose": "1", "actor": "agent", "rationale": "one more iteration", "expect": { "current": "build_mvp", "variables": { "iteration": 3, "budget": 70 } } },
+    { "choose": "1", "actor": "agent", "rationale": "loop gate must be shut", "expect": { "error": "gate-blocked" } },
+    { "choose": "2", "actor": "agent", "rationale": "three strikes", "expect": { "current": "pivot_or_kill" } },
+    { "choose": "Pivot", "actor": "lee", "rationale": "pivot to the adjacent market", "expect": { "current": "build_mvp", "variables": { "iteration": 4, "budget": 60 } } },
+    { "choose": "2", "actor": "agent", "rationale": "already taken once", "expect": { "error": "once-exhausted" } },
+    { "choose": "0", "actor": "agent", "rationale": "agent at a human checkpoint", "expect": { "error": "human-checkpoint" } },
+    { "choose": "0", "actor": "lee", "expect": { "error": "rationale-required" } },
+    { "choose": "0", "actor": "lee", "rationale": "metrics green after the pivot", "expect": { "current": "beta_launch" } },
+    { "advance": true, "actor": "agent", "rationale": "no divert here", "expect": { "error": "no-divert" } },
+    { "choose": "Announce", "actor": "agent", "rationale": "title gate holds", "expect": { "current": "retro" } },
+    { "advance": true, "actor": "agent", "rationale": "retro written, archiving", "expect": { "current": "END", "status": "completed" } }
+  ]
+}
