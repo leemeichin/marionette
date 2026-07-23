@@ -73,8 +73,11 @@ A declared loop passes when its cycle has at least one exit that is ungated,
 or whose gate is trivially decidable and satisfiable — e.g. a **monotonic
 counter**: `~ i += 1` inside the loop with an exit gate `{i >= 3}`. A
 loop-continue gate that provably shuts (`{i < 3}` with an increasing `i`) also
-counts as a verified bounded loop. Everything else is enumerated as an
-unverified-gate warning.
+counts as a verified bounded loop — on *any* edge of the cycle, whether or not
+that edge carries the `~loop~` mark. Everything else is enumerated as an
+unverified-gate warning. Note that resetting a counter (`~ i = 0`) anywhere
+makes its gates non-monotonic and therefore unverifiable; those gates warn by
+design — review them manually.
 
 Authoring note: once-only (`*`) choices anywhere **inside** a cycle are
 consumed on the first pass and can strand a later iteration at runtime. The

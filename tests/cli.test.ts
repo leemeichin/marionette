@@ -47,6 +47,15 @@ test('P0.8 CLI exit codes are CI-suitable', () => {
   assert.equal(cli(['validate'], dir).code, 2);
   assert.equal(cli(['frobnicate'], dir).code, 2);
 
+  // missing file → friendly usage error, not a stack trace
+  const missing = cli(['validate', 'no-such.mar'], dir);
+  assert.equal(missing.code, 2);
+  assert.match(missing.stderr, /cannot read plan .*no-such\.mar: no such file/);
+  assert.doesNotMatch(missing.stderr, /at readFileSync/);
+
+  // command typos get a suggestion
+  assert.match(cli(['validat', 'plan.mar'], dir).stderr, /did you mean "validate"\?/);
+
   // render and summarize work from both .mar and compiled .json
   assert.match(cli(['render', 'plan.mar'], dir).stdout, /flowchart/);
   assert.match(cli(['render', 'plan.trajectory.json'], dir).stdout, /flowchart/);

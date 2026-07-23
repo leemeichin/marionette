@@ -142,7 +142,14 @@ function resolveChoice(node: TrajectoryNode, ref: string): Choice {
   if (/^\d+$/.test(ref)) {
     const idx = Number(ref);
     if (idx >= 0 && idx < node.choices.length) return node.choices[idx];
-    throw new WalkError(`phase "${node.id}" has no choice at index ${idx} (0..${node.choices.length - 1})`);
+    if (node.choices.length === 0) {
+      const divert = node.divert
+        ? `; it diverts to "${node.divert.target}" — use "marionette state advance"`
+        : '';
+      throw new WalkError(`phase "${node.id}" has no choices${divert}`);
+    }
+    throw new WalkError(
+      `phase "${node.id}" has no choice at index ${idx} (valid: 0..${node.choices.length - 1})`);
   }
   const byLabel = node.choices.filter((c) => c.label.toLowerCase().startsWith(ref.toLowerCase()));
   if (byLabel.length === 1) return byLabel[0];
