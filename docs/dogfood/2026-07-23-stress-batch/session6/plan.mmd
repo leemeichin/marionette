@@ -1,0 +1,22 @@
+flowchart TD
+  spike_engine["<b>spike_engine</b><br/>Evaluate the hosted search engine against our relevance c…"]
+  tune_ranking["<b>tune_ranking</b><br/>Adjust analyzers, synonyms and boosts; re-run the relevan…"]
+  integrate["<b>integrate</b><br/>Wire the engine into the product behind a feature flag."]
+  qa_signoff["<b>qa_signoff</b><br/>The QA lead reviews relevance quality and signs off."]
+  rollout["<b>rollout</b><br/>Gradual rollout to all tenants, watching search abandonme…"]
+  spike_engine -- "Relevance acceptable out of the box" --> integrate
+  spike_engine -- "Relevance poor" --> tune_ranking
+  tune_ranking -. "↻ Tune again {tuning_rounds &lt; 4}" .-> tune_ranking
+  tune_ranking -- "Good enough" --> integrate
+  tune_ranking -- "✋ Not converging, escalate {tuning_rounds &gt;= 4}" --> qa_signoff
+  integrate -- "Integration complete, suite green" --> qa_signoff
+  qa_signoff -- "✋ Approved" --> rollout
+  qa_signoff -. "✋ ↻ Needs more tuning" .-> tune_ranking
+  rollout --> END
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 4 stroke:#c62828,stroke-width:3px;
+  linkStyle 6 stroke:#c62828,stroke-width:3px;
+  linkStyle 7 stroke:#c62828,stroke-width:3px;

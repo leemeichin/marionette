@@ -1,0 +1,61 @@
+# project: wordpress-to-hugo
+VAR convert_rounds = 0
+VAR theme_rounds = 0
+VAR jo_rounds = 0
+VAR cutover_attempts = 0
+
+-> export_content
+
+=== export_content ===
+Export the full WordPress site: posts, pages, and the entire media library.
+Done when the WordPress XML export and a complete images archive exist locally and post counts match the live site.
+* [Export verified complete] -> convert_to_markdown
+* [Exporter broken or archive incomplete] -> manual_export
+
+=== manual_export ===
+Fallback extraction: pull post content straight from the WordPress database and copy wp-content/uploads over SFTP.
+* [Content and media recovered] -> convert_to_markdown
+* [Cannot recover everything] @human -> reassess
+
+=== convert_to_markdown ===
+Convert exported posts to Hugo markdown with front matter, and rewrite image links to the new static paths.
+Done when every post builds under Hugo with images and internal links resolving.
+~ convert_rounds += 1
++ [All posts render, images and links resolve] -> build_theme
++ {convert_rounds < 5} [Fix conversion glitches and re-run] ~loop~ -> convert_to_markdown
++ {convert_rounds >= 5} [Conversion not converging] @human -> reassess
+
+=== build_theme ===
+Install and customise the Hugo theme until the site looks right in a local build: layout, typography, archives, RSS.
+~ theme_rounds += 1
++ [Theme looks right locally] -> preview_for_jo
++ {theme_rounds < 5} [Iterate on templates and styles] ~loop~ -> build_theme
++ {theme_rounds >= 5} [Theme work not converging] @human -> reassess
+
+=== preview_for_jo ===
+Deploy the Hugo site to a private staging URL and walk Jo through the design.
+~ jo_rounds += 1
++ [Jo approves the design] @human -> cutover
++ {jo_rounds < 4} [Jo wants changes] @human ~loop~ -> build_theme
++ {jo_rounds >= 4} [Design reviews not converging] @human -> reassess
+
+=== cutover ===
+Point the domain's DNS at the new Hugo hosting, leaving the WordPress install untouched as a fallback.
+Done when DNS has propagated and the domain serves the Hugo site.
+~ cutover_attempts += 1
++ [DNS updated and propagated] -> verify_live
+
+=== verify_live ===
+Spot-check the live domain: recent and old posts, images, RSS feed, and redirects for old WordPress permalinks.
++ [Everything checks out] -> retire_wordpress
++ {cutover_attempts < 3} [Broken in production; roll DNS back and fix] ~loop~ -> cutover
++ {cutover_attempts >= 3} [Cutover keeps failing] @human -> reassess
+
+=== retire_wordpress ===
+Take a final full backup of the WordPress database and files, archive it off-host, then decommission the old install and hosting.
+* [Backup archived; WordPress decommissioned] @human -> END
+
+=== reassess ===
+The migration hit a wall somewhere; decide whether to change approach, get help, or shelve it while WordPress stays live.
++ [Adjust approach and resume from conversion] @human ~loop~ -> convert_to_markdown
++ [Shelve the migration; WordPress stays live] @human -> END

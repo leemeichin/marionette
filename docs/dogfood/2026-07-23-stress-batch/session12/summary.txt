@@ -1,0 +1,72 @@
+# Plan summary: plan.mar
+
+Starts at **data_audit**. 8 phases, 4 decision points (phases with 2+ choices), 14 choices overall.
+
+- **Human checkpoints:** "Several serious attempts, still losing" (at train_model); "Risk team approves the switch" (at risk_review); "Not convinced, more model work first" (at risk_review); "Risk team rejects, keep the rules engine" (at risk_review); "Model stable long-term, decommission the rules engine" (at production_model)
+- **Declared loops:** train_model → train_model ("Not there yet, iterate again"); risk_review → train_model ("Not convinced, more model work first"); fallback_to_rules → data_audit ("Fallback complete, restart evaluation")
+- **Gates:** 6 gated choices, of which 6 unverified (review manually)
+- **Variables:** train_attempts: number = 0, labels_sufficient: boolean = false, model_beats_rules: boolean = false, drift_or_losses: boolean = false
+- **Contract hash:** `sha256:09fab44648e3…`
+
+## Walkthrough
+
+### data_audit (start)
+Audit the labeled fraud history: volume, class balance, label quality.
+Done when we know whether the labeled set can support training a model.
+- **Labeled history is deep enough** → train_model (only if `labels_sufficient`; repeatable)
+- **Labeled history too thin** → labeling_sprint (only if `!labels_sufficient`; repeatable)
+
+### labeling_sprint
+Spend a month labeling historical transactions before anything else.
+Done when the labeled set reaches the volume and quality the audit called for.
+- **Labeling month complete, dataset ready** → train_model (repeatable)
+
+### train_model
+Train the fraud model and evaluate on the holdout set against the rules engine.
+The bar: beat the rules engine on precision AND recall on the holdout.
+- on entry: `train_attempts += 1`
+- **Model beats rules on precision and recall** → shadow_scoring (only if `model_beats_rules`; repeatable)
+- **Not there yet, iterate again** → train_model (only if `train_attempts < 5`; loops back; repeatable)
+- **Several serious attempts, still losing** → keep_rules_writeup (only if `train_attempts >= 5`; **requires a human decision**; repeatable)
+
+### keep_rules_writeup
+Keep the rules engine. Write up why the model could not beat it,
+so the next attempt starts from evidence instead of scratch.
+- **Write-up published, project closed** → END (repeatable)
+
+### shadow_scoring
+Shadow-score live traffic for a month: the model runs alongside the rules,
+but decisions still come from the rules engine. Collect comparison data.
+- **Shadow month complete, results compiled** → risk_review (repeatable)
+
+### risk_review
+Risk team reviews the shadow month. They own fraud losses,
+so the switch is genuinely their call.
+- **Risk team approves the switch** → production_model (**requires a human decision**; repeatable)
+- **Not convinced, more model work first** → train_model (**requires a human decision**; loops back; repeatable)
+- **Risk team rejects, keep the rules engine** → keep_rules_writeup (**requires a human decision**; repeatable)
+
+### production_model
+Model makes live fraud decisions; auto-retrains weekly.
+Monitor data drift alerts and fraud losses against the agreed threshold.
+- **Drift alert or losses above threshold, auto-fallback** → fallback_to_rules (only if `drift_or_losses`; repeatable)
+- **Model stable long-term, decommission the rules engine** → END (**requires a human decision**; repeatable)
+
+### fallback_to_rules
+Automatic fallback: rules engine resumes making decisions immediately.
+The whole evaluation starts over from the data audit.
+- on entry: `train_attempts = 0`
+- on entry: `model_beats_rules = false`
+- on entry: `labels_sufficient = false`
+- on entry: `drift_or_losses = false`
+- **Fallback complete, restart evaluation** → data_audit (loops back; repeatable)
+
+## Compiler report
+
+0 errors, 6 warnings.
+- warning [MAR014] (line 12): unverified gate — review manually: {labels_sufficient} on choice "Labeled history is deep enough"
+- warning [MAR014] (line 13): unverified gate — review manually: {!labels_sufficient} on choice "Labeled history too thin"
+- warning [MAR014] (line 24): unverified gate — review manually: {model_beats_rules} on choice "Model beats rules on precision and recall"
+- warning [MAR014] (line 25): unverified gate — review manually: {train_attempts < 5} on choice "Not there yet, iterate again"
+- warning [MAR014] (line 26): unverified gate — review manually: {train_attempts >= 5} on choice "Several serious attempts, still losing"
+- warning [MAR014] (line 48): unverified gate — review manually: {drift_or_losses} on choice "Drift alert or losses above threshold, auto-fallback"

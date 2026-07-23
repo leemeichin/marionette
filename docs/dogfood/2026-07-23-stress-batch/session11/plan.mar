@@ -1,0 +1,71 @@
+# project: spring_tech_conf
+// 300-person tech conference next spring.
+
+-> lock_venue
+
+=== lock_venue ===
+Lock the venue for next spring: negotiate and sign the contract.
+The contract is the big irreversible spend, so the director signs it.
++ [Director signs the venue contract] @human -> run_cfp
++ [Terms not right yet — renegotiate] @human ~loop~ -> lock_venue
+
+=== run_cfp ===
+Run the call for proposals for six weeks: publicity, submissions, triage.
+Done when the CFP window closes with the submission pool ready for review.
+* [CFP window closed] -> select_program
+
+=== select_program ===
+Program committee reviews submissions and picks the talks.
+Done when a full draft program is selected.
+* [Committee has picked the program] @human -> chase_confirmations
+
+=== chase_confirmations ===
+Chase speaker confirmations for every slot in the draft program.
+Done when every slot is confirmed; any decline sends that slot back to the committee.
++ [All slots confirmed — program is full] -> announce_program
++ [A speaker declined] -> replacement_pick
+
+=== replacement_pick ===
+Program committee picks a replacement talk for the declined slot.
++ [Replacement chosen — chase their confirmation] @human ~loop~ -> chase_confirmations
+
+=== announce_program ===
+Announce the program and open ticket sales.
+Done when the program is public and tickets are on sale.
+* [Program announced, tickets selling] -> sponsorship_checkpoint
+
+=== sponsorship_checkpoint ===
+Sponsorships have been running alongside; at three months out, review progress
+against the sponsorship target.
+* [At or above 60% of the sponsorship target] -> final_prep
+* [Under 60% of the sponsorship target] -> downsize_scope
+
+=== downsize_scope ===
+Downsize catering and the after-party to fit the sponsorship shortfall,
+rather than cancel the event.
+* [Reduced scope approved] @human -> final_prep
+
+=== final_prep ===
+Final logistics: schedule, AV, catering at the agreed scope, volunteers.
+Done when everything is ready for the go/no-go review.
+* [Ready for the go/no-go review] -> go_no_go
+
+=== go_no_go ===
+Two weeks before the date: go/no-go review with the director on ticket sales
+and overall readiness.
+* [Go — ticket sales are healthy enough] @human -> run_event
+* [No-go — ticket sales catastrophically low] @human -> postpone_and_refund
+
+=== postpone_and_refund ===
+Postpone the conference to autumn and refund every ticket holder.
+Done when refunds are processed and the postponement is announced.
+* [Refunds issued, postponement announced] -> END
+
+=== run_event ===
+Run the conference for its 300 attendees.
+* [Event delivered] -> wrap_up
+
+=== wrap_up ===
+Pay the invoices and run the retrospective.
+Done when finances are settled and lessons are recorded.
+* [Invoices paid, retro complete] -> END

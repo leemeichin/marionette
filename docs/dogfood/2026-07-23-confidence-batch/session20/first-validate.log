@@ -1,0 +1,8 @@
+plan.mar:31: warning[MAR014]: unverified gate — review manually: {rollbacks < 2} on choice "Fix and retry the wave"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:32: warning[MAR014]: unverified gate — review manually: {rollbacks >= 2} on choice "Second rollback on this wave — escalate"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:45: warning[MAR014]: unverified gate — review manually: {wave < 3} on choice "Wave stable, seek go-ahead for the next wave"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 3 warning(s)
+exit=1

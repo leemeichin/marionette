@@ -1,0 +1,76 @@
+# project: product-localization
+// Localize the product into six languages: glossary freeze, per-language
+// vendor pipeline with reviewer bounce, integration, layout checks, ship.
+
+VAR languages_approved = 0
+VAR review_rounds = 0
+VAR layout_fix_rounds = 0
+
+-> freeze_glossary
+
+=== freeze_glossary ===
+Freeze the source-string glossary so translation starts from a stable base.
+Product marketing owns this sign-off; nothing moves until the glossary is locked.
++ [Marketing approves the frozen glossary] @human -> vendor_translation
++ [Glossary needs another revision] @human ~loop~ -> freeze_glossary
+
+=== vendor_translation ===
+The translation vendor translates the current language from the frozen glossary.
+One language moves through the pipeline at a time; this phase re-enters for each of the six.
+~ review_rounds = 0
++ [Translation draft delivered] -> vendor_qa
+
+=== vendor_qa ===
+The vendor runs its own QA pass on the translated language before handing it to the in-country reviewer.
++ [Vendor QA passes] -> reviewer_review
+
+=== reviewer_review ===
+The in-country reviewer evaluates the language for accuracy, tone and terminology.
+The language bounces back to vendor fixes until the reviewer is satisfied.
++ [Reviewer approves this language] @human -> language_approved
++ {review_rounds < 4} [Changes requested] @human ~loop~ -> vendor_fixes
++ {review_rounds >= 4} [Still bouncing after four rounds] -> manager_arbitration
+
+=== vendor_fixes ===
+The vendor applies the reviewer's requested fixes to this language.
+~ review_rounds += 1
++ [Fixes applied, back to the reviewer] ~loop~ -> reviewer_review
+
+=== manager_arbitration ===
+The localization manager arbitrates a language stuck after four review rounds:
+accept it as-is, or direct one more targeted fix round.
++ [Manager accepts the language as-is] @human -> language_approved
++ [Manager directs another fix round] @human ~loop~ -> vendor_fixes
+
+=== language_approved ===
+This language is approved and banked. Move to the next language, or to
+integration once all six are done.
+~ languages_approved += 1
++ {languages_approved < 6} [Start the next language] ~loop~ -> vendor_translation
++ {languages_approved >= 6} [All six languages approved] -> integration
+
+=== integration ===
+Integrate all six approved languages into the product build.
+* [Integration complete] -> layout_checks
+
+=== layout_checks ===
+Run pseudo-localization and layout checks across the integrated build,
+looking for truncation and overflow bugs.
++ [All layout checks pass] -> ship
++ {layout_fix_rounds < 3} [Truncation or layout bugs found] ~loop~ -> fix_truncation
++ {layout_fix_rounds >= 3} [Still failing after three fix rounds] -> partial_ship_decision
+
+=== fix_truncation ===
+Fix the truncation and layout bugs surfaced by the checks.
+~ layout_fix_rounds += 1
++ [Fixes applied, re-run the checks] ~loop~ -> layout_checks
+
+=== partial_ship_decision ===
+Layout checks are still failing after three fix rounds. The localization
+manager decides which passing languages ship now and which are deferred.
++ [Ship the passing languages, defer the rest] @human -> ship
++ [Keep fixing instead] @human ~loop~ -> fix_truncation
+
+=== ship ===
+Release the localized product with the approved (or manager-selected) languages.
+-> END

@@ -1,0 +1,114 @@
+# Plan summary: plan.mar
+
+Starts at **observability_build**. 18 phases, 13 decision points (phases with 2+ choices), 32 choices overall.
+
+- **Human checkpoints:** "SRE signs off capacity" (at auth_capacity_signoff); "SRE flags gaps, remediate and re-shadow" (at auth_capacity_signoff); "Third cutback, auth approach goes to the architecture board" (at auth_cutback_fix); "Finance confirms the month reconciles to the penny" (at billing_reconciliation); "Discrepancies found, fix and re-run a ledger month" (at billing_reconciliation); "SRE signs off capacity" (at billing_capacity_signoff); "SRE flags gaps, remediate and re-shadow" (at billing_capacity_signoff); "Third cutback, billing approach goes to the architecture board" (at billing_cutback_fix); "SRE signs off capacity" (at monolith_capacity_signoff); "SRE flags gaps, remediate and rebook the window" (at monolith_capacity_signoff); "Board approves a revised auth approach, restart that extraction" (at arch_board_review); "Board approves a revised billing approach, restart that extraction" (at arch_board_review); "Board halts the programme" (at arch_board_review); "Decommission the old estate" (at program_review); "Keep the old estate warm for a quarter" (at program_review); "Insurance quarter elapsed, decommission the old estate" (at keep_warm)
+- **Declared loops:** auth_shadow → auth_extraction ("Parity drifting, rework the extraction"); auth_capacity_signoff → auth_shadow ("SRE flags gaps, remediate and re-shadow"); auth_cutback_fix → auth_shadow ("Fixed, re-run shadow parity"); billing_shadow → billing_extraction ("Parity drifting, rework the extraction"); billing_reconciliation → billing_shadow ("Discrepancies found, fix and re-run a ledger month"); billing_capacity_signoff → billing_shadow ("SRE flags gaps, remediate and re-shadow"); billing_cutback_fix → billing_shadow ("Fixed, re-run shadow parity"); monolith_capacity_signoff → monolith_freeze_booking ("SRE flags gaps, remediate and rebook the window"); monolith_migration → monolith_freeze_booking ("Freeze window pulled by support, rebook it"); arch_board_review → auth_extraction ("Board approves a revised auth approach, restart that extraction"); arch_board_review → billing_extraction ("Board approves a revised billing approach, restart that extraction")
+- **Gates:** 4 gated choices, of which 0 unverified (review manually)
+- **Variables:** auth_cutbacks: number = 0, billing_cutbacks: number = 0
+- **Contract hash:** `sha256:d044f2cfb2bd…`
+
+## Walkthrough
+
+### observability_build (start)
+Build the new observability stack: metrics, logs, traces, dashboards and alerting on the PaaS.
+Nothing else ships until this is live; without it we fly blind.
+- **Stack live, dashboards and alerts verified** → auth_extraction
+
+### auth_extraction
+Extract the auth service from the monolith behind a strangler-fig facade.
+Done means the new service can take auth calls in shadow while the monolith stays authoritative.
+- **Extraction complete, start shadowing** → auth_shadow (repeatable)
+
+### auth_shadow
+Mirror production auth traffic to the new service and compare results.
+Parity metrics must hold for two full weeks before cutover is considered.
+- **Parity metrics held for two weeks** → auth_capacity_signoff (repeatable)
+- **Parity drifting, rework the extraction** → auth_extraction (loops back; repeatable)
+
+### auth_capacity_signoff
+Platform SRE reviews capacity ahead of the auth cutover.
+- **SRE signs off capacity** → auth_cutover (**requires a human decision**; repeatable)
+- **SRE flags gaps, remediate and re-shadow** → auth_shadow (**requires a human decision**; loops back; repeatable)
+
+### auth_cutover
+Cut live auth traffic over to the new service and watch the error budget for one week.
+Burning more than 20 percent of the error budget in week one triggers a cutback.
+- **Week-one burn within error budget** → billing_extraction (repeatable)
+- **Burned over 20 percent of error budget, cut back** → auth_cutback_fix (repeatable)
+
+### auth_cutback_fix
+Auth traffic is cut back to the monolith while the team fixes the regression.
+- on entry: `auth_cutbacks += 1`
+- **Fixed, re-run shadow parity** → auth_shadow (only if `auth_cutbacks < 3`; loops back; repeatable)
+- **Third cutback, auth approach goes to the architecture board** → arch_board_review (only if `auth_cutbacks >= 3`; **requires a human decision**; repeatable)
+
+### billing_extraction
+Extract the billing service from the monolith behind a strangler-fig facade.
+Done means shadow ledger entries are being written alongside the monolith ledger.
+- **Extraction complete, start shadowing** → billing_shadow (repeatable)
+
+### billing_shadow
+Mirror production billing traffic, writing shadow ledger entries, and compare results.
+Parity metrics must hold for two full weeks before reconciliation begins.
+- **Parity metrics held for two weeks** → billing_reconciliation (repeatable)
+- **Parity drifting, rework the extraction** → billing_extraction (loops back; repeatable)
+
+### billing_reconciliation
+Finance reconciles a full month of shadow ledger entries against the monolith ledger, to the penny.
+Billing cannot cut over until this reconciliation passes.
+- **Finance confirms the month reconciles to the penny** → billing_capacity_signoff (**requires a human decision**; repeatable)
+- **Discrepancies found, fix and re-run a ledger month** → billing_shadow (**requires a human decision**; loops back; repeatable)
+
+### billing_capacity_signoff
+Platform SRE reviews capacity ahead of the billing cutover.
+- **SRE signs off capacity** → billing_cutover (**requires a human decision**; repeatable)
+- **SRE flags gaps, remediate and re-shadow** → billing_shadow (**requires a human decision**; loops back; repeatable)
+
+### billing_cutover
+Cut live billing traffic over to the new service and watch the error budget for one week.
+Burning more than 20 percent of the error budget in week one triggers a cutback.
+- **Week-one burn within error budget** → monolith_freeze_booking (repeatable)
+- **Burned over 20 percent of error budget, cut back** → billing_cutback_fix (repeatable)
+
+### billing_cutback_fix
+Billing traffic is cut back to the monolith while the team fixes the regression.
+- on entry: `billing_cutbacks += 1`
+- **Fixed, re-run shadow parity** → billing_shadow (only if `billing_cutbacks < 3`; loops back; repeatable)
+- **Third cutback, billing approach goes to the architecture board** → arch_board_review (only if `billing_cutbacks >= 3`; **requires a human decision**; repeatable)
+
+### monolith_freeze_booking
+Agree a change-freeze window with support for the monolith lift-and-shift.
+If the window gets pulled later, we come back here and rebook, as many times as it takes.
+- **Freeze window agreed and booked** → monolith_capacity_signoff (repeatable)
+
+### monolith_capacity_signoff
+Platform SRE reviews capacity for moving the remaining monolith onto the PaaS as-is.
+- **SRE signs off capacity** → monolith_migration (**requires a human decision**; repeatable)
+- **SRE flags gaps, remediate and rebook the window** → monolith_freeze_booking (**requires a human decision**; loops back; repeatable)
+
+### monolith_migration
+Lift-and-shift the remaining monolith onto the PaaS during the agreed freeze window.
+- **Freeze window pulled by support, rebook it** → monolith_freeze_booking (loops back; repeatable)
+- **Monolith live on the PaaS** → program_review (repeatable)
+
+### arch_board_review
+The architecture board reviews the failing service's extraction approach after its third cutback.
+The board either approves a revised approach for another attempt or halts the programme.
+- **Board approves a revised auth approach, restart that extraction** → auth_extraction (**requires a human decision**; loops back; repeatable)
+- **Board approves a revised billing approach, restart that extraction** → billing_extraction (**requires a human decision**; loops back; repeatable)
+- **Board halts the programme** → END (**requires a human decision**; repeatable)
+
+### program_review
+End-of-programme review of the old estate.
+Decide whether to decommission immediately or keep it warm for a quarter as insurance.
+- **Decommission the old estate** → END (**requires a human decision**)
+- **Keep the old estate warm for a quarter** → keep_warm (**requires a human decision**)
+
+### keep_warm
+The old estate stays warm for one quarter as insurance while the PaaS beds in.
+- **Insurance quarter elapsed, decommission the old estate** → END (**requires a human decision**)
+
+## Compiler report
+
+No defects, no warnings. The plan is structurally sound: every phase is reachable, every path has an exit, and all declared loops have a verified exit.

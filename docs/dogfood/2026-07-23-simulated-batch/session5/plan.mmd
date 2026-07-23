@@ -1,0 +1,44 @@
+flowchart TD
+  spike_sdk["<b>spike_sdk</b><br/>Spike the embedded-analytics SDK: throwaway prototype plu…"]
+  spike_logistics["<b>spike_logistics</b><br/>Spike the vertical product for logistics companies: throw…"]
+  spike_copilot["<b>spike_copilot</b><br/>Spike the AI-native reporting copilot: throwaway prototyp…"]
+  board_direction["<b>board_direction</b><br/>The board reviews all three spike results and either pick…"]
+  soc2_readiness["<b>soc2_readiness</b><br/>Copilot-only gate: complete a SOC 2 readiness review, sin…"]
+  build_mvp["<b>build_mvp</b><br/>Build the MVP for the chosen direction. Done means a prod…"]
+  design_partner_beta["<b>design_partner_beta</b><br/>Run a six-week design-partner beta; the goal is at least …"]
+  board_kill_or_continue["<b>board_kill_or_continue</b><br/>After two beta extensions without three paying design par…"]
+  contract_negotiation["<b>contract_negotiation</b><br/>Convert paying design partners into a signed annual contr…"]
+  scale_up["<b>scale_up</b><br/>A signed annual contract is the win condition: scale the …"]
+  spike_sdk -- "Prototype built and five discovery calls done" --> spike_logistics
+  spike_sdk -- "Two-week timebox expired, cut the spike" --> spike_logistics
+  spike_logistics -- "Prototype built and five discovery calls done" --> spike_copilot
+  spike_logistics -- "Two-week timebox expired, cut the spike" --> spike_copilot
+  spike_copilot -- "Prototype built and five discovery calls done" --> board_direction
+  spike_copilot -- "Two-week timebox expired, cut the spike" --> board_direction
+  board_direction -- "✋ Board picks the embedded-analytics SDK" --> build_mvp
+  board_direction -- "✋ Board picks the logistics vertical" --> build_mvp
+  board_direction -- "✋ Board picks the AI reporting copilot" --> soc2_readiness
+  board_direction -- "✋ Board kills the company" --> END
+  soc2_readiness -- "Readiness review passed" --> build_mvp
+  soc2_readiness -. "✋ ↻ Readiness unachievable this quarter, send the direction choice back to the board" .-> board_direction
+  build_mvp -- "MVP ready for design partners" --> design_partner_beta
+  design_partner_beta -- "Three or more paying design partners on board" --> contract_negotiation
+  design_partner_beta -. "↻ Short of three partners, extend the beta {beta_rounds &lt; 3}" .-> design_partner_beta
+  design_partner_beta -- "Two extensions used and still short of three partners {beta_rounds &gt;= 3}" --> board_kill_or_continue
+  board_kill_or_continue -- "✋ Board kills the company" --> END
+  board_kill_or_continue -. "✋ ↻ Board continues, run another beta round" .-> design_partner_beta
+  contract_negotiation -- "✋ CEO signs an annual contract" --> scale_up
+  contract_negotiation -. "↻ Deal falls through, work the beta cohort again" .-> design_partner_beta
+  scale_up --> END
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 6 stroke:#c62828,stroke-width:3px;
+  linkStyle 7 stroke:#c62828,stroke-width:3px;
+  linkStyle 8 stroke:#c62828,stroke-width:3px;
+  linkStyle 9 stroke:#c62828,stroke-width:3px;
+  linkStyle 11 stroke:#c62828,stroke-width:3px;
+  linkStyle 16 stroke:#c62828,stroke-width:3px;
+  linkStyle 17 stroke:#c62828,stroke-width:3px;
+  linkStyle 18 stroke:#c62828,stroke-width:3px;

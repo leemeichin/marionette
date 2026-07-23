@@ -1,0 +1,55 @@
+# project: podcast-season-one
+VAR episodes_banked = 0
+VAR re_edits = 0
+
+-> record_pilot
+
+=== record_pilot ===
+Record the pilot episode to prove out the show format.
++ [Pilot cut ready for review] -> pilot_review
+
+=== pilot_review ===
+Comms director reviews the pilot and rules on whether the format works.
+* [Format works, start booking guests] @human -> book_guests
++ [Retool the format and re-record] @human ~loop~ -> record_pilot
+
+=== book_guests ===
+Maintain a rolling pipeline of confirmed guests for the season.
++ [Guest dropped out, book the next one] ~loop~ -> book_guests
++ [Enough guests confirmed for a batch] -> batch_production
+
+=== batch_production ===
+Record and edit episodes in batches with the confirmed guests.
+~ re_edits = 0
++ [Batch recorded and edited] -> guest_approval
+
+=== guest_approval ===
+The guest reviews the final cut of their episode before it can be scheduled.
++ [Guest approves the final cut] @human -> sponsor_reads
++ {re_edits < 1} [Guest requests their one re-edit] @human -> re_edit
+
+=== re_edit ===
+Apply the guest's requested changes; each guest gets one re-edit.
+~ re_edits += 1
++ [Deliver the revised cut] ~loop~ -> guest_approval
+
+=== sponsor_reads ===
+Sponsor reviews and approves the sponsor reads before insertion.
++ [Sponsor approves the reads] @human -> bank_check
++ [Sponsor requests changes] @human ~loop~ -> sponsor_reads
+
+=== bank_check ===
+Bank the approved episode and check progress toward the launch threshold.
+~ episodes_banked += 1
+* {episodes_banked >= 6} [Six episodes banked, launch] -> launch
++ {episodes_banked < 6} [Keep producing] ~loop~ -> book_guests
++ [Quarter ending short of six] -> shortfall_decision
+
+=== shortfall_decision ===
+Comms director decides how to handle a quarter-end shortfall.
+* [Launch with four episodes] @human -> launch
++ [Push to next quarter, keep banking] @human ~loop~ -> book_guests
+
+=== launch ===
+Launch season one of the podcast.
+-> END

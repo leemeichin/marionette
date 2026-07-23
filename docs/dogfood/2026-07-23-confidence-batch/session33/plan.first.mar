@@ -1,0 +1,69 @@
+# project: season3-liveops
+VAR drops_shipped = 0
+
+=== season_kickoff ===
+Season 3 content is planned and locked as three content drops.
+Team is staffed and drop 1 production is ready to begin.
+* [Kick off drop production] -> drop_build
+
+=== drop_build ===
+Build the current drop's content: featured mode, events, and rewards.
+Done means a release candidate build exists for QA.
++ [Build complete, ready for QA] -> drop_qa
+
+=== drop_qa ===
+Internal QA on the drop's release candidate.
+Done means no blocking issues remain and the drop is cleared to ship.
++ [QA passes, cleared to ship] -> drop_ship
++ [QA finds blocking issues, back to build] ~loop~ -> drop_build
+
+=== drop_ship ===
+Ship the drop to the live game.
+~ drops_shipped += 1
++ [Drop is live] -> live_watch
+
+=== live_watch ===
+Watch retention and revenue KPIs and crash rates for the drop's first live week.
+Done means the first week has closed with the drop stable.
++ [Crashes or instability detected] -> hotfix
++ [First week closed, KPIs at or above target] -> drop_review
++ [Crashes stabilized but KPIs under target] -> kpi_remediation
+
+=== hotfix ===
+Develop and deploy a hotfix for the drop's crashes; as many hotfixes as it takes to stabilize.
++ [Hotfix deployed, resume watching KPIs] ~loop~ -> live_watch
+
+=== kpi_remediation ===
+The drop is stable but KPIs remain under target after stabilization.
+The live-ops lead chooses the remediation path.
++ [Run a compensation event] @human -> comp_event
++ [Pull the drop's featured mode] @human -> pull_featured_mode
+
+=== comp_event ===
+Run the compensation event to win back retention and revenue for the affected drop.
++ [Event run, drop closed out] -> drop_review
+
+=== pull_featured_mode ===
+Pull the drop's featured mode from the live game and communicate the change to players.
++ [Mode pulled, drop closed out] -> drop_review
+
+=== drop_review ===
+The drop's first live week is closed out; route to the next stage of the season.
++ {drops_shipped < 2} [Start the next drop] ~loop~ -> drop_build
++ {drops_shipped == 2} [Mid-season checkpoint on cumulative KPIs] -> midseason_review
++ {drops_shipped >= 3} [All drops shipped, wrap the season] -> season_wrap
+
+=== midseason_review ===
+The studio head reviews cumulative season KPIs and sets the season's course.
++ [Extend the season by a month] @human ~loop~ -> drop_build
++ [End on schedule, ship the final drop] @human ~loop~ -> drop_build
++ [End early, pivot the team to season 4 pre-production] @human -> s4_preprod
+
+=== s4_preprod ===
+The season winds down early and the team pivots to season 4 pre-production.
+* [Team pivoted, season closed] -> season_wrap
+
+=== season_wrap ===
+Season retrospective: what the drops and KPIs taught us, feeding the season 4 greenlight decision.
+* [Greenlight season 4] @human -> END
+* [Do not greenlight season 4] @human -> END

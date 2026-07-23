@@ -1,0 +1,63 @@
+# project: newsletter-media-business
+VAR month = 0
+VAR hit_streak = 0
+VAR miss_streak = 0
+
+-> growth_cycle
+
+=== growth_cycle ===
+Run a monthly growth experiment cycle toward 20k subscribers.
+Launch experiments, measure, keep what works, kill what doesn't.
+~ month += 1
++ [Hit 20k subscribers] -> choose_mix
++ {month < 8} [Not there yet, run another cycle] ~loop~ -> growth_cycle
++ {month >= 8} [Eight months in, still under 20k] @human -> eight_month_call
+
+=== eight_month_call ===
+Eight months without hitting 20k: my call on whether this is still worth it.
+* [Lower the bar and monetize anyway] @human -> choose_mix
+* [Shelve the whole idea] @human -> END
+
+=== choose_mix ===
+Pick the monetization mix for the newsletter.
++ [Sponsorships only] @human -> sponsorship_prep
++ [Paid tier only] @human -> paid_tier_prep
++ [Both sponsorships and paid tier] @human -> both_prep
+
+=== sponsorship_prep ===
+Build the sponsorship offer: publish a rate card and warm up a sponsor
+pipeline before running the first campaign.
++ [Rate card done and five-plus warm sponsor conversations] -> revenue_operation
+
+=== paid_tier_prep ===
+Bank three months of weekly premium content before launching the paid tier.
++ [Three months of premium content banked, tier launched] -> revenue_operation
+
+=== both_prep ===
+Do both preps: rate card plus five-plus warm sponsor conversations, and
+three months of weekly premium content banked.
++ [Both tracks ready, campaigns and paid tier live] -> revenue_operation
+
+=== revenue_operation ===
+Run the monetization mix for a month and measure revenue against target.
+This is the first revenue month both paths converge on.
++ [Month came in at target] -> at_target_month
++ [Month came in below target] -> below_target_month
+
+=== at_target_month ===
+A month at target: extend the hit streak and reset the miss streak.
+~ hit_streak += 1
+~ miss_streak = 0
++ {hit_streak >= 2} [Two consecutive months at target] -> incorporate
++ {hit_streak < 2} [Keep operating, one more month] ~loop~ -> revenue_operation
+
+=== below_target_month ===
+A month below target: extend the miss streak and reset the hit streak.
+~ miss_streak += 1
+~ hit_streak = 0
++ {miss_streak < 3} [Keep pushing with the current mix] ~loop~ -> revenue_operation
++ {miss_streak >= 3} [Missed three months running, change the mix] @human ~loop~ -> choose_mix
+
+=== incorporate ===
+Incorporate the business: the newsletter is now my job.
+* [Incorporated, this is the job now] @human -> END

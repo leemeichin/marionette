@@ -1,0 +1,50 @@
+# project: payments-reconciliation-hardening
+VAR runs = 0
+VAR clean_streak = 0
+
+-> rework_matching_engine
+
+=== rework_matching_engine ===
+Rework the matching engine for the payments reconciliation job.
+Done means the redesigned engine is deployed to the nightly job and ready for a fresh set of retry runs.
+~ runs = 0
+~ clean_streak = 0
++ [Engine reworked, start the retry runs] -> run_reconciliation
+
+=== run_reconciliation ===
+Run the nightly reconciliation with the reworked engine; at most five runs per rework cycle.
+~ runs += 1
++ [Run reconciled clean] -> record_clean
++ [Run had breaks] -> record_dirty
++ [QA pulls the plug, back to the drawing board] @human ~loop~ -> rework_matching_engine
+
+=== record_clean ===
+Record a clean run; two clean runs in a row end the retries early.
+~ clean_streak += 1
++ {clean_streak >= 2} [Two clean in a row, call it done early] -> finance_review
++ {clean_streak < 2 && runs < 5} [Streak not proven yet, run again] ~loop~ -> run_reconciliation
++ {clean_streak < 2 && runs >= 5} [Five runs used up] -> finance_review
+
+=== record_dirty ===
+Record a run with breaks; the clean streak resets.
+~ clean_streak = 0
++ {runs < 5} [Retry the nightly reconciliation] ~loop~ -> run_reconciliation
++ {runs >= 5} [Five runs used up] -> finance_review
+
+=== finance_review ===
+Finance reviews the final match rate, whether retries ended early, ran out, or QA never intervened.
+* [Match rate above 99.9 percent, sign off] @human -> END
+* [Match rate not above 99.9 percent, escalate] @human -> cfo_escalation
+
+=== cfo_escalation ===
+CFO decides how to close the match-rate shortfall.
+* [Buy a vendor product] @human -> adopt_vendor_product
+* [Keep the manual process] @human -> keep_manual_process
+
+=== adopt_vendor_product ===
+Procure and roll out the vendor reconciliation product to replace the in-house matcher.
+-> END
+
+=== keep_manual_process ===
+Keep the manual reconciliation process in place alongside the existing job.
+-> END

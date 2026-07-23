@@ -1,0 +1,6 @@
+plan.mar:43: warning[MAR014]: unverified gate — review manually: {negotiation_rounds < 2} on choice "Counter-offer, revise terms"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:44: warning[MAR014]: unverified gate — review manually: {negotiation_rounds >= 2} on choice "Rounds exhausted, no agreement"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 2 warning(s)
+exit=1

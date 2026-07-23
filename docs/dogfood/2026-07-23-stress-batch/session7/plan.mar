@@ -1,0 +1,25 @@
+# project: nightly-pipeline
+# sla:freshness_hours: 24
+VAR patch_cycles = 0
+
+-> ingest
+
+=== ingest ===
+Pull the nightly dumps from the vendor SFTP drop; vendor outages are expected and non-fatal.
++ [Dump retrieved] -> transform
++ [Vendor outage, retry tomorrow night] ~loop~ -> ingest
+
+=== transform ===
+Normalize the dumps into the warehouse schema; mapping bugs surface here.
++ [Transform clean] -> publish
++ {patch_cycles < 5} [Mapping bugs found, reconcile and patch] ~loop~ -> reconcile
++ {patch_cycles >= 5} [Five patch cycles exhausted, page the on-call] @human -> END
+
+=== reconcile ===
+Reconcile row counts against the source and patch the mapping.
+~ patch_cycles += 1
++ [Patched, run the transform again] -> transform
+
+=== publish ===
+Publish the curated tables, write the audit trail, and notify downstream consumers within the 24-hour freshness SLA.
+-> END

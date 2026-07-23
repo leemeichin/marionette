@@ -190,6 +190,40 @@ VAR i = 0
   assert.ok(result.ok);
 });
 
+test('monotonic continue gate verifies on a cycle edge without the ~loop~ mark', () => {
+  // The ~loop~ mark sits on reconcile -> transform; the gated continue edge
+  // transform -> reconcile is part of the same cycle and must not warn MAR014.
+  const result = compile(`
+VAR patches = 0
+=== transform ===
+~ patches += 1
++ {patches < 5} [Bugs found, reconcile] -> reconcile
+* [Clean run] -> END
+* {patches >= 5} [Budget spent] @human -> END
+=== reconcile ===
++ [Patched, retry] ~loop~ -> transform
+`);
+  assert.deepEqual(result.diagnostics, []);
+  assert.ok(result.ok);
+});
+
+test('counter reset keeps gates unverified (MAR014) by design', () => {
+  const result = compile(`
+VAR tries = 0
+=== work ===
+~ tries += 1
++ {tries < 3} [Retry] ~loop~ -> work
+* {tries >= 3} [Escalate] @human -> reset_and_return
+* [Works] -> END
+=== reset_and_return ===
+~ tries = 0
++ [Start the evaluation over] ~loop~ -> work
++ [Stop] @human -> END
+`);
+  assert.ok(result.ok);
+  assert.ok(result.diagnostics.some((d) => d.code === 'MAR014'));
+});
+
 test('loop verified by an ungated @human exit', () => {
   const result = compile(`
 === a ===

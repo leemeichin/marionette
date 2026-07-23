@@ -1,0 +1,53 @@
+# project: soc2-type-ii-readiness
+// SOC 2 Type II readiness: gap assessment -> implement missing controls ->
+// three-month observation window with monthly spot-checks -> auditor
+// fieldwork with remediation -> report to CEO and sales.
+
+VAR months_observed = 0   // months since the youngest control clock (re)started
+
+=== gap_assessment ===
+Assess the current environment against the SOC 2 Trust Services Criteria and produce a prioritized gap list.
+Done when every criterion maps to an existing control or a named gap.
+* [Gap list complete and prioritized] -> implement_controls
+
+=== implement_controls ===
+Implement the missing controls: security tooling, written policies, the onboarding/offboarding process, and the vendor review workflow.
+The observation clock does not start until the last control is live.
++ [A control is still being implemented] ~loop~ -> implement_controls
+* [Last control is live — observation clock starts] -> observation_window
+
+=== observation_window ===
+All controls operating in production; the observation window is running.
+The window completes when the youngest control clock reaches three months.
+~ months_observed += 1
++ [Month elapsed — run the internal spot-check] -> monthly_spot_check
+
+=== monthly_spot_check ===
+Internal spot-check of every control's operation, sampling evidence the way the auditor will.
++ {months_observed < 3} [All controls passing, window not yet complete] ~loop~ -> observation_window
+* {months_observed >= 3} [All controls passing and window complete — engage the auditor] @human -> auditor_fieldwork
++ [One or two controls failed] -> control_remediation
++ [Three or more controls failed] -> ciso_window_call
+
+=== ciso_window_call ===
+Three or more controls failed this month's spot-check. The CISO decides whether the entire observation window restarts or only the failed controls' clocks.
++ [Restart the entire observation window] @human -> control_remediation
++ [Restart only the failed controls' clocks] @human -> control_remediation
+
+=== control_remediation ===
+Fix the failing control(s). A restarted control's clock returns to zero while the other controls keep their elapsed time; the counter tracks the youngest clock.
+~ months_observed = 0
++ [Remediated — resume observation] ~loop~ -> observation_window
+
+=== auditor_fieldwork ===
+The auditor performs Type II fieldwork over the observation-period evidence.
++ [Findings raised] -> remediate_findings
+* [No open findings — report drafted] -> report_distribution
+
+=== remediate_findings ===
+Remediate each audit finding and prepare evidence for the auditor's re-test.
++ [Fixes ready for auditor re-test] ~loop~ -> auditor_fieldwork
+
+=== report_distribution ===
+The final SOC 2 Type II report is delivered to the CEO, and sales receives it for customer security reviews.
+-> END

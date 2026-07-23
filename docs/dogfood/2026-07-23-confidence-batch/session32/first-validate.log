@@ -1,0 +1,9 @@
+plan.mar:28: warning[MAR014]: unverified gate — review manually: cannot statically verify loop exit {months_observed >= 3}
+  28 | * {months_observed >= 3} [All controls passing and window complete — engage the auditor] @human -> auditor_fieldwork
+  help: the compiler only verifies constant gates and monotonic counters; confirm this exit can occur
+plan.mar:27: warning[MAR014]: unverified gate — review manually: {months_observed < 3} on choice "All controls passing, window not yet complete"
+  27 | + {months_observed < 3} [All controls passing, window not yet complete] ~loop~ -> observation_window
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 2 warnings
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1

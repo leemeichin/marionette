@@ -1,0 +1,38 @@
+flowchart TD
+  build_mvp["<b>build_mvp</b><br/>Build the MVP: the smallest version of the app worth putt…"]
+  closed_beta["<b>closed_beta</b><br/>Closed beta via TestFlight: ship a build, collect feedbac…"]
+  architecture_review["<b>architecture_review</b><br/>The hard conversation: is the app architecture actually s…"]
+  app_store_submission["<b>app_store_submission</b><br/>Submit to the App Store for review. Rejections are expect…"]
+  rejection_escalation["<b>rejection_escalation</b><br/>Three App Store rejections means the problem is not cosme…"]
+  launch_scheduling["<b>launch_scheduling</b><br/>The app is approved. Marketing picks the actual launch da…"]
+  launch_monitoring["<b>launch_monitoring</b><br/>The app is live. Monitor crash rates, reviews, and suppor…"]
+  maintenance_handover["<b>maintenance_handover</b><br/>Hand the app over to the maintenance team: docs, dashboar…"]
+  build_mvp -- "MVP is ready for testers" --> closed_beta
+  closed_beta -- "Crash-free rate is above 99.5%" --> app_store_submission
+  closed_beta -. "↻ Iterate on beta feedback {beta_cycles &lt; 4}" .-> closed_beta
+  closed_beta -- "✋ Four cycles and still below target {beta_cycles &gt;= 4}" --> architecture_review
+  architecture_review -. "✋ ↻ Architecture is sound, keep working the beta" .-> closed_beta
+  architecture_review -. "✋ ↻ Architecture needs rework, rebuild the app" .-> build_mvp
+  architecture_review -- "✋ Not worth saving, stop here" --> END
+  app_store_submission -- "Apple approved the app" --> launch_scheduling
+  app_store_submission -. "↻ Rejected, fix and resubmit {submissions &lt; 3}" .-> app_store_submission
+  app_store_submission -- "✋ Rejected three times, something fundamental is wrong {submissions &gt;= 3}" --> rejection_escalation
+  rejection_escalation -. "✋ ↻ Address the fundamental issue and rebuild" .-> build_mvp
+  rejection_escalation -- "✋ Shelve the launch" --> END
+  launch_scheduling -- "✋ Marketing confirms the launch date, go live" --> launch_monitoring
+  launch_monitoring -. "✋ ↻ Serious incident, pull the app from the store" .-> closed_beta
+  launch_monitoring -- "First week is clean" --> maintenance_handover
+  maintenance_handover --> END
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 3 stroke:#c62828,stroke-width:3px;
+  linkStyle 4 stroke:#c62828,stroke-width:3px;
+  linkStyle 5 stroke:#c62828,stroke-width:3px;
+  linkStyle 6 stroke:#c62828,stroke-width:3px;
+  linkStyle 9 stroke:#c62828,stroke-width:3px;
+  linkStyle 10 stroke:#c62828,stroke-width:3px;
+  linkStyle 11 stroke:#c62828,stroke-width:3px;
+  linkStyle 12 stroke:#c62828,stroke-width:3px;
+  linkStyle 13 stroke:#c62828,stroke-width:3px;

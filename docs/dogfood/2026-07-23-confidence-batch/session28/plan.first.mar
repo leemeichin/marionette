@@ -1,0 +1,87 @@
+# project: erp-finance-migration
+
+// Streak of consecutive clean month-end closes (reset on any discrepancy).
+VAR clean_closes = 0
+// Months spent in parallel running (monotonic).
+VAR months_parallel = 0
+// Parallel-running budget in months; three quarters by default, CFO can extend.
+VAR parallel_budget = 9
+
+-> configure_and_load
+
+=== configure_and_load ===
+Configure the new finance system and load historical data from the legacy ERP.
+Done when configuration is signed off and historical balances tie out in the new system.
+* [Historical data loaded and tied out] -> month_end_close
+
+=== month_end_close ===
+Run the month-end close in both systems: legacy ERP and the new finance system produce parallel ledgers for the same period.
+~ months_parallel += 1
++ [Both closes complete] -> reconcile
+
+=== reconcile ===
+The controller reconciles the two ledgers for this period and records the reconciliation evidence.
++ [Ledgers match, clean close] @human -> record_clean_close
++ [Discrepancy found] @human -> root_cause
+
+=== record_clean_close ===
+Log a clean close; the cutover streak requires three consecutive clean month-end closes.
+~ clean_closes += 1
++ {clean_closes >= 3} [Three consecutive clean closes] -> audit_review
++ {clean_closes < 3 and months_parallel < parallel_budget} [Streak building, run next month] ~loop~ -> month_end_close
++ {clean_closes < 3 and months_parallel >= parallel_budget} [Parallel running past budget] -> cfo_program_review
+
+=== root_cause ===
+Chase the root cause of the discrepancy and fix it in config, mappings or process.
+Any discrepancy resets the clean-close streak to zero.
+~ clean_closes = 0
++ {months_parallel < parallel_budget} [Root cause fixed, resume parallel running] ~loop~ -> month_end_close
++ {months_parallel >= parallel_budget} [Parallel running past budget] -> cfo_program_review
+
+=== audit_review ===
+External auditors review the reconciliation evidence for the three clean closes.
++ [Auditors accept the evidence] @human -> cutover_approval
++ [Auditors raise findings, back to parallel running] @human ~loop~ -> month_end_close
+
+=== cutover_approval ===
+The CFO makes the cutover go/no-go call on the audited evidence.
++ [CFO approves cutover] @human -> cutover_window
++ [CFO sends us back to parallel running] @human ~loop~ -> month_end_close
+
+=== cutover_window ===
+Cutover may happen only between fiscal quarters. Hold at the approved state until the quarter boundary; keep parallel closes running in the meantime.
++ [At the fiscal quarter boundary, go] @human -> execute_cutover
++ [Mid-quarter, keep running parallel until the boundary] @human ~loop~ -> month_end_close
+
+=== execute_cutover ===
+Cut over: the new finance system becomes the system of record; the legacy ERP is switched to read-only.
+* [Cutover executed cleanly] -> hypercare
+
+=== hypercare ===
+One quarter of hypercare on the new system with the legacy ERP available read-only for reference and fallback lookups.
+* [Hypercare quarter complete, no open blockers] -> archive_legacy
+
+=== archive_legacy ===
+Archive the legacy ERP: preserve data for retention requirements and decommission the system.
+-> END
+
+=== cfo_program_review ===
+Parallel running has dragged past its budget of three quarters. The CFO decides how the programme proceeds.
++ [Extend parallel running] @human -> extend_program
++ [Descope to core modules only] @human -> descope_core
++ [Abort, fall back to the legacy system] @human -> abort_rollback
+
+=== extend_program ===
+Extend the parallel-running budget by one quarter and continue.
+~ parallel_budget += 3
++ [Resume parallel running] ~loop~ -> month_end_close
+
+=== descope_core ===
+Reduce migration scope to core modules only; reconfigure the new system and restart the clean-close streak for the reduced scope.
+~ clean_closes = 0
+~ parallel_budget += 3
++ [Core-only scope live, resume parallel running] ~loop~ -> month_end_close
+
+=== abort_rollback ===
+Abort the migration: the legacy ERP remains the system of record, the new system is stood down, and lessons learned are written up.
+-> END

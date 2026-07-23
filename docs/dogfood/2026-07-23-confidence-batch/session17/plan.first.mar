@@ -1,0 +1,57 @@
+# project: security-incident-response-program
+// Quarterly re-drills after signoff are explicitly out of scope.
+VAR tabletops = 0
+
+-> draft_runbooks
+
+=== draft_runbooks ===
+Stand up the incident response program by writing the runbooks: detection,
+triage, containment, eradication, recovery, and communications procedures.
+Done when the runbook set covers the agreed incident classes and has an owner.
+* [Runbooks drafted] -> tabletop_exercise
+
+=== tabletop_exercise ===
+Run a tabletop exercise against the current runbooks.
+A clean run means the team completes the scenario without hitting a gap.
+~ tabletops += 1
++ [Exercise runs clean] -> wire_paging
++ {tabletops < 6} [Gaps surfaced] -> fold_in_gaps
++ {tabletops >= 6} [Six tabletops and still not clean] -> outside_help_decision
+
+=== fold_in_gaps ===
+Fold the gaps surfaced by the tabletop back into the runbooks.
+Done when every gap has a runbook change or a documented rationale for none.
++ [Runbooks updated] ~loop~ -> tabletop_exercise
+
+=== outside_help_decision ===
+The CISO decides whether to bring in outside help after six tabletops
+without a clean run.
++ [Bring in outside IR help] @human -> engage_external_help
++ [Keep iterating internally] @human ~loop~ -> tabletop_exercise
+
+=== engage_external_help ===
+External incident response specialists review the runbooks and exercise
+history, then revise the runbooks with the team.
++ [Revised runbooks ready to exercise] ~loop~ -> tabletop_exercise
+
+=== wire_paging ===
+Wire up the paging system and the on-call rotation.
+Done when alerts page the rotation end-to-end and the schedule is staffed.
+* [Paging live and rotation staffed] -> live_fire_drill
+
+=== live_fire_drill ===
+Run one live-fire drill, exercising the runbooks, paging, and the exec
+communications tree end-to-end.
++ [Drill complete, findings folded into runbooks] -> ciso_signoff
++ [Drill reveals blocking problems] -> remediate_drill_gaps
+
+=== remediate_drill_gaps ===
+Fix the blocking problems the live-fire drill exposed in the runbooks,
+paging, or comms tree.
++ [Fixed, re-run the drill] ~loop~ -> live_fire_drill
+
+=== ciso_signoff ===
+The CISO reviews the full program: runbooks, exercise history, on-call
+rotation, and drill results.
++ [CISO signs the program off] @human -> END
++ [Changes requested] @human ~loop~ -> live_fire_drill

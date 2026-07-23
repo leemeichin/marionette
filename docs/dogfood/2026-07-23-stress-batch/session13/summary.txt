@@ -1,0 +1,75 @@
+# Plan summary: plan.mar
+
+Starts at **data_inventory**. 11 phases, 6 decision points (phases with 2+ choices), 18 choices overall.
+
+- **Human checkpoints:** "Inventory stalled, human decides how to proceed" (at chase_stragglers); "DPO approves the schedule" (at dpo_schedule_review); "DPO bounces it for redrafting" (at dpo_schedule_review); "Remediation not converging" (at remediation); "DPO resolves the escalation — back to re-review" (at dpo_escalation); "DPO formally closes the program" (at program_close)
+- **Declared loops:** chase_stragglers → data_inventory ("Chased — re-check responses"); chase_stragglers → data_inventory ("Inventory stalled, human decides how to proceed"); dpo_schedule_review → draft_schedule ("DPO bounces it for redrafting"); remediation → compliance_review ("Remediation done — re-review the teams"); dpo_escalation → compliance_review ("DPO resolves the escalation — back to re-review"); external_audit → remediation ("Audit findings raised")
+- **Gates:** 4 gated choices, of which 0 unverified (review manually)
+- **Variables:** chase_rounds: number = 0, remediation_rounds: number = 0
+- **Contract hash:** `sha256:2f3bcb381f3d…`
+
+## Walkthrough
+
+### data_inventory (start)
+Inventory personal data across all eleven teams: each team fills in the
+data map. Done when every team has submitted a complete data map.
+- **All eleven data maps received** → draft_schedule (repeatable)
+- **Some teams have not responded** → chase_stragglers (repeatable)
+
+### chase_stragglers
+Legal chases the teams that have not yet filled in their data map.
+- on entry: `chase_rounds += 1`
+- **Chased — re-check responses** → data_inventory (only if `chase_rounds < 6`; loops back; repeatable)
+- **Inventory stalled, human decides how to proceed** → data_inventory (only if `chase_rounds >= 6`; **requires a human decision**; loops back; repeatable)
+
+### draft_schedule
+Legal drafts the data-retention schedule from the completed inventory.
+- **Draft ready for DPO review** → dpo_schedule_review (repeatable)
+
+### dpo_schedule_review
+The DPO reviews the retention schedule and either approves it or bounces
+it back to legal for redrafting, as often as needed.
+- **DPO approves the schedule** → implement_deletion (**requires a human decision**; repeatable)
+- **DPO bounces it for redrafting** → draft_schedule (**requires a human decision**; loops back; repeatable)
+
+### implement_deletion
+Teams implement deletion jobs against the approved retention schedule.
+Done when every team has deletion jobs ready for compliance review.
+- **Deletion jobs implemented across teams** → compliance_review
+
+### compliance_review
+Per-team compliance review of the deletion jobs. Teams pass, fail for the
+first time, or fail for a second time.
+- **All teams pass review** → external_audit (repeatable)
+- **Some teams failed their first review** → remediation (repeatable)
+- **A team has failed review twice** → dpo_escalation (repeatable)
+
+### remediation
+Failing teams (and any external-audit findings) get remediation tasks,
+then go back for re-review.
+- on entry: `remediation_rounds += 1`
+- **Remediation done — re-review the teams** → compliance_review (only if `remediation_rounds < 4`; loops back; repeatable)
+- **Remediation not converging** → dpo_escalation (only if `remediation_rounds >= 4`; **requires a human decision**; repeatable)
+
+### dpo_escalation
+Teams that failed review twice go on the escalation list for the DPO,
+who decides how to unblock them.
+- **DPO resolves the escalation — back to re-review** → compliance_review (**requires a human decision**; loops back; repeatable)
+
+### external_audit
+External counsel performs the final audit once all teams have passed
+compliance review.
+- **Audit clean, no findings** → program_close (repeatable)
+- **Audit findings raised** → remediation (loops back; repeatable)
+
+### program_close
+The DPO formally closes the GDPR data-retention cleanup program.
+- **DPO formally closes the program** → file_report (**requires a human decision**)
+
+### file_report
+Legal files the compliance report with the board.
+- **Compliance report filed with the board** → END
+
+## Compiler report
+
+No defects, no warnings. The plan is structurally sound: every phase is reachable, every path has an exit, and all declared loops have a verified exit.

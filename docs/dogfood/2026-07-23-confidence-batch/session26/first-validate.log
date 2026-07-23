@@ -1,0 +1,9 @@
+plan.mar:31: warning[MAR014]: unverified gate — review manually: {review_rounds < 4} on choice "Changes requested"
+  31 | + {review_rounds < 4} [Changes requested] @human ~loop~ -> vendor_fixes
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:32: warning[MAR014]: unverified gate — review manually: {review_rounds >= 4} on choice "Still bouncing after four rounds"
+  32 | + {review_rounds >= 4} [Still bouncing after four rounds] -> manager_arbitration
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 2 warnings
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1

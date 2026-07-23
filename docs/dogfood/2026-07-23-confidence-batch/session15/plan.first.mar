@@ -1,0 +1,47 @@
+# project: kitchen-renovation
+VAR council_bounces = 0
+
+=== gather_quotes ===
+Collect renovation quotes from two contractors for the kitchen.
+Done when both written quotes are in hand and comparable.
+* [Both quotes in hand] -> choose_contractor
+
+=== choose_contractor ===
+We and Sam compare the two quotes and pick a contractor. Sam has equal say.
++ [Contractor chosen together] @human -> budget_signoff
+
+=== budget_signoff ===
+Sam reviews and signs off on the budget before any deposit is paid.
++ [Sam approves budget, pay deposit] @human -> permit_application
++ [Budget not approved, revisit choice] @human ~loop~ -> choose_contractor
+
+=== permit_application ===
+Submit the permit application to the council and await their response.
++ [Permit granted] -> demolition_build
++ {council_bounces < 2} [Council bounced it with questions] -> address_council_questions
++ {council_bounces >= 2} [Bounced again, time to rethink] @human -> rethink_design
+
+=== address_council_questions ===
+Answer the council's questions and resubmit the application.
+~ council_bounces += 1
++ [Resubmitted] ~loop~ -> permit_application
+
+=== rethink_design ===
+Rework the kitchen design with the contractor to address the council's objections.
++ [Revised design ready, resubmit] @human ~loop~ -> permit_application
+
+=== demolition_build ===
+Contractor demolishes the old kitchen and builds the new one to the permitted design.
+* [Build complete] -> snag_walkthrough
+
+=== snag_walkthrough ===
+Walk through the kitchen with the contractor and list snags to fix.
+Repeat walkthroughs until we are happy with the result.
++ [Snags found, contractor fixes them] ~loop~ -> snag_walkthrough
++ [We're happy with the kitchen] @human -> final_signoff
+
+=== final_signoff ===
+Sam and I both inspect the finished kitchen; final payment is released only
+after both of us sign off.
++ [Both sign off, release final payment] @human -> END
++ [Not satisfied, more snags] @human ~loop~ -> snag_walkthrough

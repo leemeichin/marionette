@@ -1,0 +1,42 @@
+# project: nightly-release-train
+// Fully autonomous nightly release train: build, test, deploy, monitor,
+// auto-rollback and requeue. Runs every night, weekends included.
+
+-> await_window
+
+=== await_window ===
+Nightly departure window: the train leaves every night, weekends included, carrying whatever changes are queued.
+Done when tonight's window opens and the ship-or-idle call is made autonomously.
++ [Changes queued, train departs] -> build
++ [Nothing to ship tonight, idle until tomorrow] ~loop~ -> await_window
++ [Retire the release train] @human -> END
+
+=== build ===
+Build tonight's release artifact from the queued changes.
+Done when a versioned, reproducible artifact exists.
++ [Build succeeded] -> test
++ [Build failed, changes ride tomorrow's train] ~loop~ -> await_window
+
+=== test ===
+Run the full automated test suite against tonight's artifact.
+Done when every suite is green; no human review of results.
++ [All tests green] -> deploy
++ [Tests failed, release requeued for tomorrow night] ~loop~ -> await_window
+
+=== deploy ===
+Deploy tonight's artifact to production, fully unattended.
+Done when the new release is serving live traffic.
++ [Deploy is live] -> monitor
++ [Deploy failed, retry now] ~loop~ -> deploy
++ [Deploy persistently stuck, release rides tomorrow's train instead] ~loop~ -> await_window
+
+=== monitor ===
+Watch production health signals for the new release; monitoring is continuous and the train never stops on its own.
+Done for this cycle when the release is judged healthy or an incident is traced to it.
++ [Incident traced to this release] -> rollback
++ [Release healthy, keep monitoring until the next window] ~loop~ -> await_window
+
+=== rollback ===
+Automatically roll back to the previous known-good release, no human sign-off.
+Done when the rollback is live and the failed release is requeued for the next night's train.
++ [Rolled back, release back on the train] ~loop~ -> await_window

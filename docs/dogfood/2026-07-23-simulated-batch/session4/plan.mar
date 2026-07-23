@@ -1,0 +1,51 @@
+# project: mobile-app-launch
+// First mobile app: MVP -> TestFlight beta -> App Store -> launch -> handover.
+
+VAR beta_cycles = 0
+VAR submissions = 0
+
+-> build_mvp
+
+=== build_mvp ===
+Build the MVP: the smallest version of the app worth putting in testers' hands.
+Done when the core flows work end to end on a real device.
++ [MVP is ready for testers] -> closed_beta
+
+=== closed_beta ===
+Closed beta via TestFlight: ship a build, collect feedback and crash reports, fix, repeat.
+Done when the crash-free rate is above 99.5%.
+~ beta_cycles += 1
++ [Crash-free rate is above 99.5%] -> app_store_submission
++ {beta_cycles < 4} [Iterate on beta feedback] ~loop~ -> closed_beta
++ {beta_cycles >= 4} [Four cycles and still below target] @human -> architecture_review
+
+=== architecture_review ===
+The hard conversation: is the app architecture actually sound, or are we polishing something structurally broken?
++ [Architecture is sound, keep working the beta] @human ~loop~ -> closed_beta
++ [Architecture needs rework, rebuild the app] @human ~loop~ -> build_mvp
+* [Not worth saving, stop here] @human -> END
+
+=== app_store_submission ===
+Submit to the App Store for review. Rejections are expected: read the feedback, fix, resubmit.
+~ submissions += 1
++ [Apple approved the app] -> launch_scheduling
++ {submissions < 3} [Rejected, fix and resubmit] ~loop~ -> app_store_submission
++ {submissions >= 3} [Rejected three times, something fundamental is wrong] @human -> rejection_escalation
+
+=== rejection_escalation ===
+Three App Store rejections means the problem is not cosmetic. Escalated to the project owner to decide the path forward.
++ [Address the fundamental issue and rebuild] @human ~loop~ -> build_mvp
+* [Shelve the launch] @human -> END
+
+=== launch_scheduling ===
+The app is approved. Marketing picks the actual launch date; that is their call, not engineering's.
++ [Marketing confirms the launch date, go live] @human -> launch_monitoring
+
+=== launch_monitoring ===
+The app is live. Monitor crash rates, reviews, and support channels closely for one week.
++ [Serious incident, pull the app from the store] @human ~loop~ -> closed_beta
+* [First week is clean] -> maintenance_handover
+
+=== maintenance_handover ===
+Hand the app over to the maintenance team: docs, dashboards, on-call. Project complete.
+-> END

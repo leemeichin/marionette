@@ -1,0 +1,28 @@
+# project: search-revamp
+VAR tuning_rounds = 0
+
+-> spike_engine
+
+=== spike_engine ===
+Evaluate the hosted search engine against our relevance corpus.
+* [Relevance acceptable out of the box] -> integrate
+* [Relevance poor] -> tune_ranking
+
+=== tune_ranking ===
+Adjust analyzers, synonyms and boosts; re-run the relevance suite after each change.
+~ tuning_rounds += 1
+* {tuning_rounds < 4} [Tune again] -> tune_ranking
+* [Good enough] -> integrate
+* {tuning_round >= 4} [Not converging, escalate] @human -> qa_signof
+
+=== integrate ===
+Wire the engine into the product behind a feature flag.
+* [Integration complete, suite green] -> qa_signoff
+
+=== qa_signoff ===
+The QA lead reviews relevance quality and signs off.
+* [Approved] @human -> rollout
++ [Needs more tuning] @human -> tune_ranking
+
+=== rollout ===
+Gradual rollout to all tenants, watching search abandonment metrics.

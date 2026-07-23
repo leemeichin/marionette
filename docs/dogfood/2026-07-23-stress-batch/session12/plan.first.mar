@@ -1,0 +1,58 @@
+# project: fraud-ml-migration
+VAR train_attempts = 0
+VAR labels_sufficient = false
+VAR model_beats_rules = false
+VAR drift_or_losses = false
+
+-> data_audit
+
+=== data_audit ===
+Audit the labeled fraud history: volume, class balance, label quality.
+Done when we know whether the labeled set can support training a model.
++ {labels_sufficient} [Labeled history is deep enough] -> train_model
++ {!labels_sufficient} [Labeled history too thin] -> labeling_sprint
+
+=== labeling_sprint ===
+Spend a month labeling historical transactions before anything else.
+Done when the labeled set reaches the volume and quality the audit called for.
++ [Labeling month complete, dataset ready] -> train_model
+
+=== train_model ===
+Train the fraud model and evaluate on the holdout set against the rules engine.
+The bar: beat the rules engine on precision AND recall on the holdout.
+~ train_attempts += 1
++ {model_beats_rules} [Model beats rules on precision and recall] -> shadow_scoring
++ {train_attempts < 5} [Not there yet, iterate again] ~loop~ -> train_model
++ {train_attempts >= 5} [Several serious attempts, still losing] @human -> keep_rules_writeup
+
+=== keep_rules_writeup ===
+Keep the rules engine. Write up why the model could not beat it,
+so the next attempt starts from evidence instead of scratch.
++ [Write-up published, project closed] -> END
+
+=== shadow_scoring ===
+Shadow-score live traffic for a month: the model runs alongside the rules,
+but decisions still come from the rules engine. Collect comparison data.
++ [Shadow month complete, results compiled] -> risk_review
+
+=== risk_review ===
+Risk team reviews the shadow month. They own fraud losses,
+so the switch is genuinely their call.
++ [Risk team approves the switch] @human -> production_model
++ [Not convinced, more model work first] @human ~loop~ -> train_model
++ [Risk team rejects, keep the rules engine] @human -> keep_rules_writeup
+
+=== production_model ===
+Model makes live fraud decisions; auto-retrains weekly.
+Monitor data drift alerts and fraud losses against the agreed threshold.
++ {drift_or_losses} [Drift alert or losses above threshold, auto-fallback] -> fallback_to_rules
++ [Model stable long-term, decommission the rules engine] @human -> END
+
+=== fallback_to_rules ===
+Automatic fallback: rules engine resumes making decisions immediately.
+The whole evaluation starts over from the data audit.
+~ train_attempts = 0
+~ model_beats_rules = false
+~ labels_sufficient = false
+~ drift_or_losses = false
++ [Fallback complete, restart evaluation] ~loop~ -> data_audit

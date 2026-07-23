@@ -1,0 +1,66 @@
+# project: warehouse-wms-deployment
+VAR clean_days = 0
+
+-> migrate_pilot_aisle
+
+=== migrate_pilot_aisle ===
+Migrate the pilot aisle's inventory records to the new warehouse management system.
+Done means records are migrated and reconciled against the old system.
+~ clean_days = 0
++ [Records migrated and reconciled] -> pilot_cycle_counts
+
+=== pilot_cycle_counts ===
+Run picks and putaways for the pilot aisle on the new system and perform the daily cycle count.
+Target: 99.5% inventory accuracy for five consecutive days; a miss resets the streak.
++ [Daily count hit 99.5%] -> record_clean_day
++ [Daily count missed 99.5%] -> reset_streak
++ [Pilot is stalling. Ops manager decides.] @human -> ops_review
+
+=== record_clean_day ===
+Log a clean day toward the five-day accuracy streak.
+~ clean_days += 1
++ {clean_days < 5} [Streak continues; count again tomorrow] ~loop~ -> pilot_cycle_counts
++ {clean_days >= 5} [Five consecutive clean days] -> ops_review
+
+=== reset_streak ===
+A missed count resets the consecutive-day streak to zero.
+~ clean_days = 0
++ [Resume daily counting] ~loop~ -> pilot_cycle_counts
+
+=== ops_review ===
+The ops manager reviews pilot results and decides how to proceed.
++ [Extend the pilot to another aisle] @human ~loop~ -> migrate_pilot_aisle
++ [Green-light the full warehouse] @human -> freeze_check
+
+=== freeze_check ===
+Absolute constraint: nothing changes during the peak-season freeze from November through January.
+If we are not live before the freeze, the whole thing waits for February.
++ [Freeze has not started; proceed to cutover] -> full_migration_weekend
++ [Freeze window reached; hold until February] -> wait_for_february
+
+=== wait_for_february ===
+Hold all changes through peak season; the old system keeps running untouched.
++ [February arrives; freeze lifted] -> full_migration_weekend
+
+=== full_migration_weekend ===
+Migrate the full warehouse to the new system over one weekend.
+-> monday_verification
+
+=== monday_verification ===
+Assess Monday morning's operations on the new system.
++ [Operations normal] -> stabilization_month
++ [Operations degraded] -> rollback
+
+=== rollback ===
+Roll back to the old system; the warehouse resumes on the legacy WMS.
++ [Ops manager schedules a retry] @human ~loop~ -> freeze_check
+
+=== stabilization_month ===
+Run the full warehouse on the new system with the old system on standby.
+Done means one clean month of operations with no rollback-worthy issues.
++ [Issues found; restart the clean-month clock] ~loop~ -> stabilization_month
+* [Clean month complete] -> decommission_old_system
+
+=== decommission_old_system ===
+Retire the old warehouse management system.
+-> END

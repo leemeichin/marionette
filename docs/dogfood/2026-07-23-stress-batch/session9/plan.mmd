@@ -1,0 +1,25 @@
+flowchart TD
+  await_window["<b>await_window</b><br/>Nightly departure window: the train leaves every night, w…"]
+  build["<b>build</b><br/>Build tonight's release artifact from the queued changes."]
+  test["<b>test</b><br/>Run the full automated test suite against tonight's artif…"]
+  deploy["<b>deploy</b><br/>Deploy tonight's artifact to production, fully unattended."]
+  monitor["<b>monitor</b><br/>Watch production health signals for the new release; moni…"]
+  rollback["<b>rollback</b><br/>Automatically roll back to the previous known-good releas…"]
+  await_window -- "Changes queued, train departs" --> build
+  await_window -. "↻ Nothing to ship tonight, idle until tomorrow" .-> await_window
+  await_window -- "✋ Retire the release train" --> END
+  build -- "Build succeeded" --> test
+  build -. "↻ Build failed, changes ride tomorrow's train" .-> await_window
+  test -- "All tests green" --> deploy
+  test -. "↻ Tests failed, release requeued for tomorrow night" .-> await_window
+  deploy -- "Deploy is live" --> monitor
+  deploy -. "↻ Deploy failed, retry now" .-> deploy
+  deploy -. "↻ Deploy persistently stuck, release rides tomorrow's train instead" .-> await_window
+  monitor -- "Incident traced to this release" --> rollback
+  monitor -. "↻ Release healthy, keep monitoring until the next window" .-> await_window
+  rollback -. "↻ Rolled back, release back on the train" .-> await_window
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 2 stroke:#c62828,stroke-width:3px;

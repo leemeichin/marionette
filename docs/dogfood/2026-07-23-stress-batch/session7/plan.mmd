@@ -1,0 +1,17 @@
+flowchart TD
+  ingest["<b>ingest</b><br/>Pull the nightly dumps from the vendor SFTP drop; vendor …"]
+  transform["<b>transform</b><br/>Normalize the dumps into the warehouse schema; mapping bu…"]
+  reconcile["<b>reconcile</b><br/>Reconcile row counts against the source and patch the map…"]
+  publish["<b>publish</b><br/>Publish the curated tables, write the audit trail, and no…"]
+  ingest -- "Dump retrieved" --> transform
+  ingest -. "↻ Vendor outage, retry tomorrow night" .-> ingest
+  transform -- "Transform clean" --> publish
+  transform -. "↻ Mapping bugs found, reconcile and patch {patch_cycles &lt; 5}" .-> reconcile
+  transform -- "✋ Five patch cycles exhausted, page the on-call {patch_cycles &gt;= 5}" --> END
+  reconcile -- "Patched, run the transform again" --> transform
+  publish --> END
+  END(((END)))
+  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
+  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
+  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
+  linkStyle 4 stroke:#c62828,stroke-width:3px;

@@ -1,0 +1,70 @@
+# project: wedding-next-june
+// Wedding planned for next June. Venue first, then guest list, vendors,
+// invitations, RSVPs, and final headcount. Venue contingency both sides
+// of the deposit.
+
+VAR pushback_rounds = 0
+
+-> venue_touring
+
+=== venue_touring ===
+Tour candidate venues until we find one we both love.
+Done when a venue clears the bar for both of us.
++ [No winner yet, keep touring] ~loop~ -> venue_touring
++ [We both love this one] @human -> book_venue
+
+=== book_venue ===
+Book the chosen venue with a deposit; paying the deposit locks the wedding date.
++ [Pay the deposit, date locked] @human -> guest_list_drafting
++ [Venue falls through before the deposit] ~loop~ -> venue_touring
+
+=== guest_list_drafting ===
+Draft the guest list with both families and gather the parents' input.
+Parents can push back a couple of rounds before we close it out.
+~ pushback_rounds += 1
++ {pushback_rounds <= 2} [Parents push back, run another round] ~loop~ -> guest_list_drafting
++ [Families are aligned enough] -> guest_list_final_call
++ [Venue falls through] -> venue_insurance
+
+=== guest_list_final_call ===
+The two of us make the final call on the guest list.
++ [Final guest list locked] @human -> caterer_tastings
++ [Venue falls through] -> venue_insurance
+
+=== caterer_tastings ===
+Run caterer tastings until one stands out to both of us.
++ [Not the one, book another tasting] ~loop~ -> caterer_tastings
++ [We pick this caterer] @human -> photographer_search
++ [Venue falls through] -> venue_insurance
+
+=== photographer_search ===
+Meet and shortlist photographers until we find our match.
++ [Keep looking] ~loop~ -> photographer_search
++ [Book this photographer] @human -> send_invitations
++ [Venue falls through] -> venue_insurance
+
+=== send_invitations ===
+Send the invitations four months before the wedding date.
++ [Invitations are out] -> chase_rsvps
++ [Venue falls through] -> venue_insurance
+
+=== chase_rsvps ===
+Chase outstanding RSVPs until the responses are in.
++ [Still waiting on replies, keep chasing] ~loop~ -> chase_rsvps
++ [RSVPs are in] -> final_headcount
++ [Venue falls through] -> venue_insurance
+
+=== final_headcount ===
+Give the final headcount to the caterer three weeks before the wedding.
++ [Caterer has the final headcount] -> wedding_day
++ [Venue falls through] -> venue_insurance
+
+=== wedding_day ===
+The wedding itself; everything is locked and delivered.
+-> END
+
+=== venue_insurance ===
+The booked venue has fallen through after the deposit.
+Work the wedding insurance conversation and decide together how to recover.
++ [Rebook a new venue] @human ~loop~ -> venue_touring
++ [Change the date and rebook] @human ~loop~ -> book_venue

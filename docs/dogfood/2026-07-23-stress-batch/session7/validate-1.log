@@ -1,0 +1,11 @@
+plan.mar:4: warning[MAR016]: variable "freshness_sla" is declared but never used
+plan.mar:22: error[MAR007]: phase "publish" is unreachable from "ingest"
+  help: divert or link a choice to it, or remove it
+plan.mar:16: warning[MAR017]: loop choice "Mapping bugs found" is once-only ("*") and can iterate at most once
+  help: use a sticky choice ("+") so the loop can be taken repeatedly
+plan.mar:16: error[MAR009]: potential infinite loop: the cycle through "transform" has no exit path
+  help: add a sibling choice or divert that leaves the loop (e.g. a counter-gated exit or an @human decision)
+plan.mar:25: warning[MAR014]: unverified gate — review manually: {audited} on choice "Audit trail written"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 2 error(s), 3 warning(s)
+exit=1

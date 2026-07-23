@@ -9,6 +9,7 @@ import { CODES, END } from './types.js';
 import { tryConstEval, typeOf, varsIn } from './expr.js';
 import { analyzeGate, eventuallyFalse, type GateContext } from './gates.js';
 import type { ParsedPlan } from './parser.js';
+import { nearest } from './suggest.js';
 
 interface Edge {
   from: string;
@@ -95,6 +96,20 @@ export function validatePlan(plan: ParsedPlan, diagnostics: Diagnostic[]): void 
 
   const gateCtx: GateContext = { variables, mutations };
 
+  // Cycle membership over the unfiltered graph, so gate verdicts can tell a
+  // loop-continue gate from an ordinary one regardless of which edge carries
+  // the ~loop~ mark. False gates only ever remove edges, so a cycle found here
+  // that a false gate would break still gets its structural error below.
+  const allBySource = new Map<string, Edge[]>();
+  for (const node of nodes) {
+    const out: Edge[] = node.choices.map((c) => ({ from: node.id, to: c.target, choice: c, line: c.line }));
+    if (node.divert) out.push({ from: node.id, to: node.divert.target, choice: null, line: node.divert.line });
+    allBySource.set(node.id, out);
+  }
+  const sccAll = tarjan(nodes.map((n) => n.id), allBySource);
+  const onCycleWith = (from: string, to: string) =>
+    from === to || (to !== END && sccAll.get(from) === sccAll.get(to));
+
   // --- Per-gate verdicts -----------------------------------------------------
   const falseGates = new Set<string>(); // choice ids provably never available
   const unverified = new Map<string, { choice: Choice; reason: string }>();
@@ -109,8 +124,10 @@ export function validatePlan(plan: ParsedPlan, diagnostics: Diagnostic[]): void 
           'remove the choice or fix the gate');
       } else if (verdict.status === 'unknown') {
         // A loop-continue gate that provably shuts eventually is a verified
-        // bounded loop, not an unverified gate.
-        if (choice.loop && eventuallyFalse(choice.gate, gateCtx)) continue;
+        // bounded loop, not an unverified gate — whether or not this
+        // particular edge carries the ~loop~ mark.
+        if ((choice.loop || onCycleWith(node.id, choice.target)) &&
+            eventuallyFalse(choice.gate, gateCtx)) continue;
         unverified.set(choice.id, { choice, reason: verdict.reason });
       }
     }
@@ -366,28 +383,3 @@ function tarjan(ids: string[], bySource: Map<string, Edge[]>): Map<string, numbe
   return result;
 }
 
-/** Nearest name by edit distance (≤2), for "did you mean" suggestions. */
-function nearest(name: string, candidates: string[]): string | null {
-  let best: string | null = null;
-  let bestDist = 3;
-  for (const candidate of candidates) {
-    const d = levenshtein(name.toLowerCase(), candidate.toLowerCase());
-    if (d < bestDist) { bestDist = d; best = candidate; }
-  }
-  return best;
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length; const n = b.length;
-  if (m === 0) return n;
-  if (n === 0) return m;
-  let prev = Array.from({ length: n + 1 }, (_, j) => j);
-  for (let i = 1; i <= m; i++) {
-    const row = [i];
-    for (let j = 1; j <= n; j++) {
-      row.push(Math.min(prev[j] + 1, row[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)));
-    }
-    prev = row;
-  }
-  return prev[n];
-}

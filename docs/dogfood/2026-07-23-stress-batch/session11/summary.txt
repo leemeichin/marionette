@@ -1,0 +1,82 @@
+# Plan summary: plan.mar
+
+Starts at **lock_venue**. 13 phases, 4 decision points (phases with 2+ choices), 17 choices overall.
+
+- **Human checkpoints:** "Director signs the venue contract" (at lock_venue); "Terms not right yet — renegotiate" (at lock_venue); "Committee has picked the program" (at select_program); "Replacement chosen — chase their confirmation" (at replacement_pick); "Reduced scope approved" (at downsize_scope); "Go — ticket sales are healthy enough" (at go_no_go); "No-go — ticket sales catastrophically low" (at go_no_go)
+- **Declared loops:** lock_venue → lock_venue ("Terms not right yet — renegotiate"); replacement_pick → chase_confirmations ("Replacement chosen — chase their confirmation")
+- **Gates:** 0 gated choices, of which 0 unverified (review manually)
+- **Variables:** none
+- **Contract hash:** `sha256:c0d446a90e0b…`
+
+## Walkthrough
+
+### lock_venue (start)
+Lock the venue for next spring: negotiate and sign the contract.
+The contract is the big irreversible spend, so the director signs it.
+- **Director signs the venue contract** → run_cfp (**requires a human decision**; repeatable)
+- **Terms not right yet — renegotiate** → lock_venue (**requires a human decision**; loops back; repeatable)
+
+### run_cfp
+Run the call for proposals for six weeks: publicity, submissions, triage.
+Done when the CFP window closes with the submission pool ready for review.
+- **CFP window closed** → select_program
+
+### select_program
+Program committee reviews submissions and picks the talks.
+Done when a full draft program is selected.
+- **Committee has picked the program** → chase_confirmations (**requires a human decision**)
+
+### chase_confirmations
+Chase speaker confirmations for every slot in the draft program.
+Done when every slot is confirmed; any decline sends that slot back to the committee.
+- **All slots confirmed — program is full** → announce_program (repeatable)
+- **A speaker declined** → replacement_pick (repeatable)
+
+### replacement_pick
+Program committee picks a replacement talk for the declined slot.
+- **Replacement chosen — chase their confirmation** → chase_confirmations (**requires a human decision**; loops back; repeatable)
+
+### announce_program
+Announce the program and open ticket sales.
+Done when the program is public and tickets are on sale.
+- **Program announced, tickets selling** → sponsorship_checkpoint
+
+### sponsorship_checkpoint
+Sponsorships have been running alongside; at three months out, review progress
+against the sponsorship target.
+- **At or above 60% of the sponsorship target** → final_prep
+- **Under 60% of the sponsorship target** → downsize_scope
+
+### downsize_scope
+Downsize catering and the after-party to fit the sponsorship shortfall,
+rather than cancel the event.
+- **Reduced scope approved** → final_prep (**requires a human decision**)
+
+### final_prep
+Final logistics: schedule, AV, catering at the agreed scope, volunteers.
+Done when everything is ready for the go/no-go review.
+- **Ready for the go/no-go review** → go_no_go
+
+### go_no_go
+Two weeks before the date: go/no-go review with the director on ticket sales
+and overall readiness.
+- **Go — ticket sales are healthy enough** → run_event (**requires a human decision**)
+- **No-go — ticket sales catastrophically low** → postpone_and_refund (**requires a human decision**)
+
+### postpone_and_refund
+Postpone the conference to autumn and refund every ticket holder.
+Done when refunds are processed and the postponement is announced.
+- **Refunds issued, postponement announced** → END
+
+### run_event
+Run the conference for its 300 attendees.
+- **Event delivered** → wrap_up
+
+### wrap_up
+Pay the invoices and run the retrospective.
+Done when finances are settled and lessons are recorded.
+- **Invoices paid, retro complete** → END
+
+## Compiler report
+
+No defects, no warnings. The plan is structurally sound: every phase is reachable, every path has an exit, and all declared loops have a verified exit.

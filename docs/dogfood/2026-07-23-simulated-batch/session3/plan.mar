@@ -1,0 +1,49 @@
+# project: mysql-to-postgres-migration
+VAR spike_attempts = 0
+
+-> spike_replication
+
+=== spike_replication ===
+Spike pglogical-style replication tooling to prove MySQL-to-Postgres replication can be made reliable. Done means replication runs cleanly against a production-like dataset, or we conclude it cannot be made reliable within two attempts.
+~ spike_attempts += 1
+* [Replication is reliable] -> cutover_planning
++ {spike_attempts < 2} [Fiddly — adjust and retry the spike] ~loop~ -> spike_replication
+* {spike_attempts >= 2} [Replication cannot be made reliable] -> dual_write_fallback
+
+=== dual_write_fallback ===
+Fall back to dual writes at the application layer: writes go to both MySQL and Postgres until parity is proven. Slower but safer. Done means dual writes are live and data parity checks pass.
+* [Dual writes working with verified parity] -> cutover_planning
+* [Dual-write approach also blocked — abandon migration for now] @human -> END
+
+=== cutover_planning ===
+Draft the cutover plan: sequencing, maintenance window, verification steps, and the rollback procedure to MySQL. Done means a written plan ready for DBA review.
+* [Cutover plan drafted] -> dba_signoff
+
+=== dba_signoff ===
+Priya (DBA) reviews the cutover plan. Nothing touches production without her sign-off.
+* [Priya approves the cutover plan] @human -> cutover
++ [Priya requests changes] @human ~loop~ -> cutover_planning
+
+=== cutover ===
+Execute the cutover from MySQL to Postgres during the agreed maintenance window, following the signed-off plan. Done means Postgres is serving as the primary.
+* [Cutover completed in the window] -> monitor_48h
+* [Cutover failed mid-window] -> rollback_regroup
+
+=== monitor_48h ===
+Watch error rates and key metrics for 48 hours after cutover. Done means 48 hours elapsed with error rates within normal bounds.
+* [Error rates normal for 48 hours] -> stability_week
+* [Error rates spiked] -> rollback_regroup
+
+=== rollback_regroup ===
+Roll back to MySQL as the primary and regroup: capture what went wrong and revise the approach before any retry.
++ [Retry with a revised cutover plan] @human ~loop~ -> cutover_planning
+* [Abandon the migration] @human -> END
+
+=== stability_week ===
+Postgres runs as primary for a full week. Done means one week of stable operation with no regressions.
+* [Stable for a full week] -> decommission
+* [Instability emerged during the week] -> rollback_regroup
+
+=== decommission ===
+Decommission the old MySQL primary: final backups, revoke write paths, and retire the hardware or instance.
+-> END

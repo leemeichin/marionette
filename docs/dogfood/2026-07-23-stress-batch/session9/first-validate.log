@@ -1,0 +1,6 @@
+plan.mar:34: warning[MAR014]: unverified gate — review manually: {deploy_attempts < 5} on choice "Deploy failed, retry now"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:35: warning[MAR014]: unverified gate — review manually: {deploy_attempts >= 5} on choice "Tonight's retry budget spent, release rides tomorrow's train"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 2 warning(s)
+exit=1

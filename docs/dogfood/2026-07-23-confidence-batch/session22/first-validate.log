@@ -1,0 +1,18 @@
+plan.mar:32: warning[MAR014]: unverified gate — review manually: cannot statically verify loop exit {runs >= 5}
+  32 | + {runs >= 5} [Five runs used up] -> finance_review
+  help: the compiler only verifies constant gates and monotonic counters; confirm this exit can occur
+plan.mar:24: warning[MAR014]: unverified gate — review manually: cannot statically verify loop exit {clean_streak >= 2}
+  24 | + {clean_streak >= 2} [Two clean in a row, call it done early] -> finance_review
+  help: the compiler only verifies constant gates and monotonic counters; confirm this exit can occur
+plan.mar:26: warning[MAR014]: unverified gate — review manually: cannot statically verify loop exit {clean_streak < 2 && runs >= 5}
+  26 | + {clean_streak < 2 && runs >= 5} [Five runs used up] -> finance_review
+  help: the compiler only verifies constant gates and monotonic counters; confirm this exit can occur
+plan.mar:25: warning[MAR014]: unverified gate — review manually: {clean_streak < 2 && runs < 5} on choice "Streak not proven yet, run again"
+  25 | + {clean_streak < 2 && runs < 5} [Streak not proven yet, run again] ~loop~ -> run_reconciliation
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:31: warning[MAR014]: unverified gate — review manually: {runs < 5} on choice "Retry the nightly reconciliation"
+  31 | + {runs < 5} [Retry the nightly reconciliation] ~loop~ -> run_reconciliation
+  help: the compiler only verifies constant gates and monotonic counters
+✗ plan.mar: 0 errors, 5 warnings
+  (--strict treats warnings as failures; zero errors is the authoring bar)
+exit=1

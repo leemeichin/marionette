@@ -1,0 +1,59 @@
+# Plan summary: plan.mar
+
+Starts at **build_mvp**. 8 phases, 5 decision points (phases with 2+ choices), 15 choices overall.
+
+- **Human checkpoints:** "Four cycles and still below target" (at closed_beta); "Architecture is sound, keep working the beta" (at architecture_review); "Architecture needs rework, rebuild the app" (at architecture_review); "Not worth saving, stop here" (at architecture_review); "Rejected three times, something fundamental is wrong" (at app_store_submission); "Address the fundamental issue and rebuild" (at rejection_escalation); "Shelve the launch" (at rejection_escalation); "Marketing confirms the launch date, go live" (at launch_scheduling); "Serious incident, pull the app from the store" (at launch_monitoring)
+- **Declared loops:** closed_beta → closed_beta ("Iterate on beta feedback"); architecture_review → closed_beta ("Architecture is sound, keep working the beta"); architecture_review → build_mvp ("Architecture needs rework, rebuild the app"); app_store_submission → app_store_submission ("Rejected, fix and resubmit"); rejection_escalation → build_mvp ("Address the fundamental issue and rebuild"); launch_monitoring → closed_beta ("Serious incident, pull the app from the store")
+- **Gates:** 4 gated choices, of which 0 unverified (review manually)
+- **Variables:** beta_cycles: number = 0, submissions: number = 0
+- **Contract hash:** `sha256:042d6d8a3ba9…`
+
+## Walkthrough
+
+### build_mvp (start)
+Build the MVP: the smallest version of the app worth putting in testers' hands.
+Done when the core flows work end to end on a real device.
+- **MVP is ready for testers** → closed_beta (repeatable)
+
+### closed_beta
+Closed beta via TestFlight: ship a build, collect feedback and crash reports, fix, repeat.
+Done when the crash-free rate is above 99.5%.
+- on entry: `beta_cycles += 1`
+- **Crash-free rate is above 99.5%** → app_store_submission (repeatable)
+- **Iterate on beta feedback** → closed_beta (only if `beta_cycles < 4`; loops back; repeatable)
+- **Four cycles and still below target** → architecture_review (only if `beta_cycles >= 4`; **requires a human decision**; repeatable)
+
+### architecture_review
+The hard conversation: is the app architecture actually sound, or are we polishing something structurally broken?
+- **Architecture is sound, keep working the beta** → closed_beta (**requires a human decision**; loops back; repeatable)
+- **Architecture needs rework, rebuild the app** → build_mvp (**requires a human decision**; loops back; repeatable)
+- **Not worth saving, stop here** → END (**requires a human decision**)
+
+### app_store_submission
+Submit to the App Store for review. Rejections are expected: read the feedback, fix, resubmit.
+- on entry: `submissions += 1`
+- **Apple approved the app** → launch_scheduling (repeatable)
+- **Rejected, fix and resubmit** → app_store_submission (only if `submissions < 3`; loops back; repeatable)
+- **Rejected three times, something fundamental is wrong** → rejection_escalation (only if `submissions >= 3`; **requires a human decision**; repeatable)
+
+### rejection_escalation
+Three App Store rejections means the problem is not cosmetic. Escalated to the project owner to decide the path forward.
+- **Address the fundamental issue and rebuild** → build_mvp (**requires a human decision**; loops back; repeatable)
+- **Shelve the launch** → END (**requires a human decision**)
+
+### launch_scheduling
+The app is approved. Marketing picks the actual launch date; that is their call, not engineering's.
+- **Marketing confirms the launch date, go live** → launch_monitoring (**requires a human decision**; repeatable)
+
+### launch_monitoring
+The app is live. Monitor crash rates, reviews, and support channels closely for one week.
+- **Serious incident, pull the app from the store** → closed_beta (**requires a human decision**; loops back; repeatable)
+- **First week is clean** → maintenance_handover
+
+### maintenance_handover
+Hand the app over to the maintenance team: docs, dashboards, on-call. Project complete.
+- otherwise → END
+
+## Compiler report
+
+No defects, no warnings. The plan is structurally sound: every phase is reachable, every path has an exit, and all declared loops have a verified exit.

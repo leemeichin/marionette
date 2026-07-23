@@ -14,10 +14,37 @@ import type { Diagnostic, PlanState, Trajectory } from './types.js';
 import { compile, formatDiagnostics } from './compile.js';
 import { renderMermaid } from './render.js';
 import { summarize } from './summarize.js';
+import { nearest } from './suggest.js';
+import { styleFor } from './term.js';
 import {
   DriftError, WalkError, advance, bindState, frontier, initState, parseState,
   serializeState, takeChoice,
 } from './state.js';
+
+const err = styleFor(process.stderr);
+const out = styleFor(process.stdout);
+
+const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'state', 'help', 'version'];
+const STATE_SUBCOMMANDS = ['init', 'show', 'choose', 'advance'];
+
+function readTextFile(file: string, what = 'plan'): string {
+  try {
+    return readFileSync(file, 'utf8');
+  } catch (e) {
+    const reason = (e as NodeJS.ErrnoException).code === 'ENOENT'
+      ? 'no such file' : (e as Error).message;
+    throw new UsageError(`cannot read ${what} ${file}: ${reason}`);
+  }
+}
+
+function cliVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    return pkg.version ?? '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
+}
 
 const USAGE = `marionette — compiled project trajectories for AI agents
 
@@ -70,24 +97,26 @@ function parseArgs(argv: string[]): Args {
 
 class UsageError extends Error {}
 
-function readSource(file: string): { trajectory: Trajectory; diagnostics: Diagnostic[]; ok: boolean } {
-  let text: string;
-  try {
-    text = readFileSync(file, 'utf8');
-  } catch (e) {
-    throw new UsageError(`cannot read ${file}: ${(e as Error).message}`);
-  }
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+function readSource(file: string): { trajectory: Trajectory; diagnostics: Diagnostic[]; ok: boolean; source?: string } {
+  const text = readTextFile(file);
   if (file.endsWith('.json')) {
-    const trajectory = JSON.parse(text) as Trajectory;
+    let trajectory: Trajectory;
+    try {
+      trajectory = JSON.parse(text) as Trajectory;
+    } catch {
+      throw new UsageError(`${file} is not valid JSON`);
+    }
     if (!trajectory.hash || !trajectory.nodes) throw new UsageError(`${file} is not a trajectory document`);
     return { trajectory, diagnostics: [], ok: true };
   }
   const result = compile(text, { file });
   if (!result.trajectory) {
-    process.stderr.write(formatDiagnostics(result.diagnostics, file) + '\n');
+    process.stderr.write(formatDiagnostics(result.diagnostics, file, { source: text, style: err }) + '\n');
     throw new UsageError(`${file} did not compile`);
   }
-  return { trajectory: result.trajectory, diagnostics: result.diagnostics, ok: result.ok };
+  return { trajectory: result.trajectory, diagnostics: result.diagnostics, ok: result.ok, source: text };
 }
 
 function output(flags: Args['flags'], fallback: string | null, content: string): void {
@@ -116,8 +145,9 @@ function loadState(trajectory: Trajectory, file: string): PlanState {
 
 function printFrontier(trajectory: Trajectory, state: PlanState): void {
   const node = trajectory.nodes.find((n) => n.id === state.current);
-  process.stdout.write(`current: ${state.current}${state.status === 'completed' ? ' (completed)' : ''}\n`);
-  if (node?.body) process.stdout.write(node.body + '\n');
+  const done = state.status === 'completed' ? out.green(' (completed)') : '';
+  process.stdout.write(`current: ${out.bold(state.current)}${done}\n`);
+  if (node?.body) process.stdout.write(out.dim(node.body) + '\n');
   const vars = Object.entries(state.variables);
   if (vars.length > 0) {
     process.stdout.write('variables: ' + vars.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ') + '\n');
@@ -131,12 +161,12 @@ function printFrontier(trajectory: Trajectory, state: PlanState): void {
   process.stdout.write('choices:\n');
   for (let i = 0; i < options.length; i++) {
     const { choice, blocked } = options[i];
-    const marks = [choice.human ? '@human' : null, choice.loop ? '~loop~' : null,
-      choice.gate ? `{${choice.gate.source}}` : null].filter(Boolean).join(' ');
-    const status = blocked ? `  [unavailable: ${blocked}]` : '';
-    process.stdout.write(`  [${i}] ${choice.label}${marks ? ' ' + marks : ''} -> ${choice.target}${status}\n`);
+    const marks = [choice.human ? out.magenta('@human') : null, choice.loop ? out.cyan('~loop~') : null,
+      choice.gate ? out.dim(`{${choice.gate.source}}`) : null].filter(Boolean).join(' ');
+    const line = `  [${i}] ${choice.label}${marks ? ' ' + marks : ''} -> ${choice.target}`;
+    process.stdout.write(blocked ? out.dim(`${line}  [unavailable: ${blocked}]`) + '\n' : line + '\n');
   }
-  if (node?.divert) process.stdout.write(`  (fallthrough) -> ${node.divert.target}\n`);
+  if (node?.divert) process.stdout.write(out.dim(`  (fallthrough) -> ${node.divert.target}\n`));
 }
 
 export function run(argv: string[]): number {
@@ -146,8 +176,8 @@ export function run(argv: string[]): number {
       process.stdout.write(USAGE);
       return command ? 0 : 2;
     }
-    if (command === 'version' || command === '--version') {
-      process.stdout.write('marionette 0.1.0\n');
+    if (command === 'version' || command === '--version' || command === '-v') {
+      process.stdout.write(`marionette ${cliVersion()}\n`);
       return 0;
     }
 
@@ -156,15 +186,19 @@ export function run(argv: string[]): number {
         const { positional, flags } = parseArgs(rest);
         const file = positional[0];
         if (!file) throw new UsageError('compile: missing <plan.mar>');
-        const text = readFileSync(file, 'utf8');
+        const text = readTextFile(file);
         const result = compile(text, { file });
         if (result.diagnostics.length > 0) {
-          process.stderr.write(formatDiagnostics(result.diagnostics, file) + '\n');
+          process.stderr.write(formatDiagnostics(result.diagnostics, file, { source: text, style: err }) + '\n');
         }
         if (!result.ok || !result.trajectory) return 1;
         if (flags['strict'] && result.diagnostics.length > 0) return 1;
         const fallback = file.replace(/\.mar$/, '') + '.trajectory.json';
         output(flags, fallback, JSON.stringify(result.trajectory, null, 2) + '\n');
+        const choices = result.trajectory.nodes.reduce((n, node) => n + node.choices.length, 0);
+        process.stderr.write(err.green('✓') +
+          ` compiled ${result.trajectory.nodes.length} phases, ${choices} choices ` +
+          err.dim(`(${result.trajectory.hash.slice(0, 19)}…)`) + '\n');
         return 0;
       }
 
@@ -172,16 +206,22 @@ export function run(argv: string[]): number {
         const { positional, flags } = parseArgs(rest);
         const file = positional[0];
         if (!file) throw new UsageError('validate: missing <plan.mar>');
-        const text = readFileSync(file, 'utf8');
+        const text = readTextFile(file);
         const result = compile(text, { file });
         if (result.diagnostics.length > 0) {
-          process.stderr.write(formatDiagnostics(result.diagnostics, file) + '\n');
+          process.stderr.write(formatDiagnostics(result.diagnostics, file, { source: text, style: err }) + '\n');
         }
         const errors = result.diagnostics.filter((d) => d.severity === 'error').length;
         const warnings = result.diagnostics.length - errors;
-        process.stderr.write(`${basename(file)}: ${errors} error(s), ${warnings} warning(s)\n`);
+        const failed = !result.ok || (Boolean(flags['strict']) && warnings > 0);
+        const mark = failed ? err.red('✗') : err.green('✓');
+        const counts = `${count(errors, 'error')}, ${count(warnings, 'warning')}`;
+        process.stderr.write(`${mark} ${basename(file)}: ${counts}\n`);
         if (!result.ok) return 1;
-        if (flags['strict'] && warnings > 0) return 1;
+        if (flags['strict'] && warnings > 0) {
+          process.stderr.write(err.dim('  (--strict treats warnings as failures; zero errors is the authoring bar)\n'));
+          return 1;
+        }
         return 0;
       }
 
@@ -189,9 +229,9 @@ export function run(argv: string[]): number {
         const { positional, flags } = parseArgs(rest);
         const file = positional[0];
         if (!file) throw new UsageError('render: missing <plan.mar|.json>');
-        const { trajectory, ok, diagnostics } = readSource(file);
+        const { trajectory, ok, diagnostics, source } = readSource(file);
         if (!ok) {
-          process.stderr.write(formatDiagnostics(diagnostics, file) + '\n');
+          process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
           return 1;
         }
         let state: PlanState | null = null;
@@ -222,9 +262,9 @@ export function run(argv: string[]): number {
         const { positional, flags } = parseArgs(stateRest);
         const file = positional[0];
         if (!sub || !file) throw new UsageError('state: expected "state <init|show|choose|advance> <plan>"');
-        const { trajectory, ok, diagnostics } = readSource(file);
+        const { trajectory, ok, diagnostics, source } = readSource(file);
         if (!ok) {
-          process.stderr.write(formatDiagnostics(diagnostics, file) + '\n');
+          process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
           process.stderr.write('refusing to walk a plan that does not validate\n');
           return 1;
         }
@@ -264,11 +304,18 @@ export function run(argv: string[]): number {
           printFrontier(trajectory, state);
           return 0;
         }
-        throw new UsageError(`unknown state subcommand "${sub}"`);
+        {
+          const near = nearest(sub, STATE_SUBCOMMANDS);
+          const hint = near ? `; did you mean "state ${near}"?` : '';
+          throw new UsageError(`unknown state subcommand "${sub}"${hint}`);
+        }
       }
 
-      default:
-        throw new UsageError(`unknown command "${command}"\n\n${USAGE}`);
+      default: {
+        const near = nearest(command, COMMANDS);
+        const hint = near ? `; did you mean "${near}"?` : '';
+        throw new UsageError(`unknown command "${command}"${hint}\n\n${USAGE}`);
+      }
     }
   } catch (e) {
     if (e instanceof DriftError) {
@@ -276,11 +323,11 @@ export function run(argv: string[]): number {
       return 3;
     }
     if (e instanceof WalkError) {
-      process.stderr.write(`error: ${e.message}\n`);
+      process.stderr.write(`${err.red('error:')} ${e.message}\n`);
       return 1;
     }
     if (e instanceof UsageError) {
-      process.stderr.write(`error: ${e.message}\n`);
+      process.stderr.write(`${err.red('error:')} ${e.message}\n`);
       return 2;
     }
     throw e;

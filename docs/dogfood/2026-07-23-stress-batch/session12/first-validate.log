@@ -1,0 +1,14 @@
+plan.mar:12: warning[MAR014]: unverified gate — review manually: {labels_sufficient} on choice "Labeled history is deep enough"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:13: warning[MAR014]: unverified gate — review manually: {!labels_sufficient} on choice "Labeled history too thin"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:24: warning[MAR014]: unverified gate — review manually: {model_beats_rules} on choice "Model beats rules on precision and recall"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:25: warning[MAR014]: unverified gate — review manually: {train_attempts < 5} on choice "Not there yet, iterate again"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:26: warning[MAR014]: unverified gate — review manually: {train_attempts >= 5} on choice "Several serious attempts, still losing"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar:48: warning[MAR014]: unverified gate — review manually: {drift_or_losses} on choice "Drift alert or losses above threshold, auto-fallback"
+  help: the compiler only verifies constant gates and monotonic counters
+plan.mar: 0 error(s), 6 warning(s)
+exit=1

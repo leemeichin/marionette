@@ -1,0 +1,3 @@
+# Session 4 notes (as given)
+
+> Launching our first mobile app. Build the MVP, then closed beta via TestFlight — we keep iterating on beta feedback until the crash-free rate is above 99.5%, but if we're still below that after four beta cycles we need to have a hard conversation about whether the app architecture is sound. Then submit to the App Store; expect rejections, just fix and resubmit, but if Apple rejects us three times escalate to me because something's fundamentally wrong. Marketing decides the actual launch date — that's their call not ours. After launch we monitor for a week; a serious incident means we pull the app and go back to beta, otherwise we hand over to the maintenance team and we're done.

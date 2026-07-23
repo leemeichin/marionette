@@ -1,0 +1,49 @@
+# project: oncall-overhaul
+VAR shadow_cycles = 0
+
+-> alert_audit
+
+=== alert_audit ===
+Audit every alert; delete or tune the noisy ones.
+Done looks like a full pass over the alert inventory with deletions and tuning applied, aiming for under ten pages per week.
++ [Not livable yet — keep tuning] @human ~loop~ -> alert_audit
++ [Under ten pages a week and actually livable] @human -> rotation_design
+
+=== rotation_design ===
+Design the new on-call rotation to run alongside the old one.
+Done looks like a rota schedule ready to enter its first shadow cycle.
+* [Design ready — start shadowing] -> shadow_cycle
+
+=== shadow_cycle ===
+Run the new rota alongside the old one for a full cycle, with new folks shadowing every page.
+~ shadow_cycles += 1
++ [Cycle complete — capture what shadowing found] -> runbook_gap_writeup
+
+=== runbook_gap_writeup ===
+Write up every runbook gap found during shadowing; gaps must be documented before the next cycle starts.
++ {shadow_cycles < 2} [Gaps written up — run the next shadow cycle] ~loop~ -> shadow_cycle
++ {shadow_cycles >= 2} [Shadowing complete — request sign-off] -> primary_signoff
+
+=== primary_signoff ===
+The SRE lead reviews the shadow cycles and decides whether the new rotation goes primary.
++ [Signed off — new rota goes primary] @human -> first_month_primary
++ [Not ready — run another shadow cycle] @human ~loop~ -> shadow_cycle
+
+=== first_month_primary ===
+The new rotation is primary for its first month, with the old rota kept on standby.
+Watch incidents for anything that exposes a flaw in the rotation design itself.
++ [Stable month — retire the old rota] @human -> retire_old_rota
++ [Incident exposed a rotation design flaw — revert to old rota] @human -> revert_and_fix
+
+=== revert_and_fix ===
+The old rota is primary again while the rotation design flaw is fixed.
+Done looks like a corrected design ready to re-prove itself in one more shadow cycle.
++ [Design fixed — re-run one shadow cycle] ~loop~ -> shadow_cycle
+
+=== retire_old_rota ===
+The old rota is switched off and archived; the new rotation is the only rotation.
+* [Old rota retired] -> blameless_review
+
+=== blameless_review ===
+Blameless review of the whole overhaul: alert tuning, shadowing, the cutover, and any revert, with lessons written down.
+-> END

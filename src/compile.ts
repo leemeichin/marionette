@@ -8,6 +8,7 @@ import type { Diagnostic, Trajectory } from './types.js';
 import { SPEC_VERSION } from './types.js';
 import { parsePlan } from './parser.js';
 import { validatePlan } from './validate.js';
+import { styleFor, type Style } from './term.js';
 
 export interface CompileResult {
   /** Present whenever the plan parsed far enough to build a graph (even with errors). */
@@ -67,13 +68,30 @@ function canonicalize(value: unknown): string {
   return '{' + entries.join(',') + '}';
 }
 
+export interface FormatOptions {
+  /** Plan source text; when given, each located diagnostic shows its line. */
+  source?: string;
+  style?: Style;
+}
+
 /** Render diagnostics in a compiler-style, line-numbered format. */
-export function formatDiagnostics(diagnostics: Diagnostic[], file = 'plan.mar'): string {
+export function formatDiagnostics(
+  diagnostics: Diagnostic[],
+  file = 'plan.mar',
+  options: FormatOptions = {},
+): string {
+  const s = options.style ?? styleFor({ isTTY: false });
+  const sourceLines = options.source?.split(/\r?\n/);
   const lines: string[] = [];
   for (const d of diagnostics) {
     const loc = d.line !== undefined ? `${file}:${d.line}` : file;
-    lines.push(`${loc}: ${d.severity}[${d.code}]: ${d.message}`);
-    if (d.suggestion) lines.push(`  help: ${d.suggestion}`);
+    const severity = d.severity === 'error' ? s.red(s.bold('error')) : s.yellow(s.bold('warning'));
+    lines.push(`${s.dim(loc + ':')} ${severity}${s.dim(`[${d.code}]`)}: ${d.message}`);
+    if (sourceLines && d.line !== undefined && sourceLines[d.line - 1] !== undefined) {
+      const no = String(d.line);
+      lines.push(s.dim(`  ${no} | `) + sourceLines[d.line - 1]);
+    }
+    if (d.suggestion) lines.push(`  ${s.cyan('help:')} ${d.suggestion}`);
   }
   return lines.join('\n');
 }

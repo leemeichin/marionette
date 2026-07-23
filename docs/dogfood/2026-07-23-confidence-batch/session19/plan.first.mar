@@ -1,0 +1,54 @@
+# project: staff-engineer-hire-platform
+VAR months_elapsed = 0
+VAR negotiation_rounds = 0
+
+=== sourcing_and_screening ===
+Source and screen candidates for the platform team staff engineer role.
+Done when the screen produces a strong panel pipeline for this month.
+~ months_elapsed += 1
++ [Strong panel pipeline ready] -> panel_interviews
++ {months_elapsed < 3} [Keep sourcing another month] ~loop~ -> sourcing_and_screening
++ {months_elapsed >= 3} [Three months, no hirable candidate] -> rescope_review
+
+=== rescope_review ===
+Eng director revisits the role: keep searching for a staff engineer,
+or re-scope to a senior contractor instead.
++ [Continue the staff search] @human ~loop~ -> sourcing_and_screening
+* [Re-scope to a senior contractor] @human -> contractor_pivot
+
+=== contractor_pivot ===
+Engage a senior contractor for the platform team instead of a staff hire.
+-> END
+
+=== panel_interviews ===
+Run the panel interview loop with the candidate.
+Done when all panel feedback is submitted.
+-> debrief
+
+=== debrief ===
+Panel debrief: weigh feedback and decide whether to extend an offer.
+~ negotiation_rounds = 0
++ [Strong hire, draft an offer] -> offer_approval
++ [No hire, back to the pipeline] ~loop~ -> sourcing_and_screening
+
+=== offer_approval ===
+Eng director reviews the offer terms; no offer goes out without approval.
++ [Director approves, send the offer] @human -> offer_negotiation
++ [Director wants changes, revisit terms] @human ~loop~ -> debrief
+
+=== offer_negotiation ===
+Offer is out; candidate responds. Negotiation can run a couple of rounds.
+~ negotiation_rounds += 1
++ [Candidate accepts] -> background_check
++ {negotiation_rounds < 2} [Counter-offer, revise terms] ~loop~ -> offer_approval
++ {negotiation_rounds >= 2} [Rounds exhausted, no agreement] ~loop~ -> sourcing_and_screening
++ [Candidate declines] ~loop~ -> sourcing_and_screening
+
+=== background_check ===
+Run the background check on the accepted candidate.
++ [Check clears] -> start_date_set
++ [Check fails, reopen the search] ~loop~ -> sourcing_and_screening
+
+=== start_date_set ===
+Agree a start date and hand off to onboarding. The hire is complete.
+-> END
