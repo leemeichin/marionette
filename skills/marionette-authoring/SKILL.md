@@ -59,6 +59,12 @@ Below, `marionette` means whichever form resolved.
 - **Phases are states, not tasks.** 5–15 phases for most projects. Each body
   is 1–3 sentences of prose stating what the phase means and what "done"
   looks like. First line becomes the node title in renders.
+- **Match the plan's weight to the project's stakes.** A weekend migration
+  does not need four counters and a contingency hub; a production cutover
+  does. Add phases, counters and fallback paths the notes imply — not every
+  one the DSL can express. When in doubt, the smaller graph is the better
+  draft: reviewers read it cold, and structure that isn't in the notes is
+  yours to justify.
 - **Every phase needs an exit** — a choice or a divert. Terminal outcomes
   divert to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this
@@ -84,6 +90,19 @@ Below, `marionette` means whichever form resolved.
   The always-available `@human` escape (`+ [Enough. Decide.] @human -> …`)
   is the alternative when no natural counter exists (PRD OQ4 — both are
   acceptable; prefer the counter when the notes imply a budget).
+
+  **`~loop~` placement:** the compiler accepts a cycle once **any one edge
+  on it** carries `~loop~`; put it on the returning edge (the one that
+  jumps back to an earlier phase). When cycles overlap — e.g. several
+  phases all return to one hub — mark the returning edge of *each* cycle;
+  extra `~loop~` marks are harmless, a missing one is MAR008.
+
+  **Sticky edges inside cycles:** every choice on a path the traversal can
+  revisit should be sticky (`+`), not just the `~loop~` edge. A once-only
+  (`*`) choice inside a multi-phase cycle is consumed on the first pass and
+  can strand the second iteration at runtime — and the compiler only warns
+  (MAR017) about the `~loop~` edge itself, so this one is on you. Reserve
+  `*` for edges on straight-line, visited-once paths.
 - **Gates use declared variables only.** Declare every variable with `VAR`
   in the preamble with a typed literal. Prefer gates the compiler can verify
   (constants, monotonic counters). Dynamic-fact gates (e.g.

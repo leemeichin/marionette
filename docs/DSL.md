@@ -41,7 +41,7 @@ Launch to the beta cohort.
 | Choice (sticky) | `+ [Label] -> target` | Repeatable. Use for loop edges. |
 | Gate | `{expr}` before or after the label | Choice is available only while the expression is true. |
 | Human checkpoint | `@human` on a choice | The agent must pause and escalate; only a human may record this decision. |
-| Loop | `~loop~` on a choice | Declares an intentional cycle. Undeclared cycles are compile errors. |
+| Loop | `~loop~` on a choice | Declares an intentional cycle. A cycle is declared when **any one** of its edges carries `~loop~` (convention: the returning edge); overlapping cycles each need a marked edge. Undeclared cycles are compile errors. |
 | Divert | `-> target` on its own line | Fallthrough edge. At most one per phase; must come after choices. |
 | End | `-> END` | Terminal. Reaching it completes the plan. |
 | Metadata | `# key: value` · `# tag` | Plan-level in the preamble, node-level inside a phase. Namespaced keys (`github:issue`) are the extension mechanism. |
@@ -75,3 +75,9 @@ counter**: `~ i += 1` inside the loop with an exit gate `{i >= 3}`. A
 loop-continue gate that provably shuts (`{i < 3}` with an increasing `i`) also
 counts as a verified bounded loop. Everything else is enumerated as an
 unverified-gate warning.
+
+Authoring note: once-only (`*`) choices anywhere **inside** a cycle are
+consumed on the first pass and can strand a later iteration at runtime. The
+compiler warns (MAR017) only when the `~loop~` edge itself is once-only;
+keeping every cycle-participating edge sticky (`+`) is an authoring
+convention, not a compiler guarantee.
