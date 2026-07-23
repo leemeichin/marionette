@@ -21,6 +21,18 @@ export {
   type Brief, type BriefChoice, type BriefStatus, type Escalation,
 } from './brief.js';
 export {
+  TRACKERS, LINK_KEY, SyncEditError, resolveTracker, validateTracker,
+  buildSyncManifest, renderSyncManifest, bindTrackerInSource, linkNodeInSource,
+  syncFileFor,
+  type TrackerProvider, type TrackerBinding, type TrackerResolution,
+  type SyncOp, type SyncManifest, type SyncSidecar,
+} from './sync.js';
+export { loadSidecar, saveSidecar } from './sync-store.js';
+export {
+  parseImportSpec, scaffoldPlan, ImportError,
+  type ImportIssue, type ImportSpec, type ImportMode,
+} from './scaffold.js';
+export {
   RUNTIME_PROTOCOL_VERSION, ProtocolError, parseRuntimeRequest, graphReference,
   type RuntimeRole, type RuntimePrincipal, type ProjectionProfile, type RuntimeBudget,
   type RuntimeRequest, type RuntimeEventKind, type GraphReference, type RuntimeEvent,

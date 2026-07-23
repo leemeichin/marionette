@@ -65,6 +65,34 @@ Below, `marionette` means whichever form resolved.
    validate pass succeeded with zero errors — that is the "first-session
    compile success" data point the Marionette project tracks.
 
+## Starting from an issue tracker (`marionette import`)
+
+When the project already lives in Jira, Linear or GitHub Issues, don't
+transcribe tickets into DSL by hand — fetch and scaffold
+(reference: `docs/SYNC.md` in the marionette repo):
+
+1. **Fetch with the tools in your context** — a GitHub MCP server, a
+   Jira/Linear integration, a CLI. Marionette holds no tracker connection;
+   if you have no tool for the user's tracker, say so and ask them to paste
+   the issue list instead of inventing one.
+2. **Shape the issues as neutral JSON** and let the scaffolder write the DSL:
+
+   ```json
+   { "tracker": "github", "context": "acme/platform",
+     "issues": [ { "id": 12, "title": "Fix login redirect" } ] }
+   ```
+
+   `marionette import issues.json -o plan.mar` emits a compiling draft:
+   `--mode queue` (default) is one work-queue phase with a verified bounded
+   loop — one iteration per issue, O(1) tokens in phase count; `--mode
+   phases` is one linked phase per issue. Treat the draft as raw material
+   for the workflow above — reshape phases, add gates and `@human`
+   checkpoints; the issue links ride along on the metadata.
+3. **Bind the tracker once.** If the user's tracker is ambiguous (or nothing
+   in context says which they use), ask once, then record it in the preamble
+   (`# tracker: github|jira|linear`) so no future session has to re-ask —
+   the plan is the project's memory.
+
 ## Drafting conventions
 
 - **Phases are states, not tasks.** 5–15 phases for most projects. Each body

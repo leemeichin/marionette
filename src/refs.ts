@@ -23,6 +23,7 @@
 
 import type { Diagnostic, Ref } from './types.js';
 import { CODES } from './types.js';
+import { validateNodeTracker, validateTracker } from './sync.js';
 
 type Meta = Record<string, string | string[]>;
 
@@ -213,9 +214,11 @@ export function analyzeMeta(
 
   const planRefs = extractRefs(planMeta, planMeta, warnAt(undefined));
   validateDelivery(planMeta, warnAt(undefined));
+  validateTracker(planMeta, warnAt(undefined));
   for (const node of nodes) {
     node.refs = extractRefs(node.meta, planMeta, warnAt(node.line));
     validateDelivery(node.meta, warnAt(node.line));
+    validateNodeTracker(node.meta, warnAt(node.line));
   }
   return planRefs;
 }

@@ -108,6 +108,31 @@ When you portion work out to subagents, hand each one the phase's work
 packet (body, refs, delivery) — not the whole plan — and collect back the
 evidence + proposed rationale; the choice itself is recorded once, by you.
 
+## Tracker sync (audit export)
+
+If the user wants the plan mirrored on their issue tracker — or the plan
+carries a `# tracker:` tag — the manifest tells you exactly what to do
+(reference: `docs/SYNC.md` in the marionette repo):
+
+1. `marionette sync <plan> --json` → ops: `ensure-issue` (create an issue
+   for an unlinked phase), `comment` (mirror a decision-log entry), `close`
+   (plan completed).
+2. **Apply the ops with the tracker tools in your context** — a GitHub MCP
+   server, a Jira/Linear integration, a CLI. Marionette holds no tracker
+   connection. If no tool for the bound tracker is available, report that
+   and move on — never fabricate a sync or post to the wrong system.
+3. If the manifest says `tracker: null`, the binding is ambiguous: ask the
+   user once, record it with `marionette sync bind <plan> --tracker <t>`,
+   and re-run. The answer is remembered in the plan itself.
+4. Embed each op's `idempotencyKey` in what you post (a trailing marker
+   line) and skip ops whose key already appears on the item — re-syncing
+   must never duplicate comments.
+5. Record results: `marionette sync link <plan> <phase> <issue-id>` for each
+   created issue (it updates the plan and rebinds state — never hand-edit),
+   then `marionette sync mark <plan>` once comments are posted.
+6. Sync at the cadence the plan's `report:` config prescribes: `per-phase`
+   after each recorded step, `at-checkpoints`/`at-end` with those reports.
+
 ## Hard rules
 
 - Never edit the `.mar`, the trajectory JSON, or the state file by hand;

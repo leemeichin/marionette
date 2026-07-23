@@ -128,9 +128,14 @@ else `null` with the id preserved. Malformed values warn (`MAR018`). Repeated
 tags accumulate. The provider/kind sets are open — unknown namespaces stay
 available as raw meta for custom extensions.
 
-Refs are deliberately *references*, not sync: the executor decides what to do
-with them (read the issue for context, comment progress, close on phase exit)
-per its own capabilities. Status sync remains parked (PRD P2).
+Refs are deliberately *references*: the executor decides what to do with
+them (read the issue for context, comment progress, close on phase exit)
+per its own capabilities. When a plan should actively mirror to a tracker —
+issues created per phase, decisions commented, issues closed on completion —
+that is computed, not improvised: `marionette sync` emits a deterministic
+manifest the executor applies with its own tracker tools, and
+`marionette import` scaffolds a plan *from* an existing backlog. See
+[`SYNC.md`](SYNC.md).
 
 ## @human escalation (OQ2 proposal)
 
