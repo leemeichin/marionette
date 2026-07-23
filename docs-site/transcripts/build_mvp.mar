@@ -1,11 +1,24 @@
 // The PRD's illustrative example, completed into a full valid plan.
 # project: build-mvp-example
+# summary: Ship an MVP in evidence-bounded iterations — three attempts to move the metrics, a human launch gate, and a forced pivot-or-kill decision instead of a fourth quiet retry.
+# prompt: """
+We keep polishing instead of shipping. Plan an MVP loop with teeth:
+
+- ship the smallest slice that can produce real usage data
+- iterate only on what the metrics say, three attempts max
+- I decide when it goes to the beta cohort, and I decide whether we
+  pivot or kill — that call must never happen by inertia
+"""
 VAR iteration = 0
 
 -> build_mvp
 
 === build_mvp ===
 Ship the smallest testable slice.
+Cut scope until one user-visible outcome can ship this iteration, then release
+it to real users behind the cheapest guard available. Done means it is live,
+the activation/retention funnel is collecting, and a week of data is in —
+"metrics green" is judged against the targets in the brief, not gut feel.
 ~ iteration += 1
 * [Metrics green] @human -> beta_launch
 + {iteration < 3} [Learnings, go again] ~loop~ -> build_mvp
@@ -13,9 +26,15 @@ Ship the smallest testable slice.
 
 === beta_launch ===
 Launch to the beta cohort and monitor.
+Open the flag to the full beta list, announce it, and watch error rates plus
+the same funnel for two weeks. Done means the cohort is live with no
+regression worth a rollback; after that, ordinary product work takes over.
 -> END
 
 === pivot_or_kill ===
 Three iterations without green metrics: decide whether to pivot or stop.
+Write the one-page account of the three attempts — what shipped, what the
+metrics did, what was learned. That document, not optimism, is the input to
+this decision.
 + [Pivot: new angle, fresh loop] @human ~loop~ -> build_mvp
 * [Kill it] @human -> END

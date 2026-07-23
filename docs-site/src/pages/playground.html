@@ -1,11 +1,4 @@
-<h1>playground</h1>
-<p class="lede">A guided tutorial and a sandbox in one. Write a plan, and
-your browser compiles it with the
-<em>real</em> Marionette compiler (the same TypeScript that runs in the
-CLI, hash and all) and walks it with the <em>real</em> walker. No agent is
-attached here — the part an agent would play is yours to press — but every
-rule is live: gates evaluate, once-only choices exhaust, and
-<code>@human</code> checkpoints refuse the agent actor.</p>
+<h1 class="visually-hidden">Playground</h1>
 
 <noscript><p><strong>The playground needs JavaScript</strong> — it runs the
 compiler in your browser. The <a href="/walkthrough">walkthrough</a> shows
@@ -27,32 +20,34 @@ the same flow as captured terminal sessions.</p></noscript>
 </section>
 
 <div class="pg" data-playground>
-  <section class="pg-editor">
-    <label for="pg-src"><code>playground.mar</code> — edits compile as you type</label>
-    <textarea id="pg-src" spellcheck="false" autocomplete="off" rows="20"></textarea>
+  <section class="pg-editor" aria-label="Plan editor">
+    <div class="pg-toolbar">
+      <label class="pg-example-row" data-examples-row>
+        <span>load example</span>
+        <select data-examples></select>
+      </label>
+      <button type="button" class="pg-tut-enter" data-tut-enter hidden>tutorial</button>
+    </div>
+    <textarea id="pg-src" spellcheck="false" autocomplete="off" aria-label="playground.mar — edits compile as you type"></textarea>
     <div class="pg-diagnostics" data-diagnostics aria-label="compiler diagnostics" role="log"></div>
   </section>
 
-  <section class="pg-viz">
-    <h2 id="pg-graph-h">Graph</h2>
+  <section class="pg-viz" aria-label="Graph and walk">
     <div class="pg-canvas" data-canvas aria-hidden="true"></div>
-    <p class="pg-hint">The picture is a courtesy; the controls below are the
-    real interface. Current phase is lit, taken edges stay lit,
-    <span class="mar-human">@human</span> edges are violet.</p>
-
-    <h2 id="pg-walk-h">Walk it</h2>
     <div class="pg-walk" data-walk>
-      <fieldset class="pg-actor">
-        <legend>Acting as</legend>
-        <label><input type="radio" name="pg-actor" value="agent" checked> agent</label>
-        <label><input type="radio" name="pg-actor" value="human"> human</label>
-      </fieldset>
-      <label for="pg-rationale">Rationale (logged with every step)</label>
-      <input id="pg-rationale" type="text" value="exploring in the playground">
+      <div class="pg-walk-controls">
+        <fieldset class="pg-actor">
+          <legend>acting as</legend>
+          <label><input type="radio" name="pg-actor" value="agent" checked> agent</label>
+          <label><input type="radio" name="pg-actor" value="human"> human</label>
+        </fieldset>
+        <label class="pg-rationale-row">rationale
+          <input id="pg-rationale" type="text" value="exploring in the playground">
+        </label>
+        <button type="button" class="pg-reset" data-reset>↺ reset</button>
+      </div>
       <div class="pg-node" data-node role="status"></div>
       <div class="pg-choices" data-choices></div>
-      <button type="button" class="pg-reset" data-reset>↺ reset walk</button>
-      <h3>Decision log</h3>
       <ol class="pg-log" data-log aria-label="decision log"></ol>
     </div>
   </section>

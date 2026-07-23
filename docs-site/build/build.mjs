@@ -18,7 +18,7 @@ export const PAGES = [
   { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI and skills, write and validate your first plan.' },
   { slug: 'syntax', nav: 'syntax', title: 'Syntax reference — Marionette', desc: 'The .mar language: phases, choices, gates, loops, human checkpoints, variables, metadata.' },
   { slug: 'walkthrough', slugAliases: [], nav: 'walkthrough', title: 'Walkthrough — Marionette', desc: 'An end-to-end session: author a plan, fix compile errors, walk it with an agent, gate it as a human. Every frame is real CLI output.' },
-  { slug: 'playground', nav: 'playground', title: 'Playground — Marionette', desc: 'Guided tutorial + sandbox: write .mar plans, compile them in your browser with the real compiler, and walk them with the real walker.' },
+  { slug: 'playground', nav: 'playground', wide: true, title: 'Playground — Marionette', desc: 'Guided tutorial + sandbox: write .mar plans, compile them in your browser with the real compiler, and walk them with the real walker.' },
   { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'How agents ingest and traverse a plan: state, briefs, escalation, drift and rebind, delivery metadata.' },
   { slug: 'examples', nav: 'examples', title: 'Examples & use-cases — Marionette', desc: 'Worked plans: product iteration loops, replatforms, and Marionette planning its own development.' },
   { slug: 'reference', nav: 'reference', title: 'CLI reference — Marionette', desc: 'Commands, exit codes, and the full compiler diagnostic table (MAR001–MAR019).' },
@@ -102,6 +102,7 @@ export function build() {
   for (const page of PAGES) {
     const fragment = readFileSync(join(src, 'pages', `${page.slug}.html`), 'utf8');
     const html = layout
+      .replaceAll('<main id="main">', page.wide ? '<main id="main" class="wide">' : '<main id="main">')
       .replaceAll('{{title}}', escapeHtml(page.title))
       .replaceAll('{{desc}}', escapeHtml(page.desc))
       .replaceAll('{{nav}}', navFor(page.slug))
@@ -128,6 +129,17 @@ export function build() {
     if (!existsSync(src)) throw new Error(`missing ${src} — run \`npm run build\` at the repo root first`);
     cpSync(src, join(dist, 'lib', f));
   }
+  // Example plans for the playground dropdown, sourced from transcripts/.
+  const EXAMPLES = [
+    { file: 'checkout.mar', label: 'checkout-revamp — the walkthrough plan' },
+    { file: 'checkout-broken.mar', label: 'checkout-revamp — first draft (2 errors to fix)' },
+    { file: 'build_mvp.mar', label: 'build-mvp — the MVP loop' },
+    { file: 'paas_replatform.mar', label: 'paas-replatform — an 18-phase programme' },
+    { file: 'docs-site.mar', label: 'marionette-docs-site — the plan that built this site' },
+  ].map((e) => ({ ...e, source: readFileSync(join(transcripts, e.file), 'utf8') }));
+  writeFileSync(join(dist, 'examples-data.js'),
+    'export const EXAMPLES = ' + JSON.stringify(EXAMPLES, null, 1) + ';\n');
+
   console.log(`built ${PAGES.length} pages → dist/`);
 }
 
