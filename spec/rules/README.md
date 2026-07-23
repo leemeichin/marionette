@@ -113,6 +113,22 @@ agreement); MAR009/MAR010 report once per SCC at the first triggering
 oracle test fails until the matching clause here is updated — which is the
 point: the change has to be legible enough to state twice.
 
-SWI-Prolog ≥ 9 is required (tabling). The oracle test skips loudly when
-`swipl` is not on `PATH`; CI installs it, so agreement is enforced on every
-push.
+## Dependency posture
+
+**Installing marionette requires no Prolog.** The npm package stays
+zero-runtime-dependency: nothing in `src/` or the CLI ever invokes a Prolog
+engine — `marionette facts` is pure TypeScript that prints text, and the
+`.pl` files ship in `spec/` as inert data. A missing `swipl` costs you
+nothing but the ability to run the oracle and the interactive queries.
+
+The engine, when you want those, is **SWI-Prolog ≥ 9** specifically (the
+rules use its tabling and string types) — `apt install swi-prolog-nox`,
+`brew install swi-prolog`. The oracle test skips loudly when `swipl` is not
+on `PATH`; CI installs it, so agreement is enforced on every push regardless
+of contributors' local setups.
+
+If the query surface ever needs to be first-class for every install (or in
+the browser playground), the path is `swipl-wasm` — SWI-Prolog compiled to
+WebAssembly, loadable from npm — rather than bundling platform binaries.
+Deliberately not done here: the oracle's value is CI-side, and a wasm engine
+is a real dependency to take on only when something user-facing wants it.
