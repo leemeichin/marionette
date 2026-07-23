@@ -6,6 +6,9 @@ Usage:
   marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
+  marionette start     <plan.mar|.json> --run <id> [--store dir]
+                       [--principal id] [--role agent|human] [--principal-uri uri]
+  marionette stop      <plan.mar|.json> --run <id> [--store dir]
   marionette state init    <plan.mar|.json> [--state f] [--force]
   marionette state show    <plan.mar|.json> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
@@ -21,3 +24,9 @@ Options:
   --force             Overwrite an existing state file on init
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
   --rationale <text>  Why the step was taken (required for choices)
+  --run <id>           Run id (required by start/stop)
+  --store <dir>        Run store (default: <plan-dir>/.marionette)
+  --create             Start a new run; error if it already exists
+  --principal <id>     Connection principal id (default: agent)
+  --role <role>        Bound connection role: agent or human (default: agent)
+  --principal-uri <u>  Optional provenance URI for decision records

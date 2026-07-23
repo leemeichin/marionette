@@ -2,12 +2,13 @@
 <p class="lede">Phase 1 answers <em>"is this plan sound?"</em>. Execution
 answers <em>"an agent is holding this plan — what exactly does it do next,
 and how does the work come back?"</em> Everything here is
-executor-agnostic: a Claude session running the execution skill, a native
-agent integration, and a CI job all consume the same contract.</p>
+executor-agnostic: a Claude session running the execution skill, a host
+driving the local runtime process, and a CI job all consume the same
+contract.</p>
 
 <h2 id="loop">The executor loop</h2>
 
-<pre class="code"><code>┌─────────────────────────────────────────────────────────────┐
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>┌─────────────────────────────────────────────────────────────┐
 │  marionette brief plan.mar --json      ← "what now?"        │
 │      │                                                      │
 │      ├─ status: active         → do the phase's work, then  │
@@ -61,6 +62,63 @@ the plan parked at the checkpoint, visible in <code>brief</code>,
 refuses <code>--actor agent</code> on <code>@human</code> choices with the
 <code>human-checkpoint</code> error code — so escalation is enforced, not
 advisory.</p>
+
+<h2 id="runtime">The local runtime: <code>marionette start</code></h2>
+
+<p>The CLI loop above is one executor shape. The other is a
+<strong>single-writer runtime process</strong>: <code>marionette start</code>
+holds the compiled graph and walker behind newline-delimited JSON on
+stdin/stdout, so an agent host consumes lifecycle events programmatically
+and injects only the compact projection the model needs. Same DSL, same
+trajectory contract, same rules — a different transport.</p>
+
+<p>A scripted session against the checkout plan (each input line is one
+request; the host would normally be an agent framework, not a file):</p>
+
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ cat session.ndjson
+{"protocol":"0.1.0","id":1,"op":"initialize","client":{"name":"docs-site","version":"0.1"}}
+{"protocol":"0.1.0","id":2,"op":"next","profile":"work"}
+{"protocol":"0.1.0","id":3,"op":"choose","choiceId":"build_checkout#0","rationale":"metrics look good","expectedRevision":0,"idempotencyKey":"turn-1","profile":"signal"}
+{"protocol":"0.1.0","id":4,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}
+{"protocol":"0.1.0","id":5,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}</code></pre>
+
+<demo-cast id="21-runtime-session" title="start — an NDJSON runtime session"></demo-cast>
+
+<p>Worth reading closely in that output:</p>
+
+<ul>
+  <li><strong>Request 3 is refused with <code>forbidden</code>.</strong> The
+    connection was launched with <code>--role agent</code>; role is fixed at
+    process start and absent from command payloads, so an agent cannot cross
+    an <code>@human</code> checkpoint by editing an <code>actor</code> field.
+    A trusted human-facing host connects separately with
+    <code>--role human</code>.</li>
+  <li><strong>Request 4 commits.</strong> The write returns its receipt and
+    the next projection together, then emits
+    <code>decision.committed</code> / <code>node.entered</code> journal
+    events — each carrying the immutable trajectory hash and a
+    <code>marionette://trajectory/…</code> URI.
+    <code>expectedRevision</code> rejects stale writers.</li>
+  <li><strong>Request 5 replays.</strong> Same
+    <code>idempotencyKey</code>, same command → the original receipt with
+    <code>"replayed": true</code>, and no second decision appended. Retries
+    are safe by construction.</li>
+</ul>
+
+<p>Projections come in three profiles — <code>signal</code> (status, node
+identity, available choices), <code>work</code> (the default; adds node
+prose, refs, targets) and <code>debug</code> (adds blocked choices, gates,
+variables, progress) — with <code>budget</code> bounds for items and body
+size, so a host controls exactly how much of the plan enters model context.
+The run store is an append-only journal
+(<code>.marionette/runs/&lt;run-id&gt;/events.jsonl</code>) with fsynced
+snapshots and trajectories archived by content hash; on resume the snapshot
+is rebuilt from the journal. One process owns writes for a run;
+<code>marionette stop</code> (or Ctrl-C) ends it, and the same
+<code>start</code> command resumes it. Full details:
+<a href="https://github.com/leemeichin/marionette/blob/main/docs/RUNTIME.md">docs/RUNTIME.md</a>
+and the versioned protocol schema
+<code>spec/runtime-protocol.schema.json</code>.</p>
 
 <h2 id="delivery">Portioning out the work: delivery config</h2>
 

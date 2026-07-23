@@ -7,7 +7,7 @@ escalate at <code>@human</code>).</p>
 
 <h2 id="cli">1 · Install the CLI</h2>
 
-<pre class="code"><code># a) global command from a clone
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code># a) global command from a clone
 $ git clone https://github.com/leemeichin/marionette &amp;&amp; cd marionette
 $ npm install &amp;&amp; npm link          # installs deps, builds, puts `marionette` on PATH
 $ marionette version
@@ -45,7 +45,7 @@ Sam reviews the shipped surface.
 + [Changes requested] @human ~loop~ -> build_importer
 </mar-src>
 
-<pre class="code"><code>$ marionette validate plan.mar --strict   # zero errors is the authoring bar
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ marionette validate plan.mar --strict   # zero errors is the authoring bar
 $ marionette summarize plan.mar           # plain-language review
 $ marionette render plan.mar              # Mermaid graph</code></pre>
 
@@ -62,12 +62,12 @@ natural-language notes into a validated draft; the execution skill drives a
 compiled plan. The repo is a single-plugin marketplace — in any Claude Code
 session:</p>
 
-<pre class="code"><code>/plugin marketplace add leemeichin/marionette
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>/plugin marketplace add leemeichin/marionette
 /plugin install marionette@marionette</code></pre>
 
 <p>Then give the authoring skill real notes, e.g.:</p>
 
-<pre class="code"><code>Use marionette-authoring. Plan this for me: we're migrating the billing
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>Use marionette-authoring. Plan this for me: we're migrating the billing
 service off Stripe Classic. Spike the new API first — if metered billing
 isn't supported we stay put. Up to two spike attempts. Finance signs off
 before any customer is switched, and we roll back if error rates spike.</code></pre>
@@ -80,7 +80,7 @@ use): <a href="https://github.com/leemeichin/marionette/blob/main/docs/GETTING-S
 
 <h2 id="traverse">4 · Traverse it</h2>
 
-<pre class="code"><code>$ marionette state init plan.mar        # binds plan.state.json to the compiled hash
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ marionette state init plan.mar        # binds plan.state.json to the compiled hash
 $ marionette brief plan.mar             # work packet: phase, refs, choices, escalation
 $ marionette state show plan.mar        # current phase, variables, available choices
 $ marionette state choose plan.mar 1 --actor agent --rationale "why"
@@ -104,5 +104,5 @@ validation errors (or warnings with <code>--strict</code>) and refused walk
 operations, <code>2</code> usage/I-O errors, <code>3</code> plan/state
 drift. A minimal gate:</p>
 
-<pre class="code"><code>$ marionette validate plans/*.mar --strict     # plans stay sound
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ marionette validate plans/*.mar --strict     # plans stay sound
 $ marionette state show plans/project.mar      # exit 3 = plan edited without rebind</code></pre>

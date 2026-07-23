@@ -191,6 +191,11 @@ refs (`github:`/`jira`/`linear`/`ref`) and delivery config (`delivery:`/
 `@human` escalation and rationale logging with machine-readable refusal
 codes; `state rebind` migrates live state across plan edits; and a
 runtime-agnostic conformance suite (`spec/conformance/`) holds any future
-walker to the same behaviour — the pi agent integration is next (issue #4,
-OQ2 escalation channel). Dogfooding is live: `plans/marionette.mar` tracks
-this project and CI re-validates plan + state drift on every push.
+walker to the same behaviour. The **local runtime** has landed
+(`marionette start`/`stop`, [`docs/RUNTIME.md`](docs/RUNTIME.md)): a
+single-writer process speaking compact NDJSON
+(`spec/runtime-protocol.schema.json`) with role-bound connections, revision
+checks, idempotent writes and an append-only journal — the pi agent
+integration builds on it next (issue #4, OQ2 escalation channel).
+Dogfooding is live: `plans/marionette.mar` tracks this project and CI
+re-validates plan + state drift on every push.

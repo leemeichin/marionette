@@ -30,7 +30,7 @@ let demos = 0;
 let failures = 0;
 for (const file of htmlFiles(dist)) {
   const html = readFileSync(file, 'utf8');
-  for (const m of html.matchAll(/<section class="term" data-demo="([^"]+)"[\s\S]*?<pre class="term-screen"><code>([\s\S]*?)<\/code><\/pre>/g)) {
+  for (const m of html.matchAll(/<section class="term" data-demo="([^"]+)"[\s\S]*?<pre class="term-screen"[^>]*><code>([\s\S]*?)<\/code><\/pre>/g)) {
     demos++;
     const [, id, body] = m;
     const meta = manifest[id];
@@ -59,5 +59,6 @@ for (const file of htmlFiles(dist)) {
   }
 }
 
+if (demos === 0) { console.error('FAIL: no demo casts found in dist/ — extraction regex drifted from build output'); failures++; }
 if (failures) process.exit(1);
 console.log(`fidelity: ${demos} demo casts match their captured transcripts byte-for-byte`);

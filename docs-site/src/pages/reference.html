@@ -56,7 +56,11 @@ state.</p>
 <h2 id="walk-errors">Walker refusal codes</h2>
 
 <p>Refusals are machine-coded so executors can react programmatically, and
-a refused operation never mutates state.</p>
+a refused operation never mutates state. (The runtime protocol carries its
+own error codes on the same principles — e.g. <code>forbidden</code> for an
+agent connection at an <code>@human</code> checkpoint,
+<code>stale-revision</code> for an outdated <code>expectedRevision</code> —
+see <code>spec/runtime-protocol.schema.json</code>.)</p>
 
 <div class="table-wrap">
 <table>
@@ -82,5 +86,8 @@ a refused operation never mutates state.</p>
   <tr><td><code>plan.mar</code></td><td>the script — durable, diffable source of truth</td></tr>
   <tr><td><code>plan.trajectory.json</code></td><td>compiled contract (<code>marionette compile</code>); content-hashed</td></tr>
   <tr><td><code>plan.state.json</code></td><td>traversal state + decision log, bound to the trajectory hash</td></tr>
+  <tr><td><code>.marionette/graphs/&lt;hash&gt;.trajectory.json</code></td><td>runtime store: compiled trajectories archived by content hash</td></tr>
+  <tr><td><code>.marionette/runs/&lt;run-id&gt;/events.jsonl</code></td><td>runtime store: append-only event journal (authoritative)</td></tr>
+  <tr><td><code>.marionette/runs/&lt;run-id&gt;/snapshot.json</code></td><td>runtime store: fsynced snapshot, rebuilt from the journal on resume</td></tr>
 </table>
 </div>

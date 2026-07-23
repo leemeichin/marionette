@@ -61,8 +61,15 @@ Audit the whole site: AA contrast on the terminal palette, full keyboard
 operability of the demos, visible focus, prefers-reduced-motion honoured,
 landmarks and skip links, sensible screen-reader output for animated
 terminals.
-* [Audit clean] -> ship_review
+* [Audit clean] -> integrate_runtime
 + [Issues found — fix and re-audit] ~loop~ -> accessibility_pass
+
+=== integrate_runtime ===
+Main merged a local runtime mid-traversal (docs/RUNTIME.md: start/stop
+lifecycle, NDJSON protocol, run store). Capture real runtime sessions with
+the same fidelity rule, fold the runtime into the README and the site
+(execution, reference, getting-started), and re-run every gate.
+* [Runtime folded in, gates green] -> ship_review
 
 === ship_review ===
 Everything committed on the delivery branch and pushed, draft PR open with

@@ -1,6 +1,6 @@
 {
   "spec": "0.2.0",
-  "hash": "sha256:ec2eaabc948a6182f4df7e59ee79a85c77f56e5b44e86112f703b1021460c6dc",
+  "hash": "sha256:c807cf129b29f0bf2e0bf2a742335673897829c2040d518bef4441d3bf7fc42a",
   "source": {
     "file": "plans/docs-site.mar"
   },
@@ -242,7 +242,7 @@
           "gate": null,
           "human": false,
           "loop": false,
-          "target": "ship_review",
+          "target": "integrate_runtime",
           "line": 64
         },
         {
@@ -262,6 +262,27 @@
       "refs": []
     },
     {
+      "id": "integrate_runtime",
+      "body": "Main merged a local runtime mid-traversal (docs/RUNTIME.md: start/stop\nlifecycle, NDJSON protocol, run store). Capture real runtime sessions with\nthe same fidelity rule, fold the runtime into the README and the site\n(execution, reference, getting-started), and re-run every gate.",
+      "actions": [],
+      "choices": [
+        {
+          "id": "integrate_runtime#0",
+          "label": "Runtime folded in, gates green",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "loop": false,
+          "target": "ship_review",
+          "line": 72
+        }
+      ],
+      "divert": null,
+      "line": 67,
+      "meta": {},
+      "refs": []
+    },
+    {
       "id": "ship_review",
       "body": "Everything committed on the delivery branch and pushed, draft PR open with\nthe site preview story and deployment instructions. A human reviews the\nREADME and the site before anything merges or deploys.",
       "actions": [],
@@ -274,7 +295,7 @@
           "human": true,
           "loop": false,
           "target": "END",
-          "line": 71
+          "line": 78
         },
         {
           "id": "ship_review#1",
@@ -284,11 +305,11 @@
           "human": true,
           "loop": true,
           "target": "address_feedback",
-          "line": 72
+          "line": 79
         }
       ],
       "divert": null,
-      "line": 67,
+      "line": 74,
       "meta": {},
       "refs": []
     },
@@ -299,9 +320,9 @@
       "choices": [],
       "divert": {
         "target": "ship_review",
-        "line": 77
+        "line": 84
       },
-      "line": 74,
+      "line": 81,
       "meta": {},
       "refs": []
     }

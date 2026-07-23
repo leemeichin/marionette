@@ -44,6 +44,10 @@ for (const file of htmlFiles(dist)) {
   for (const m of html.matchAll(/<section class="term"[^>]*>/g)) {
     if (!/aria-label=/.test(m[0])) fail(file, `demo terminal without aria-label: ${m[0].slice(0, 60)}`);
   }
+  // scrollable code regions must be keyboard-focusable
+  for (const m of html.matchAll(/<pre class="(?:term-screen|code)[^"]*"[^>]*>/g)) {
+    if (!/tabindex="0"/.test(m[0])) fail(file, `scrollable pre without tabindex: ${m[0].slice(0, 60)}`);
+  }
   // nav marks the current page (404 excepted)
   if (!file.endsWith('404.html') && !html.includes('aria-current="page"')) {
     fail(file, 'nav has no aria-current="page"');

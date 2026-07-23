@@ -50,7 +50,7 @@ function renderDemo(id, title) {
 <button type="button" data-act="restart">↺ reset</button>
 <p class="term-status" role="status"></p>
 </div>
-<pre class="term-screen"><code><span class="t-line t-cmd"><span class="t-prompt">$ </span>${escapeHtml(meta.cmd)}</span>${body}</code></pre>
+<pre class="term-screen" tabindex="0" aria-label="terminal transcript (scrollable)"><code><span class="t-line t-cmd"><span class="t-prompt">$ </span>${escapeHtml(meta.cmd)}</span>${body}</code></pre>
 </section>`;
 }
 
@@ -64,7 +64,7 @@ function renderMarBlock(source, title) {
   const bar = title
     ? `<div class="term-bar"><span class="term-dots" aria-hidden="true">●●●</span><span class="term-title">${escapeHtml(title)}</span></div>`
     : '';
-  return `<div class="term">${bar}<pre class="term-screen mar"><code>${highlightMar(source)}</code></pre></div>`;
+  return `<div class="term">${bar}<pre class="term-screen mar" tabindex="0" aria-label="plan source (scrollable)"><code>${highlightMar(source)}</code></pre></div>`;
 }
 
 function expand(html) {

@@ -75,11 +75,6 @@
     "exit": 0
   },
   {
-    "id": "16-help",
-    "cmd": "marionette help",
-    "exit": 0
-  },
-  {
     "id": "17-brief-json",
     "cmd": "marionette brief checkout.mar --json",
     "exit": 0
@@ -97,6 +92,16 @@
   {
     "id": "20-validate-paas",
     "cmd": "marionette validate paas_replatform.mar --strict",
+    "exit": 0
+  },
+  {
+    "id": "21-runtime-session",
+    "cmd": "marionette start checkout.mar --run docs-demo --principal coding-agent --role agent < session.ndjson",
+    "exit": 0
+  },
+  {
+    "id": "16-help",
+    "cmd": "marionette help",
     "exit": 0
   }
 ]
