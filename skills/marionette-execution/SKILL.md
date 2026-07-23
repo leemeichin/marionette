@@ -78,6 +78,17 @@ the plan changed underneath the state: stop and surface the drift message;
   starting the phase; when your platform allows, post progress where the ref
   points (e.g. comment on the linked GitHub issue). Refs are references, not
   sync obligations.
+- **Missing context is a question, not a licence to infer.** If the phase
+  body names work whose specifics you'd have to guess ("rebuild the flow" —
+  which flow, to what spec?) and neither the body, the plan's intent, nor
+  `node.refs` supplies them, stop and ask the plan owner for the missing
+  source before starting — in-band, like an `@human` escalation, stating
+  exactly what's unspecified. Record the answer where it survives: as the
+  decision rationale, or better, ask the owner to attach it to the plan
+  (`# ref:`/`# github:issue:` on the phase, or `marionette sync link`) so
+  the next traversal doesn't re-ask. Never substitute your own reading of
+  under-specified work for the owner's — a wrong guess executed
+  confidently is worse than a paused phase.
 - **Honest rationales beat optimistic ones.** If the evidence for a choice
   is thin, that is what loop edges and `@human` escapes are for.
 

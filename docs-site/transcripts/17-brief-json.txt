@@ -3,12 +3,25 @@
   "plan": {
     "file": "checkout.mar",
     "project": "checkout-revamp",
-    "hash": "sha256:24d32e0b28205dbad62004391795fe41fc4bfbb40696d30f6e7a62497635efa0",
+    "hash": "sha256:45a90f7fc02fd039909f2d0570bbe4f0f487112dfbe5cb045e9213b1291a1c83",
     "intent": {
       "summary": "Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.",
       "prompt": "Checkout conversion has been flat for two quarters. Rebuild the flow\nbehind a flag and iterate on cohort evidence — five attempts max. I take\nthe ship call, and if it never converts we go back to research rather\nthan grinding out attempt six."
     },
-    "refs": []
+    "refs": [
+      {
+        "provider": "github",
+        "kind": "repo",
+        "id": "acme/shop",
+        "url": "https://github.com/acme/shop"
+      },
+      {
+        "provider": "url",
+        "kind": "link",
+        "id": "https://wiki.acme.dev/checkout-revamp",
+        "url": "https://wiki.acme.dev/checkout-revamp"
+      }
+    ]
   },
   "status": "active",
   "variables": {
@@ -18,8 +31,17 @@
     "id": "build_checkout",
     "title": "Rebuild the checkout flow behind a feature flag.",
     "body": "Rebuild the checkout flow behind a feature flag.\nShip one measurable change per attempt to the flag cohort and read the\nconversion funnel after a full week; an attempt is done when its data is in.",
-    "meta": {},
-    "refs": []
+    "meta": {
+      "github:issue": "41"
+    },
+    "refs": [
+      {
+        "provider": "github",
+        "kind": "issue",
+        "id": "acme/shop#41",
+        "url": "https://github.com/acme/shop/issues/41"
+      }
+    ]
   },
   "delivery": {
     "mode": "none",

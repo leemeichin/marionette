@@ -30,9 +30,12 @@ behind a flag and iterate on cohort evidence — five attempts max. I take
 the ship call, and if it never converts we go back to research rather
 than grinding out attempt six.
 """
+# github:repo: acme/shop
+# ref: https://wiki.acme.dev/checkout-revamp
 VAR attempts = 0
 
 === build_checkout ===
+# github:issue: 41
 Rebuild the checkout flow behind a feature flag.
 Ship one measurable change per attempt to the flag cohort and read the
 conversion funnel after a full week; an attempt is done when its data is in.
@@ -42,6 +45,7 @@ conversion funnel after a full week; an attempt is done when its data is in.
 * {attempts >= 5} [Not converging — rethink] @human -> rethink
 
 === rethink ===
+# ref: https://wiki.acme.dev/checkout-usability-study
 Five iterations without lift: take the flow back to research.
 Run the checkout usability study and write up why the five attempts failed;
 that write-up is the input to whichever door is taken next.
@@ -49,6 +53,7 @@ that write-up is the input to whichever door is taken next.
 * [Park the revamp] @human -> END
 
 === rollout ===
+# github:issue: 42
 Ramp the flag to 100% and retire the old flow.
 Watch error rates and conversion during the ramp; done means the old flow is
 deleted, not merely dark.
@@ -68,11 +73,11 @@ all build failures, each with a line number and a fix:
 
 ```console
 $ marionette validate checkout.mar
-checkout.mar:19: error[MAR006]: phase "rollout" is a dead end: no choices and no divert
-  19 | === rollout ===
+checkout.mar:22: error[MAR006]: phase "rollout" is a dead end: no choices and no divert
+  22 | === rollout ===
   help: add a choice or divert (e.g. "-> END") so every path has an exit
-checkout.mar:17: error[MAR008]: undeclared cycle: build_checkout -> build_checkout
-  17 | + [Conversion flat — iterate] -> build_checkout
+checkout.mar:20: error[MAR008]: undeclared cycle: build_checkout -> build_checkout
+  20 | + [Conversion flat — iterate] -> build_checkout
   help: cycles must be intentional: mark the returning choice with ~loop~
 ✗ checkout.mar: 2 errors, 0 warnings
 ```
@@ -86,7 +91,7 @@ rationale:
 
 ```console
 $ marionette state init checkout.mar
-initialised checkout.state.json bound to sha256:24d32e0b2820…
+initialised checkout.state.json bound to sha256:45a90f7fc02f…
 current: build_checkout
 Rebuild the checkout flow behind a feature flag.
 Ship one measurable change per attempt to the flag cohort and read the

@@ -104,6 +104,16 @@ transcribe tickets into DSL by hand — fetch and scaffold
   one the DSL can express. When in doubt, the smaller graph is the better
   draft: reviewers read it cold, and structure that isn't in the notes is
   yours to justify.
+- **Anchor phases to their sources.** A phase body says what the work *is*;
+  where the details live is a ref. When the notes mention an issue, ticket,
+  PR or document, attach it to the phase with the namespaced metadata tags
+  (`# github:issue: 41`, `# jira: PROJ-123`, `# linear: ENG-42`,
+  `# ref: https://…`), and put shared context (`# github:repo:`,
+  `# jira:site:`) in the preamble so ids resolve to URLs. The executor
+  reads refs before starting a phase — a phase whose work depends on
+  context that exists somewhere but isn't reffed is a draft defect: the
+  plan is asking the executor to guess. If the notes imply external context
+  but don't name it, ask the user for the link rather than omitting it.
 - **Every phase needs an exit** — a choice or a divert. Terminal outcomes
   divert to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this
