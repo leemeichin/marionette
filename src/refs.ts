@@ -203,6 +203,63 @@ export function resolveDelivery(planMeta: Meta, nodeMeta: Meta, nodeId: string):
   };
 }
 
+/* ---- Pacing: timeboxes and priority (time as evidence, never as a gate) ----
+ *
+ *   # timebox: 3d        advisory wall-clock budget for a speculative phase
+ *   # priority: high     executor ordering hint; maps to tracker priority on sync
+ *
+ * The walker never consults the clock — determinism, replay and static gate
+ * verification depend on that. A timebox is carried in the brief alongside
+ * the phase's entry timestamp; the executor treats "overdue" as evidence for
+ * the phase's abandon exit, and the decision log records that time drove it.
+ */
+
+export const PRIORITIES = ['critical', 'high', 'normal', 'low'] as const;
+export type Priority = (typeof PRIORITIES)[number];
+
+/** A parsed `# timebox:` value: original spelling plus normalised seconds. */
+export interface Timebox {
+  source: string;
+  seconds: number;
+}
+
+const TIMEBOX_UNITS: Record<string, number> = { m: 60, h: 3600, d: 86400, w: 604800 };
+
+/** Parse a single-unit duration ("30m", "4h", "3d", "2w"), or null. */
+export function parseTimebox(value: string): Timebox | null {
+  const m = value.trim().match(/^(\d+)([mhdw])$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (n === 0) return null;
+  return { source: value.trim(), seconds: n * TIMEBOX_UNITS[m[2]] };
+}
+
+/** Validate node-level pacing tags (MAR021/MAR022). */
+export function validatePacing(meta: Meta, warn: Warn): void {
+  const timebox = last(meta, 'timebox');
+  if (timebox !== null && parseTimebox(timebox) === null) {
+    warn(CODES.MALFORMED_TIMEBOX, `malformed timebox "${timebox}"`,
+      'expected <n><unit> with unit m|h|d|w, e.g. "90m", "4h", "3d", "2w"');
+  }
+  const priority = last(meta, 'priority');
+  if (priority !== null && !(PRIORITIES as readonly string[]).includes(priority)) {
+    warn(CODES.UNKNOWN_PRIORITY, `unknown priority "${priority}"`,
+      `expected one of: ${PRIORITIES.join(', ')}`);
+  }
+}
+
+export function resolveTimebox(nodeMeta: Meta): Timebox | null {
+  const timebox = last(nodeMeta, 'timebox');
+  return timebox === null ? null : parseTimebox(timebox);
+}
+
+export function resolvePriority(nodeMeta: Meta): Priority | null {
+  const priority = last(nodeMeta, 'priority');
+  return priority !== null && (PRIORITIES as readonly string[]).includes(priority)
+    ? (priority as Priority)
+    : null;
+}
+
 /** Attach refs to a parsed plan's nodes + plan meta, emitting MAR018/MAR019 warnings. */
 export function analyzeMeta(
   planMeta: Meta,
@@ -219,6 +276,7 @@ export function analyzeMeta(
     node.refs = extractRefs(node.meta, planMeta, warnAt(node.line));
     validateDelivery(node.meta, warnAt(node.line));
     validateNodeTracker(node.meta, warnAt(node.line));
+    validatePacing(node.meta, warnAt(node.line));
   }
   return planRefs;
 }

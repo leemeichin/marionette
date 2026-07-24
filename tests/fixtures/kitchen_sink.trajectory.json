@@ -1,8 +1,8 @@
 {
   "spec": "0.2.0",
-  "hash": "sha256:892b598223cd2fdd9ebc05a8d63a47724b8889617efb730b4f06b09ce6f9b667",
+  "hash": "sha256:10aa41739d8e7186942690fa26295c7cae9af5660f85b0974751c5bd963833a0",
   "source": {
-    "file": "tests/fixtures/kitchen_sink.mar"
+    "file": "kitchen_sink.mar"
   },
   "variables": {
     "iteration": {
@@ -180,7 +180,7 @@
           "human": true,
           "loop": true,
           "target": "build_mvp",
-          "line": 27
+          "line": 29
         },
         {
           "id": "pivot_or_kill#1",
@@ -190,12 +190,15 @@
           "human": true,
           "loop": false,
           "target": "retro",
-          "line": 28
+          "line": 30
         }
       ],
       "divert": null,
       "line": 25,
-      "meta": {},
+      "meta": {
+        "timebox": "2d",
+        "priority": "high"
+      },
       "refs": []
     },
     {
@@ -205,9 +208,9 @@
       "choices": [],
       "divert": {
         "target": "END",
-        "line": 32
+        "line": 34
       },
-      "line": 30,
+      "line": 32,
       "meta": {},
       "refs": []
     }

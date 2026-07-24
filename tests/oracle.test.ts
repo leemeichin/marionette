@@ -27,7 +27,7 @@ import { oracleReport } from '../src/oracle.js';
 const ROOT = join(import.meta.dirname, '..');
 
 /** Codes the rule base implements with exact (code, line) agreement. */
-const EXACT = new Set(['MAR006', 'MAR007', 'MAR009', 'MAR010', 'MAR011', 'MAR013', 'MAR014', 'MAR017']);
+const EXACT = new Set(['MAR006', 'MAR007', 'MAR009', 'MAR010', 'MAR011', 'MAR013', 'MAR014', 'MAR017', 'MAR023']);
 /** Error codes emitted before graph analysis: their presence means the TS
  * validator bailed, so there is nothing to diff. */
 const PRE_GRAPH = new Set(['MAR001', 'MAR002', 'MAR003', 'MAR004', 'MAR005', 'MAR012', 'MAR015']);

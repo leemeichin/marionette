@@ -122,7 +122,10 @@
             "title",
             "body",
             "meta",
-            "refs"
+            "refs",
+            "timebox",
+            "priority",
+            "enteredAt"
           ],
           "additionalProperties": false,
           "properties": {
@@ -157,6 +160,55 @@
               "items": {
                 "$ref": "#/$defs/ref"
               }
+            },
+            "timebox": {
+              "description": "Advisory wall-clock budget (# timebox:). Never a walker concern: consumers compare enteredAt with their own clock; overdue is evidence for the phase's abandon exit.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "source",
+                    "seconds"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "type": "string",
+                      "description": "Original spelling, e.g. \"3d\"."
+                    },
+                    "seconds": {
+                      "type": "number"
+                    }
+                  }
+                }
+              ]
+            },
+            "priority": {
+              "description": "Executor ordering hint (# priority:); maps to tracker priority on sync.",
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "enum": [
+                    "critical",
+                    "high",
+                    "normal",
+                    "low"
+                  ]
+                }
+              ]
+            },
+            "enteredAt": {
+              "description": "Timestamp of the log entry that moved traversal into this phase, or null.",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           }
         }

@@ -21,7 +21,8 @@
  */
 
 :- dynamic plan_start/1, node/3, variable/4, action/5, choice/5,
-           label/2, sticky/1, human/1, loop_marked/1, gate/3, divert/3.
+           label/2, sticky/1, human/1, loop_marked/1, gate/3, divert/3,
+           timebox/2, priority/2.
 :- discontiguous finding/2.
 
 end_id('END').
@@ -219,6 +220,15 @@ finding('MAR017', Line) :-
     loop_marked(C), \+ false_gate(C), \+ sticky(C),
     choice(C, _, _, Line, _).
 
+%% MAR023 — a timeboxed phase with a single exit: spending or not spending
+%% the budget leads to the same place, so the timebox decides nothing.
+finding('MAR023', Line) :-
+    timebox(N, _), node(N, Line, _),
+    findall(x, choice(_, N, _, _, _), Cs), length(Cs, Choices),
+    ( divert(N, _, _) -> Diverts = 1 ; Diverts = 0 ),
+    Exits is Choices + Diverts,
+    Exits < 2.
+
 /* ---- loop exits (MAR009 / MAR010 / loop-exit MAR014) ----
  * One analysis per cyclic SCC, reported at the first (source-order)
  * ~loop~-marked choice that closes a cycle in it — matching the TS
@@ -364,6 +374,9 @@ unattended_phase(N) :-
     plan_start(S), end_id(E), node(N, _, _),
     ( N == S ; agent_reach(S, N) ), agent_reach(N, E).
 
+%% speculative(?N) — a timeboxed phase (try it, abandon if the budget runs dry).
+speculative(N) :- timebox(N, _).
+
 /* ===================== engine reuse ===================== */
 
 %% reset_plan: retract the loaded plan's facts and drop memoized tables, so
@@ -380,6 +393,8 @@ reset_plan :-
     retractall(loop_marked(_)),
     retractall(gate(_, _, _)),
     retractall(divert(_, _, _)),
+    retractall(timebox(_, _)),
+    retractall(priority(_, _)),
     abolish_all_tables.
 
 /* ===================== report ===================== */

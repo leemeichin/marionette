@@ -24,6 +24,8 @@ Launch "mvp" to the beta cohort.
 
 === pivot_or_kill ===
 Decide whether to pivot or stop.
+# timebox: 2d
+# priority: high
 + [Pivot] @human ~loop~ -> build_mvp
 * [Kill it] @human -> retro
 

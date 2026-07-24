@@ -232,3 +232,43 @@ test('loop verified by an ungated @human exit', async () => {
 `);
   assert.deepEqual(result.diagnostics, []);
 });
+
+test('MAR021 malformed timebox warns and is ignored', async () => {
+  const { result } = await expectDiagnostic(`
+=== spike ===
+Try the thing.
+# timebox: fortnight
+* [Worked] -> END
+* [Abandon] -> END
+`, CODES.MALFORMED_TIMEBOX, 'warning');
+  assert.ok(result.ok, 'a malformed timebox is advisory, not a build failure');
+});
+
+test('MAR022 unknown priority warns with the allowed set', async () => {
+  const { hit } = await expectDiagnostic(`
+=== spike ===
+Try the thing.
+# priority: urgent
+-> END
+`, CODES.UNKNOWN_PRIORITY, 'warning');
+  assert.match(hit.suggestion!, /critical, high, normal, low/);
+});
+
+test('MAR023 timebox without an alternative exit warns', async () => {
+  await expectDiagnostic(`
+=== spike ===
+Try the thing.
+# timebox: 3d
+-> END
+`, CODES.TIMEBOX_WITHOUT_ALTERNATIVE, 'warning');
+
+  const twoDoors = await compile(`
+=== spike ===
+Try the thing.
+# timebox: 3d
+* [Worked — adopt] -> END
+* [Not viable or timebox spent] -> END
+`);
+  assert.ok(!twoDoors.diagnostics.some((d) => d.code === CODES.TIMEBOX_WITHOUT_ALTERNATIVE),
+    'a worked door plus an abandon door satisfies the timebox shape');
+});

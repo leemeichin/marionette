@@ -17,6 +17,7 @@
 
 import type { Expr, Value } from './types.js';
 import type { ParsedPlan } from './parser.js';
+import { resolvePriority, resolveTimebox } from './refs.js';
 
 /** Quote a string as a Prolog atom: 'it''s' style quoting is avoided in favour of backslash escapes. */
 function atom(s: string): string {
@@ -72,13 +73,16 @@ const ACTION_OPS: Record<string, string> = { '=': 'assign', '+=': 'inc', '-=': '
  *   sticky(Id).  human(Id).  loop_marked(Id).
  *   gate(Id, Expr, Source).
  *   divert(Node, Target, Line).
+ *   timebox(Node, Seconds).                   % valid # timebox: only
+ *   priority(Node, critical|high|normal|low). % valid # priority: only
  */
 export function emitFacts(plan: ParsedPlan): string {
   const lines: string[] = [
     ':- encoding(utf8).',
     '% Marionette fact base - generated, do not edit.',
     ':- discontiguous plan_start/1, node/3, variable/4, action/5, choice/5,',
-    '   label/2, sticky/1, human/1, loop_marked/1, gate/3, divert/3.',
+    '   label/2, sticky/1, human/1, loop_marked/1, gate/3, divert/3,',
+    '   timebox/2, priority/2.',
   ];
   if (plan.start) lines.push(`plan_start(${atom(plan.start)}).`);
 
@@ -100,6 +104,10 @@ export function emitFacts(plan: ParsedPlan): string {
       if (choice.loop) lines.push(`loop_marked(${atom(choice.id)}).`);
       if (choice.gate) lines.push(`gate(${atom(choice.id)}, ${exprTerm(choice.gate.ast)}, ${str(choice.gate.source)}).`);
     }
+    const timebox = resolveTimebox(node.meta);
+    if (timebox) lines.push(`timebox(${atom(node.id)}, ${timebox.seconds}).`);
+    const priority = resolvePriority(node.meta);
+    if (priority) lines.push(`priority(${atom(node.id)}, ${priority}).`);
     if (node.divert) lines.push(`divert(${atom(node.id)}, ${atom(node.divert.target)}, ${node.divert.line}).`);
   });
 

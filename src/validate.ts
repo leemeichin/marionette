@@ -8,6 +8,7 @@ import type { Action, Choice, Diagnostic, TrajectoryNode, VariableDecl } from '.
 import { CODES, END } from './types.js';
 import { tryConstEval, typeOf, varsIn } from './expr.js';
 import { analyzeGate, eventuallyFalse, type GateContext } from './gates.js';
+import { resolveTimebox } from './refs.js';
 import type { ParsedPlan } from './parser.js';
 import { nearest } from './suggest.js';
 
@@ -88,6 +89,18 @@ export function validatePlan(plan: ParsedPlan, diagnostics: Diagnostic[]): void 
   for (const [name, decl] of Object.entries(variables)) {
     if (!usedVars.has(name)) {
       warn(decl.line, CODES.UNUSED_VARIABLE, `variable "${name}" is declared but never used`);
+    }
+  }
+
+  // --- Timeboxes need an alternative --------------------------------------
+  // A timebox is evidence for taking an abandon door; with a single exit it
+  // cannot change any outcome, so the speculative shape is incomplete.
+  for (const node of nodes) {
+    if (resolveTimebox(node.meta) === null) continue;
+    if (node.choices.length + (node.divert ? 1 : 0) < 2) {
+      warn(node.line, CODES.TIMEBOX_WITHOUT_ALTERNATIVE,
+        `phase "${node.id}" has a timebox but only one exit: spending or not spending the budget leads to the same place`,
+        'a speculative phase needs both a "worked" and an "abandon" door — or drop the timebox');
     }
   }
 

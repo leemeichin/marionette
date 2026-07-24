@@ -13,7 +13,10 @@ import type { Trajectory, TrajectoryNode, Ref, Value } from './types.js';
 import { END } from './types.js';
 import { frontier, visitedPath, type AvailableChoice } from './state.js';
 import type { PlanState } from './types.js';
-import { resolveDelivery, type DeliveryConfig } from './refs.js';
+import {
+  resolveDelivery, resolvePriority, resolveTimebox,
+  type DeliveryConfig, type Priority, type Timebox,
+} from './refs.js';
 import type { Style } from './term.js';
 import { styleFor } from './term.js';
 
@@ -69,6 +72,16 @@ export interface Brief {
     body: string;
     meta: Record<string, string | string[]>;
     refs: Ref[];
+    /**
+     * Advisory wall-clock budget (# timebox:). The walker never consults the
+     * clock — consumers compare `enteredAt` to their own "now"; an overdue
+     * timebox is evidence for the phase's abandon exit, not a transition.
+     */
+    timebox: Timebox | null;
+    /** Executor ordering hint (# priority:), never a walker concern. */
+    priority: Priority | null;
+    /** When traversal entered this phase (from the decision log), or null. */
+    enteredAt: string | null;
   } | null;
   /** Effective delivery config at this node (node tags override plan tags). */
   delivery: DeliveryConfig;
@@ -167,7 +180,16 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
     status,
     variables: state.variables,
     node: node
-      ? { id: node.id, title: title(node)!, body: node.body, meta: node.meta, refs: node.refs }
+      ? {
+          id: node.id,
+          title: title(node)!,
+          body: node.body,
+          meta: node.meta,
+          refs: node.refs,
+          timebox: resolveTimebox(node.meta),
+          priority: resolvePriority(node.meta),
+          enteredAt: enteredAt(state, node.id),
+        }
       : null,
     delivery: resolveDelivery(trajectory.meta, node?.meta ?? {}, node?.id ?? ''),
     frontier: choices,
@@ -191,6 +213,28 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
       ],
     },
   };
+}
+
+/**
+ * When traversal entered the given phase: the latest log entry that moved
+ * there (a choose has a choice id; init/advance have a null label; amendment
+ * entries have neither and are skipped).
+ */
+function enteredAt(state: PlanState, nodeId: string): string | null {
+  for (let i = state.log.length - 1; i >= 0; i--) {
+    const entry = state.log[i];
+    if (entry.to === nodeId && (entry.choice !== null || entry.label === null)) return entry.at;
+  }
+  return null;
+}
+
+/** Render a millisecond span in the largest sensible single unit. */
+function spanText(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 120) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 /** Human-readable rendering of a brief (the `marionette brief` default). */
@@ -220,6 +264,25 @@ export function renderBrief(brief: Brief, style?: Style): string {
     }
     const d = brief.delivery;
     lines.push(s.dim(`delivery: ${d.mode} · report ${d.report}${d.branch ? ` · branch ${d.branch}` : ''}`));
+    // The one place "now" appears: rendered pacing. The JSON brief stays a
+    // pure function of state (timebox + enteredAt; consumers do their own
+    // arithmetic), and the walker never sees the clock at all.
+    if (brief.node.timebox || brief.node.priority) {
+      const bits: string[] = [];
+      if (brief.node.timebox) {
+        const { source, seconds } = brief.node.timebox;
+        if (brief.node.enteredAt) {
+          const elapsed = Date.now() - Date.parse(brief.node.enteredAt);
+          const overdue = elapsed > seconds * 1000;
+          const note = `timebox ${source} — in phase ${spanText(elapsed)}`;
+          bits.push(overdue ? s.red(note + ' (overdue: wrap up — take an exit honestly or escalate)') : note);
+        } else {
+          bits.push(`timebox ${source}`);
+        }
+      }
+      if (brief.node.priority) bits.push(`priority ${brief.node.priority}`);
+      lines.push(bits.join(' · '));
+    }
   }
 
   const vars = Object.entries(brief.variables);
