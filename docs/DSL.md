@@ -92,7 +92,33 @@ containing only """.
 """
 ```
 
-A third plain key, `# wake:`, declares what re-activates a standing
+Two node-level pacing keys encode time and urgency **as evidence, never as
+a gate** — the walker never consults the clock (determinism, replay and
+static gate verification depend on that):
+
+```
+=== spike_realtime_sync ===
+Try CRDT-based sync; a working prototype against the test suite decides.
+# timebox: 3d
+# priority: high
+* [Prototype holds up — adopt] -> integrate_sync
+* [Not viable or timebox spent] -> polling_fallback
+```
+
+- `# timebox: <n><m|h|d|w>` — advisory wall-clock budget for a speculative
+  phase. The brief carries it alongside `enteredAt` (derived from the
+  decision log); an overdue timebox is the executor's evidence for taking
+  the abandon door, and the log records that time drove the exit. Malformed
+  values warn (**MAR021**); a timebox on a phase with only one exit warns
+  (**MAR023**) — with a single door, spending or not spending the budget
+  changes nothing, so the speculative shape needs both an "adopt" and an
+  "abandon" exit.
+- `# priority: critical|high|normal|low` — executor ordering hint when
+  phases or plans compete for a session; mapped to tracker priority by
+  `sync` ops. Never reorders the walker's frontier. Unknown values warn
+  (**MAR022**).
+
+A further plain key, `# wake:`, declares what re-activates a standing
 (service) phase — a loop over an external queue — so executors and
 schedulers can park instead of polling. It passes through as ordinary
 metadata: the walker never schedules; the executing platform owns waking.

@@ -214,3 +214,21 @@ test('brief: plan.intent carries # summary: and accumulated # prompt: lines', as
   assert.equal(bareBrief.plan.intent.summary, null);
   assert.equal(bareBrief.plan.intent.prompt, null);
 });
+
+test('brief: node carries timebox, priority and enteredAt; walker ignores all three', async () => {
+  const t = (await compile(`
+=== spike ===
+Try CRDT sync.
+# timebox: 3d
+# priority: high
+* [Adopt] -> END
+* [Abandon] -> END
+`)).trajectory!;
+  const state = initState(t, 'system', AT);
+  const brief = buildBrief(t, state, { file: 'spike.mar' });
+  assert.deepEqual(brief.node!.timebox, { source: '3d', seconds: 259200 });
+  assert.equal(brief.node!.priority, 'high');
+  assert.equal(brief.node!.enteredAt, AT, 'enteredAt comes from the log entry that reached the phase');
+  assert.equal(brief.frontier.filter((c) => c.available).length, 2,
+    'pacing metadata never blocks a choice');
+});

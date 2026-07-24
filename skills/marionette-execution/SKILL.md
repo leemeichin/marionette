@@ -74,6 +74,14 @@ the plan changed underneath the state: stop and surface the drift message;
   green", "Parity held two weeks") — only record one when its claim is true,
   and say why in the rationale. The rationale is the audit trail (who reads
   it: reviewers, and future you after a `rebind`).
+- **Timeboxes are evidence, not alarms.** A brief showing
+  `timebox 3d — in phase 5d (overdue)` does not stop you — nothing in the
+  walker ever will on time — it tells you the honest move: wrap up and take
+  the phase's abandon exit (its claim "timebox spent" is now simply true),
+  or escalate if only `@human` doors remain. State the elapsed time in the
+  rationale so the log shows time drove the decision. Use `# priority:`
+  to order work when several phases or plans compete for your session;
+  priority never makes an unavailable choice available.
 - **`node.refs` is your context.** Read linked issues/PRs/docs before
   starting the phase; when your platform allows, post progress where the ref
   points (e.g. comment on the linked GitHub issue). Refs are references, not

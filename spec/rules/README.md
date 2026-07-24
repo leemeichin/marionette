@@ -42,6 +42,8 @@ human(Id).                           % @human checkpoint
 loop_marked(Id).                     % ~loop~ declared cycle edge
 gate(Id, Expr, Source).              % {gate} as AST + original text
 divert(Node, Target, Line).          % unconditional fallthrough
+timebox(Node, Seconds).              % valid # timebox: (speculative phases)
+priority(Node, Level).               % valid # priority: critical|high|normal|low
 ```
 
 `Expr` terms: `lit(num(N))`, `lit(bool(B))`, `lit(str(S))`, `var(Name)`,

@@ -148,6 +148,9 @@ export const CODES = {
   MALFORMED_REF: 'MAR018',
   UNKNOWN_DELIVERY: 'MAR019',
   UNKNOWN_TRACKER: 'MAR020',
+  MALFORMED_TIMEBOX: 'MAR021',
+  UNKNOWN_PRIORITY: 'MAR022',
+  TIMEBOX_WITHOUT_ALTERNATIVE: 'MAR023',
 } as const;
 
 /** Decision log entry (G4: every taken branch records actor, timestamp, rationale). */

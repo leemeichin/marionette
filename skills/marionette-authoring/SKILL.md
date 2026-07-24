@@ -134,6 +134,23 @@ transcribe tickets into DSL by hand — fetch and scaffold
 
   The loop is unbounded by design; the bound is the evidence claim on the
   loop edge (only taken when work exists) plus the human door.
+- **Speculative phases get a timebox and two doors.** "Try this; if it
+  works continue, if not abandon — don't sink time into it" is a phase with
+  `# timebox:` and both exits (the compiler warns — MAR023 — if the abandon
+  door is missing, because a timebox with one exit decides nothing):
+
+  ```
+  === spike_realtime_sync ===
+  Try CRDT-based sync; a working prototype against the test suite decides.
+  # timebox: 3d
+  * [Prototype holds up — adopt] -> integrate_sync
+  * [Not viable or timebox spent] -> polling_fallback
+  ```
+
+  Time is evidence, not a gate: the walker never blocks on the clock; the
+  executor reads "overdue" from the brief and takes the abandon door
+  honestly. `# priority:` (critical|high|normal|low) marks urgency when
+  phases compete for a session.
 - **Every phase needs an exit** — a choice or a divert. Terminal outcomes
   divert to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this
