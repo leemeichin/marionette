@@ -503,3 +503,137 @@ report :-
     findall(L, stranding(_, L), Ss0),
     sort(Ss0, Ss),
     forall(member(L, Ss), format("STRAND\t~w~n", [L])).
+
+/* ═════════════════════ 7 · Walker semantics ════════════════════════════
+ *
+ * Traversal, stated as rules over the plan facts plus a small mutable
+ * walk state. This is the same contract src/state.ts implements and
+ * spec/conformance/cases/ exercises — the conformance suite runs BOTH
+ * walkers (issue #21, phase C). Timestamps, log persistence and file
+ * formats are the driver's concern; the rules own what may happen and
+ * what it changes.
+ *
+ * Walk state (dynamic):
+ *   w_current(Node)    the phase the traversal is at ('END' when done)
+ *   w_status(S)        active | completed
+ *   w_var(Name, V)     live variables (typed values: num/bool/str)
+ *   w_taken(ChoiceId)  once-only choices already consumed
+ *
+ * Driver API:
+ *   init_walk                       fresh state; enters the start phase
+ *   do_choose(Ref, Actor, HasRationale, Result)
+ *   do_advance(Result)
+ *   Result = moved(To) | refused(Code)   — a refusal changes nothing.
+ *   walk_var(Name, Type, Plain)     read variables back, untyped
+ */
+
+:- dynamic w_current/1, w_status/1, w_var/2, w_taken/1.
+
+init_walk :-
+    retractall(w_current(_)), retractall(w_status(_)),
+    retractall(w_var(_, _)), retractall(w_taken(_)),
+    assertz(w_status(active)),
+    forall(variable(Name, _, Init, _), assertz(w_var(Name, Init))),
+    plan_start(S),
+    enter_node(S).
+
+% Entering a phase: END completes the walk; anything else becomes current
+% and applies its mutations in source order (later mutations see earlier
+% ones, so `~ n += 1` twice adds two).
+enter_node(T) :-
+    end_id(T), !,
+    retractall(w_current(_)), assertz(w_current(T)),
+    retractall(w_status(_)), assertz(w_status(completed)).
+enter_node(T) :-
+    retractall(w_current(_)), assertz(w_current(T)),
+    forall(action(T, Var, Op, Expr, _), apply_action(Var, Op, Expr)).
+
+apply_action(Var, Op, Expr) :-
+    walk_env(Env),
+    once(eval(Expr, Env, V)),
+    (  Op == assign -> New = V
+    ;  w_var(Var, num(Cur)), V = num(D),
+       ( Op == inc -> N is Cur + D ; N is Cur - D ), New = num(N)
+    ),
+    retract(w_var(Var, _)), assertz(w_var(Var, New)).
+
+walk_env(Env) :- findall(N-V, w_var(N, V), Env).
+
+%% available(?C) / walk_blocked(+C, -Code): the live frontier at w_current.
+%% Once-only exhaustion is checked before the gate, as in the reference.
+available(C) :- w_current(N), choice(C, N, _, _, _), \+ walk_blocked(C, _).
+walk_blocked(C, 'once-exhausted') :- \+ sticky(C), w_taken(C), !.
+walk_blocked(C, 'gate-blocked') :-
+    gate(C, E, _), walk_env(Env), \+ once(eval(E, Env, bool(true))).
+
+%% do_choose(+Ref, +Actor, +HasRationale, -Result)
+%% Refusal order matches the reference walker: completed → resolution →
+%% availability → @human actor → rationale. A refusal changes nothing.
+do_choose(_, _, _, refused(completed)) :- w_status(completed), !.
+do_choose(Ref, Actor, HasRationale, Result) :-
+    w_current(N),
+    (  resolve_choice(N, Ref, C)
+    -> (  walk_blocked(C, Code)          -> Result = refused(Code)
+       ;  human(C), agent_actor(Actor)   -> Result = refused('human-checkpoint')
+       ;  HasRationale == false          -> Result = refused('rationale-required')
+       ;  take_choice(C, Result)
+       )
+    ;  resolve_error(N, Ref, Code), Result = refused(Code)
+    ).
+
+agent_actor(Actor) :- ( Actor == "" ; Actor == "agent" ), !.
+
+take_choice(C, moved(To)) :-
+    ( sticky(C) -> true ; assertz(w_taken(C)) ),
+    choice(C, _, To, _, _),
+    enter_node(To).
+
+%% do_advance(-Result): follow the fallthrough divert. No rationale is
+%% required (the reference defaults it), matching src/state.ts advance.
+do_advance(refused(completed)) :- w_status(completed), !.
+do_advance(Result) :-
+    w_current(N),
+    (  divert(N, To, _) -> enter_node(To), Result = moved(To)
+    ;  Result = refused('no-divert')
+    ).
+
+/* Choice resolution — id, then numeric index, then unambiguous
+ * case-insensitive label prefix; the same order as the reference. */
+
+resolve_choice(N, Ref, C) :- choice(C, N, _, _, _), atom_string(C, Ref), !.
+resolve_choice(N, Ref, C) :-
+    number_string(I, Ref), integer(I), I >= 0, !,
+    nth_choice(N, I, C).
+resolve_choice(N, Ref, C) :-
+    findall(X, label_prefix_match(N, Ref, X), [C]).
+
+% The node's choices in source order, picked by position.
+nth_choice(N, I, C) :-
+    findall(Ord-X, choice(X, N, _, _, Ord), Pairs0),
+    msort(Pairs0, Pairs),
+    nth0(I, Pairs, _-C).
+
+label_prefix_match(N, Ref, C) :-
+    choice(C, N, _, _, _), label(C, L),
+    string_lower(Ref, RefLow), string_lower(L, LLow),
+    string_concat(RefLow, _, LLow).
+
+%% resolve_error(+N, +Ref, -Code): why resolution failed.
+resolve_error(N, Ref, 'ambiguous-choice') :-
+    findall(X, label_prefix_match(N, Ref, X), Ms), length(Ms, K), K > 1, !.
+resolve_error(_, _, 'unknown-choice').
+
+/* Driver plumbing: flat results (atoms, not compounds) for the wasm
+ * bridge, and typed variable read-back. */
+
+walk_var(Name, number,  X) :- w_var(Name, num(X)).
+walk_var(Name, boolean, X) :- w_var(Name, bool(X)).
+walk_var(Name, string,  X) :- w_var(Name, str(X)).
+
+%% drive_choose/drive_advance: Outcome is `ok` or the refusal code.
+drive_choose(Ref, Actor, HasRationale, Outcome) :-
+    do_choose(Ref, Actor, HasRationale, R),
+    ( R = refused(Code) -> Outcome = Code ; Outcome = ok ).
+drive_advance(Outcome) :-
+    do_advance(R),
+    ( R = refused(Code) -> Outcome = Code ; Outcome = ok ).
