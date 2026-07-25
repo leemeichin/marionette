@@ -1,13 +1,17 @@
 :- encoding(utf8).
-/*  Marionette rule base — the structural validators as logic rules.
+/*  Marionette graph semantics — NORMATIVE (ADR-0003).
  *
  *  A compiled plan is a database of facts (see spec/rules/README.md for the
- *  schema; `marionette facts plan.mar` emits it). This file restates the
- *  graph-level validators from src/validate.ts + src/gates.ts declaratively,
- *  so each MAR code reads as a one-line claim about the graph — an
- *  independent oracle diffed against the TypeScript implementation in
- *  tests/oracle.test.ts — and provides a query library for interrogating a
- *  plan interactively.
+ *  schema; `marionette facts plan.mar` emits it). This file is the
+ *  specification of Marionette's graph-layer diagnostics: each MAR code is
+ *  one clause stating the defect as a claim about the graph. An
+ *  implementation conforms iff it reproduces finding/2 — code and line — on
+ *  the vectors in spec/conformance/graph/ and stays divergence-free under
+ *  the differential harness (tests/oracle.test.ts, which holds the
+ *  TypeScript implementation in src/validate.ts to this file on every push).
+ *  Wording, suggestions and exit codes are implementation presentation, out
+ *  of scope here. The file also provides a query library for interrogating
+ *  a plan interactively.
  *
  *  Usage:
  *    swipl -g report -t halt spec/rules/marionette.pl plan.pl   % oracle output

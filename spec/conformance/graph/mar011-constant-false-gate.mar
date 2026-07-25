@@ -1,0 +1,4 @@
+=== a ===
+One gate is provably shut forever.
+* {false} [Never] -> END
+* [Ok] -> END

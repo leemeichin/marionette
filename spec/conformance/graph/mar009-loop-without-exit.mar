@@ -1,0 +1,3 @@
+=== a ===
+A declared loop with no way to leave.
++ [Again] ~loop~ -> a

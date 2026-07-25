@@ -1,0 +1,7 @@
+VAR x = 0
+
+=== a ===
+The gate depends on an assignment the analysis cannot bound.
+~ x = 1
+* {x > 0} [Go] -> END
+* [Alt] -> END

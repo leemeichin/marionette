@@ -2,9 +2,12 @@
 
 A compiled plan is a directed graph of state machines — which makes it a
 database of facts, and makes the structural validators queries over that
-database. This directory states them as such: `marionette.pl` is the
-graph-level validator suite from `src/validate.ts` + `src/gates.ts` rewritten
-as SWI-Prolog rules, where each MAR code is a clause that reads like its spec:
+database. This directory states them as such, and since
+[ADR-0003](../../docs/decisions/0003-rules-as-spec.md) the statement is
+**normative**: `marionette.pl` *is* the spec of the graph-layer semantics,
+`src/validate.ts` is an implementation held to it by CI, and the acceptance
+vectors live in [`spec/conformance/graph/`](../conformance/graph/). Each MAR
+code is a clause that reads like its spec sentence:
 
 ```prolog
 %% MAR006 — a phase with no effective exit is a dead end.
@@ -128,14 +131,17 @@ ad-hoc questions compose without touching TypeScript.
 
 ## Equivalence discipline
 
-The rules deliberately reproduce the TS validator's *decisions*, not its
-algorithms: effective edges exclude provably-false gates before dead-end /
-reachability / cycle analysis; per-gate verdicts use global mutations while
-loop-exit verdicts scope monotonicity to the cycle's SCC (with global
-agreement); MAR009/MAR010 report once per SCC at the first triggering
-`~loop~` choice in source order. When the TS validator's semantics change, the
-oracle test fails until the matching clause here is updated — which is the
-point: the change has to be legible enough to state twice.
+Conformance is judged on *findings* — code and line — never on message
+strings: the TS implementation's semantic core (`analyzePlan`) returns
+findings as data, and all wording lives in `src/diagnostics.ts`, so the
+differential harness compares semantics with presentation excluded by
+construction. The two layers make the same decisions by design: effective
+edges exclude provably-false gates before dead-end / reachability / cycle
+analysis; per-gate verdicts use global mutations while loop-exit verdicts
+scope monotonicity to the cycle's SCC (with global agreement); MAR009/MAR010
+report once per SCC at the first triggering `~loop~` choice in source order.
+A semantic change lands spec-first: clause → conformance vector →
+implementation; CI fails until all three agree.
 
 ## Dependency posture
 

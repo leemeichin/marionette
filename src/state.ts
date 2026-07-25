@@ -7,6 +7,7 @@
 import type { Choice, LogEntry, PlanState, Trajectory, TrajectoryNode, Value } from './types.js';
 import { END } from './types.js';
 import { ExprError, evalExpr } from './expr.js';
+import { blockedText, refusalText } from './diagnostics.js';
 
 export class DriftError extends Error {
   constructor(public readonly stateHash: string, public readonly planHash: string) {
@@ -69,7 +70,7 @@ export function bindState(trajectory: Trajectory, state: PlanState): void {
 
 function nodeById(trajectory: Trajectory, id: string): TrajectoryNode {
   const node = trajectory.nodes.find((n) => n.id === id);
-  if (!node) throw new WalkError(`node "${id}" does not exist in the compiled plan`, 'unknown-node');
+  if (!node) throw new WalkError(refusalText({ kind: 'unknown-node', id }), 'unknown-node');
   return node;
 }
 
@@ -87,18 +88,22 @@ export function frontier(trajectory: Trajectory, state: PlanState): AvailableCho
   const node = nodeById(trajectory, state.current);
   return node.choices.map((choice) => {
     if (!choice.sticky && state.taken.includes(choice.id)) {
-      return { choice, blocked: 'already taken (once-only choice)', blockedCode: 'once-exhausted' as const };
+      return { choice, blocked: blockedText({ kind: 'once-exhausted' }), blockedCode: 'once-exhausted' as const };
     }
     if (choice.gate) {
       try {
         const value = evalExpr(choice.gate.ast, state.variables);
         if (value !== true) {
-          return { choice, blocked: `gate {${choice.gate.source}} is ${JSON.stringify(value)}`, blockedCode: 'gate-blocked' as const };
+          return {
+            choice,
+            blocked: blockedText({ kind: 'gate-false', source: choice.gate.source, value: JSON.stringify(value) }),
+            blockedCode: 'gate-blocked' as const,
+          };
         }
       } catch (e) {
         return {
           choice,
-          blocked: `gate {${choice.gate.source}} failed to evaluate: ${(e as ExprError).message}`,
+          blocked: blockedText({ kind: 'gate-error', source: choice.gate.source, error: (e as ExprError).message }),
           blockedCode: 'gate-blocked' as const,
         };
       }
@@ -115,33 +120,26 @@ export interface TakeOptions {
 
 /** Take a choice by id, index, or unambiguous label prefix. */
 export function takeChoice(trajectory: Trajectory, state: PlanState, ref: string, opts: TakeOptions): void {
-  if (state.status === 'completed') throw new WalkError('plan is already completed', 'completed');
+  if (state.status === 'completed') throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
   const node = nodeById(trajectory, state.current);
   const choice = resolveChoice(node, ref);
   const availability = frontier(trajectory, state).find((a) => a.choice.id === choice.id)!;
   if (availability.blocked) {
     throw new WalkError(
-      `choice "${choice.label}" is not available: ${availability.blocked}`,
+      refusalText({ kind: 'not-available', label: choice.label, blocked: availability.blocked }),
       availability.blockedCode ?? 'gate-blocked',
     );
   }
   if (choice.human) {
     if (!opts.actor || opts.actor === 'agent') {
-      throw new WalkError(
-        `choice "${choice.label}" is an @human checkpoint: an agent may not take it autonomously. ` +
-        'Escalate to a human; a human records the decision with --actor <name>.',
-        'human-checkpoint',
-      );
+      throw new WalkError(refusalText({ kind: 'human-checkpoint', label: choice.label }), 'human-checkpoint');
     }
     if (!opts.rationale) {
-      throw new WalkError(
-        `@human checkpoint "${choice.label}" requires --rationale (the decision must be auditable)`,
-        'rationale-required',
-      );
+      throw new WalkError(refusalText({ kind: 'rationale-human', label: choice.label }), 'rationale-required');
     }
   }
   if (!opts.rationale) {
-    throw new WalkError('every taken branch must record a rationale: pass --rationale (G4)', 'rationale-required');
+    throw new WalkError(refusalText({ kind: 'rationale-missing' }), 'rationale-required');
   }
   if (!choice.sticky) state.taken.push(choice.id);
   enterNode(trajectory, state, choice.target, {
@@ -156,10 +154,10 @@ export function takeChoice(trajectory: Trajectory, state: PlanState, ref: string
 
 /** Follow the fallthrough divert of the current node (when no choice applies). */
 export function advance(trajectory: Trajectory, state: PlanState, opts: TakeOptions): void {
-  if (state.status === 'completed') throw new WalkError('plan is already completed', 'completed');
+  if (state.status === 'completed') throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
   const node = nodeById(trajectory, state.current);
   if (!node.divert) {
-    throw new WalkError(`phase "${node.id}" has no divert; take one of its choices instead`, 'no-divert');
+    throw new WalkError(refusalText({ kind: 'no-divert', id: node.id }), 'no-divert');
   }
   enterNode(trajectory, state, node.divert.target, {
     at: opts.at ?? new Date().toISOString(),
@@ -178,20 +176,24 @@ function resolveChoice(node: TrajectoryNode, ref: string): Choice {
     const idx = Number(ref);
     if (idx >= 0 && idx < node.choices.length) return node.choices[idx];
     if (node.choices.length === 0) {
-      const divert = node.divert
-        ? `; it diverts to "${node.divert.target}" — use "marionette state advance"`
-        : '';
-      throw new WalkError(`phase "${node.id}" has no choices${divert}`, 'unknown-choice');
+      throw new WalkError(
+        refusalText({ kind: 'no-choices', id: node.id, divertTarget: node.divert?.target ?? null }),
+        'unknown-choice');
     }
     throw new WalkError(
-      `phase "${node.id}" has no choice at index ${idx} (valid: 0..${node.choices.length - 1})`, 'unknown-choice');
+      refusalText({ kind: 'bad-index', id: node.id, index: idx, max: node.choices.length - 1 }),
+      'unknown-choice');
   }
   const byLabel = node.choices.filter((c) => c.label.toLowerCase().startsWith(ref.toLowerCase()));
   if (byLabel.length === 1) return byLabel[0];
-  if (byLabel.length > 1) throw new WalkError(`choice reference "${ref}" is ambiguous at "${node.id}"`, 'ambiguous-choice');
+  if (byLabel.length > 1) {
+    throw new WalkError(refusalText({ kind: 'ambiguous', ref, id: node.id }), 'ambiguous-choice');
+  }
   throw new WalkError(
-    `no choice "${ref}" at phase "${node.id}"; available: ` +
-    node.choices.map((c, i) => `[${i}] ${c.label}`).join(', '),
+    refusalText({
+      kind: 'no-match', ref, id: node.id,
+      available: node.choices.map((c, i) => `[${i}] ${c.label}`).join(', '),
+    }),
     'unknown-choice',
   );
 }
@@ -235,7 +237,7 @@ export function visitedPath(state: PlanState): string[] {
 export function parseState(json: string): PlanState {
   const state = JSON.parse(json) as PlanState;
   for (const key of ['hash', 'status', 'current', 'variables', 'taken', 'log'] as const) {
-    if (!(key in state)) throw new WalkError(`invalid state file: missing "${key}"`, 'invalid-state');
+    if (!(key in state)) throw new WalkError(refusalText({ kind: 'invalid-state', key }), 'invalid-state');
   }
   return state;
 }
@@ -287,11 +289,7 @@ export function rebindState(
 
   const nodeIds = new Set(trajectory.nodes.map((n) => n.id));
   if (state.current !== END && !nodeIds.has(state.current)) {
-    throw new WalkError(
-      `cannot migrate: current phase "${state.current}" no longer exists in the plan. ` +
-      'Review the plan changes, then either restore the phase or re-initialise the state.',
-      'migration-blocked',
-    );
+    throw new WalkError(refusalText({ kind: 'migration-blocked', current: state.current }), 'migration-blocked');
   }
 
   const choiceIds = new Set(trajectory.nodes.flatMap((n) => n.choices.map((c) => c.id)));

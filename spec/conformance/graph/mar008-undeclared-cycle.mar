@@ -1,0 +1,4 @@
+=== a ===
+Iterates on itself without declaring the loop.
++ [Again] -> a
+* [Done] -> END

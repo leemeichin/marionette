@@ -1,0 +1,7 @@
+=== a ===
+The ~loop~ mark points forward, closing nothing.
++ [Go] ~loop~ -> b
+
+=== b ===
+Terminal.
+-> END

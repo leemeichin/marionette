@@ -1,0 +1,4 @@
+=== a ===
+A once-only loop edge can iterate at most once.
+* [Again] ~loop~ -> a
+* [Done] -> END

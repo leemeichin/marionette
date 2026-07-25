@@ -1,0 +1,6 @@
+VAR flag = false
+
+=== a ===
+The only exit is gated on a variable that can never become true.
++ [Again] ~loop~ -> a
+* {flag} [Out] -> END

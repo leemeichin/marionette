@@ -1,0 +1,9 @@
+=== a ===
+The once-only edge sits inside the a-b cycle.
+* [Try the shortcut] -> b
++ [Take the long way] -> b
+
+=== b ===
+Loops back to a.
++ [Back] ~loop~ -> a
+* [Done] -> END
