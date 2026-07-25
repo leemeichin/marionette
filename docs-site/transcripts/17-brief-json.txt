@@ -41,7 +41,10 @@
         "id": "acme/shop#41",
         "url": "https://github.com/acme/shop/issues/41"
       }
-    ]
+    ],
+    "timebox": null,
+    "priority": null,
+    "enteredAt": "2026-07-25T11:35:53.520Z"
   },
   "delivery": {
     "mode": "none",

@@ -117,6 +117,22 @@ export const END = 'END';
 
 export type Severity = 'error' | 'warning';
 
+/**
+ * A semantic validator finding: what is wrong and where, as pure data.
+ * The presentation layer (diagnostics.ts renderFinding) phrases it; the rule
+ * base (spec/rules/marionette.pl) states the same fact as a clause. Semantic
+ * implementations are compared on Findings, never on message strings.
+ */
+export interface Finding {
+  code: string;
+  severity: Severity;
+  line?: number;
+  /** Message-shape discriminator for codes with several defect shapes. */
+  variant?: string;
+  /** Structured slots the presentation layer phrases from. */
+  data: Record<string, string | number | string[] | null>;
+}
+
 export interface Diagnostic {
   severity: Severity;
   /** Stable machine code, e.g. MAR006. */

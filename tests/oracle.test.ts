@@ -18,9 +18,8 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import type { Diagnostic } from '../src/types.js';
 import { parsePlan, type ParsedPlan } from '../src/parser.js';
-import { validatePlan } from '../src/validate.js';
+import { analyzePlan } from '../src/validate.js';
 import { emitFacts } from '../src/facts.js';
 import { oracleReport } from '../src/oracle.js';
 
@@ -54,16 +53,16 @@ interface Verdict {
 }
 
 function tsVerdict(plan: ParsedPlan): Verdict | null {
-  const diagnostics: Diagnostic[] = [...plan.diagnostics];
-  validatePlan(plan, diagnostics);
-  if (diagnostics.some((d) => d.severity === 'error' && PRE_GRAPH.has(d.code))) return null;
-  const exact = diagnostics
-    .filter((d) => EXACT.has(d.code))
-    .map((d) => `${d.code}:${d.line}`)
+  // Compare on semantic findings — presentation is excluded by construction.
+  const findings = analyzePlan(plan);
+  if (findings.some((f) => f.severity === 'error' && PRE_GRAPH.has(f.code))) return null;
+  const exact = findings
+    .filter((f) => EXACT.has(f.code))
+    .map((f) => `${f.code}:${f.line}`)
     .sort();
   return {
     exact: [...new Set(exact)],
-    hasUndeclaredCycle: diagnostics.some((d) => d.code === 'MAR008'),
+    hasUndeclaredCycle: findings.some((f) => f.code === 'MAR008'),
     strandLines: [],
   };
 }
@@ -129,6 +128,26 @@ function mutants(plan: ParsedPlan): Array<{ name: string; plan: ParsedPlan }> {
   }
   return picked;
 }
+
+test('graph spec vectors: both implementations reproduce the frozen expectations', async (t) => {
+  const dir = join(ROOT, 'spec', 'conformance', 'graph');
+  const cases = JSON.parse(readFileSync(join(dir, 'cases.json'), 'utf8')) as Array<{
+    case: string; plan: string; findings: string[]; undeclaredCycle: boolean; strands: number[];
+  }>;
+  assert.ok(cases.length >= 11, 'every graph diagnostic has a vector');
+  for (const c of cases) {
+    await t.test(c.case, async () => {
+      const plan = parsePlan(readFileSync(join(dir, c.plan), 'utf8'));
+      const ts = tsVerdict(plan)!;
+      const pl = await prologVerdict(plan);
+      assert.deepEqual(ts.exact, [...c.findings].sort(), 'TypeScript matches the spec vector');
+      assert.deepEqual(pl.exact, [...c.findings].sort(), 'rule base matches the spec vector');
+      assert.equal(ts.hasUndeclaredCycle, c.undeclaredCycle, 'TypeScript MAR008 presence');
+      assert.equal(pl.hasUndeclaredCycle, c.undeclaredCycle, 'rule base MAR008 presence');
+      assert.deepEqual(pl.strandLines, c.strands, 'rule base STRAND lines');
+    });
+  }
+});
 
 test('prolog oracle agrees with the TypeScript validator', async (t) => {
   const novel: string[] = [];

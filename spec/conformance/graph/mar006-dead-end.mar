@@ -1,0 +1,6 @@
+=== a ===
+Reach b, which forgets to exit.
+* [Go] -> b
+
+=== b ===
+No way out of here.
