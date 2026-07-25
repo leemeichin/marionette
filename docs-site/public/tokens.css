@@ -1,22 +1,23 @@
-/* Design tokens — see DESIGN.md. Watercolour pastel: a cool paper-white
-   default and a slate-blue dark theme; no warm/olive cast. Every fg/bg
+/* Design tokens — see DESIGN.md. Vivid ink on cool paper: a periwinkle-white
+   default and a deep indigo-navy dark theme; accents are saturated (indigo,
+   emerald, raspberry, amber, azure, violet) instead of pastel. Every fg/bg
    pair verified ≥ 4.5:1 (AA) by build/check-contrast.mjs; edit there and
    here together. */
 
 :root {
-  --bg: #f8fafc;
-  --bg-elev: #eef2f8;
-  --bg-code: #f1f5fa;
-  --fg: #2c3644;
-  --fg-dim: #51606f;
-  --fg-faint: #5c6a79;
-  --green: #1e7566;
-  --red: #b04a5e;
-  --yellow: #7d661f;
-  --cyan: #22708a;
-  --magenta: #8b4d9e;
-  --accent: #1e7566;
-  --focus: #145c50;
+  --bg: #f7f8ff;
+  --bg-elev: #eceffd;
+  --bg-code: #f1f3fe;
+  --fg: #252c40;
+  --fg-dim: #4a5474;
+  --fg-faint: #555f7e;
+  --green: #0c7a43;
+  --red: #c22a5a;
+  --yellow: #8a5a00;
+  --cyan: #0561b8;
+  --magenta: #8b2fc9;
+  --accent: #5b3df5;
+  --focus: #3c22d1;
 
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
     "DejaVu Sans Mono", monospace;
@@ -31,36 +32,36 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
-    --bg: #14171d;
-    --bg-elev: #1b202a;
-    --bg-code: #212734;
-    --fg: #dee4ee;
-    --fg-dim: #a3aebf;
-    --fg-faint: #96a1b2;
-    --green: #93d9b2;
-    --red: #f4a9b4;
-    --yellow: #e8d3a4;
-    --cyan: #a1d6e8;
-    --magenta: #d8b6ec;
-    --accent: #93d9b2;
-    --focus: #aee8ff;
+    --bg: #12151f;
+    --bg-elev: #191e2e;
+    --bg-code: #1f2639;
+    --fg: #e4e9f9;
+    --fg-dim: #a9b4d4;
+    --fg-faint: #9aa5c5;
+    --green: #43dd8f;
+    --red: #ff92ac;
+    --yellow: #ffc75e;
+    --cyan: #57c4f5;
+    --magenta: #d29bff;
+    --accent: #a4a0ff;
+    --focus: #7ee2ff;
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #14171d;
-  --bg-elev: #1b202a;
-  --bg-code: #212734;
-  --fg: #dee4ee;
-  --fg-dim: #a3aebf;
-  --fg-faint: #96a1b2;
-  --green: #93d9b2;
-  --red: #f4a9b4;
-  --yellow: #e8d3a4;
-  --cyan: #a1d6e8;
-  --magenta: #d8b6ec;
-  --accent: #93d9b2;
-  --focus: #aee8ff;
+  --bg: #12151f;
+  --bg-elev: #191e2e;
+  --bg-code: #1f2639;
+  --fg: #e4e9f9;
+  --fg-dim: #a9b4d4;
+  --fg-faint: #9aa5c5;
+  --green: #43dd8f;
+  --red: #ff92ac;
+  --yellow: #ffc75e;
+  --cyan: #57c4f5;
+  --magenta: #d29bff;
+  --accent: #a4a0ff;
+  --focus: #7ee2ff;
   color-scheme: dark;
 }

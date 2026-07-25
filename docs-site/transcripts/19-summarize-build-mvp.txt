@@ -1,7 +1,5 @@
 # Plan summary: build_mvp.mar
 
-**Intent:** Ship an MVP in evidence-bounded iterations — three attempts to move the metrics, a human launch gate, and a forced pivot-or-kill decision instead of a fourth quiet retry.
-
 > We keep polishing instead of shipping. Plan an MVP loop with teeth:
 > 
 > - ship the smallest slice that can produce real usage data
@@ -15,7 +13,7 @@ Starts at **build_mvp**. 3 phases, 2 decision points (phases with 2+ choices), 5
 - **Declared loops:** build_mvp → build_mvp ("Learnings, go again"); pivot_or_kill → build_mvp ("Pivot: new angle, fresh loop")
 - **Gates:** 2 gated choices, of which 0 unverified (review manually)
 - **Variables:** iteration: number = 0
-- **Contract hash:** `sha256:b587ba458ff7…`
+- **Contract hash:** `sha256:2f7f04edfaa6…`
 
 ## Walkthrough
 

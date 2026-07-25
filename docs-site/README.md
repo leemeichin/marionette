@@ -49,13 +49,18 @@ from the Cloudflare dashboard afterwards if wanted.
 - `<demo-cast id="06-state-init" title="…"></demo-cast>` in a page becomes
   an interactive terminal window replaying that capture. The fidelity check
   fails the build if rendered frames diverge from the capture by one byte.
-- `/playground` compiles and walks plans **in the browser** using the repo's
-  own tsc output (staged into `dist/lib` by the build — run `npm run build`
-  at the repo root first). Hashing is WebCrypto (`globalThis.crypto`), the
-  same code path on Node ≥ 20 and browsers — no shims. Three.js is vendored
-  under `public/vendor/` and loaded only on that page.
+- The home page (`/`) compiles and walks plans **in the browser** using the
+  repo's own tsc output (staged into `dist/lib` by the build — run
+  `npm run build` at the repo root first). Hashing is WebCrypto
+  (`globalThis.crypto`), the same code path on Node ≥ 20 and browsers — no
+  shims. Three.js is vendored under `public/vendor/` and loaded only there.
+- `<mini-playground src="checkout.mar" title="…">` embeds the same engine
+  on the examples page as an editable two-pane widget (plan left, walk
+  right), without the 3D canvas — see `public/mini.js`.
 - `<mar-file src="checkout.mar">` / `<mar-src>…</mar-src>` render
   syntax-tinted `.mar` sources.
+- Old URLs (`/playground`, `/syntax`, `/walkthrough`, `/reference`) 301 to
+  their new homes via `public/_redirects`.
 
 Accessibility is enforced, not aspirational: `npm run check` fails on any
 AA contrast regression, unlabelled control, missing landmark/skip link, or

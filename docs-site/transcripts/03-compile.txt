@@ -1,2 +1,2 @@
 wrote checkout.trajectory.json
-[32m✓[39m compiled 3 phases, 5 choices [2m(sha256:45a90f7fc02f…)[22m
+[32m✓[39m compiled 3 phases, 5 choices [2m(sha256:7273a73bb2f8…)[22m

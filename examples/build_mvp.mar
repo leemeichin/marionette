@@ -1,6 +1,5 @@
 // The PRD's illustrative example, completed into a full valid plan.
 # project: build-mvp-example
-# summary: Ship an MVP in evidence-bounded iterations — three attempts to move the metrics, a human launch gate, and a forced pivot-or-kill decision instead of a fourth quiet retry.
 # prompt: """
 We keep polishing instead of shipping. Plan an MVP loop with teeth:
 

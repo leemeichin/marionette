@@ -37,7 +37,7 @@ running plan. These rules do not depend on instructions in an AI prompt.</p>
 <h2 id="brief">The agent's assignment, as JSON</h2>
 
 <p>This is the checkout example from the
-<a href="/walkthrough">walkthrough</a>, partway through the project. The
+<a href="/docs#check">docs</a>, partway through the project. The
 JSON contains the original request, the current stage and its instructions,
 useful values, progress so far, every possible choice and why it is
 available or blocked, and the command needed to record a result. Its exact
@@ -173,22 +173,11 @@ context, comment progress, close on phase exit).</p>
 
 <h2 id="drift">Editing a live plan: drift and rebind</h2>
 
-<p>Plans change mid-flight. Any semantic edit changes the content hash, and
-every walk command then refuses with a drift error (exit 3). Two sanctioned
-paths out:</p>
-
-<ul>
-  <li><code>marionette state rebind plan.mar</code> — migrate the existing
-    state onto the edited plan, <strong>keeping the decision log</strong>.
-    Vanished taken-choices are dropped (and reported), removed variables
-    dropped, new variables added at their initials, type-changed variables
-    reset. Refused (<code>migration-blocked</code>) when the current phase
-    no longer exists — that reconciliation needs a human.</li>
-  <li><code>marionette state init --force</code> — start over; history
-    discarded.</li>
-</ul>
-
-<p>See it happen in the <a href="/walkthrough#drift">walkthrough</a>.</p>
+<p>Plans change mid-flight; any semantic edit changes the content hash and
+every walk command then refuses with a drift error (exit 3) until the edit
+is reconciled. The full story — with the recorded demos — is in
+<a href="/docs#change">docs · change it safely</a>. The executor-relevant
+part: treat exit 3 as "stop and surface", never as a retry.</p>
 
 <h2 id="conformance">Conformance: any walker, same behaviour</h2>
 

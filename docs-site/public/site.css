@@ -47,6 +47,10 @@ body {
   padding: var(--s1) var(--s2);
   background: var(--bg-elev);
   border-bottom: 1px solid var(--bg-code);
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(90deg, var(--accent), var(--magenta), var(--cyan), var(--green)) 1;
+  border-left: 0;
+  border-right: 0;
 }
 
 .site-title {
@@ -107,7 +111,7 @@ body {
 .site-nav a::before { content: "./"; color: var(--fg-faint); }
 
 .site-nav a:hover, .site-nav a:focus-visible {
-  color: var(--fg);
+  color: var(--accent);
   text-decoration: underline;
 }
 
@@ -117,12 +121,19 @@ body {
   font-weight: 700;
 }
 
+/* One shared measure: prose, tables and example terminals all sit in the
+   same centred column, so nothing juts past the text edge. */
 main {
   padding: var(--s4) var(--s3) var(--s6);
-  max-width: 60rem;
+  max-width: 56rem;
   width: 100%;
-  justify-self: start;
+  justify-self: center;
 }
+
+/* Wide pages (the home playground) span the viewport; their prose lives in
+   .measure blocks so reading width stays sane. */
+main.wide { max-width: none; justify-self: stretch; padding-top: var(--s3); }
+.measure { max-width: 56rem; margin-inline: auto; }
 
 .site-footer {
   padding: var(--s2) var(--s3);
@@ -157,12 +168,11 @@ h1 { font-size: 2rem; margin: 0 0 var(--s3); }
 h2 { font-size: 1.5rem; margin: var(--s5) 0 var(--s2); }
 h3 { font-size: 1.25rem; margin: var(--s4) 0 var(--s2); }
 
-h1::before, h2::before { content: "# "; color: var(--fg-faint); }
-h3::before { content: "## "; color: var(--fg-faint); }
-
-p, ul, ol, table { max-width: 72ch; }
+h1::before, h2::before { content: "# "; color: var(--accent); }
+h3::before { content: "## "; color: var(--magenta); }
 
 a { color: var(--accent); }
+a:hover { color: var(--magenta); }
 
 hr {
   border: none;
@@ -181,6 +191,30 @@ kbd, code {
 
 pre code { background: none; padding: 0; }
 
+/* ---- on-page section nav (the docs page) ---- */
+
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  margin: 0 0 var(--s3);
+  padding: 0;
+  list-style: none;
+}
+.subnav a {
+  display: inline-block;
+  padding: 0.2rem 0.75rem;
+  border: 1px solid var(--fg-faint);
+  border-radius: 999px;
+  color: var(--fg-dim);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+.subnav a:hover, .subnav a:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ---- code blocks (static, non-demo) ---- */
 
 pre.code {
@@ -188,9 +222,10 @@ pre.code {
   border: 1px solid var(--bg-elev);
   border-radius: 4px;
   padding: var(--s2);
-  overflow-x: auto;
   line-height: 1.45;
   max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 /* .mar syntax tint */
@@ -243,7 +278,16 @@ th { background: var(--bg-elev); }
   font-size: 0.8125rem;
 }
 
-.term-dots { color: var(--fg-faint); letter-spacing: 0.2em; }
+/* traffic lights — decorative chrome, aria-hidden */
+.term-dots { display: inline-flex; gap: 0.35rem; }
+.term-dots i {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: var(--red);
+}
+.term-dots i:nth-child(2) { background: var(--yellow); }
+.term-dots i:nth-child(3) { background: var(--green); }
 
 .term-title { color: var(--fg-dim); flex: 1; min-width: 0; }
 
@@ -274,7 +318,7 @@ th { background: var(--bg-elev); }
   cursor: pointer;
 }
 
-.term-controls button:hover:not(:disabled) { border-color: var(--accent); }
+.term-controls button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .term-controls button:disabled { color: var(--fg-faint); cursor: default; }
 
 .term-status {
@@ -284,6 +328,8 @@ th { background: var(--bg-elev); }
   color: var(--fg-faint);
 }
 
+/* Long lines wrap instead of scrolling sideways; the box keeps a focusable
+   scroll container role only as a fallback for zoomed/narrow extremes. */
 .term-screen {
   margin: 0;
   padding: var(--s2);
@@ -292,7 +338,12 @@ th { background: var(--bg-elev); }
   font-size: 0.9375rem;
 }
 
-.term-screen .t-line { display: block; min-height: 1.45em; white-space: pre; }
+.term-screen .t-line {
+  display: block;
+  min-height: 1.45em;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
 /* collapsed lines keep their box so playback never reflows the page */
 .term-screen .t-line[hidden] { display: block; visibility: hidden; }
 
@@ -326,9 +377,9 @@ th { background: var(--bg-elev); }
   * { transition: none !important; }
 }
 
-/* ---- playground ---- */
+/* ---- playground (home) ---- */
 
-.pg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3); }
+.pg { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s3); align-items: start; }
 @media (max-width: 64rem) { .pg { grid-template-columns: minmax(0, 1fr); } }
 
 .pg label { display: block; margin-bottom: var(--s1); color: var(--fg-dim); font-size: 0.8125rem; }
@@ -346,6 +397,7 @@ th { background: var(--bg-elev); }
   resize: vertical;
   tab-size: 2;
 }
+.pg textarea:focus-visible { border-color: var(--accent); }
 
 .pg-diagnostics { margin-top: var(--s2); font-size: 0.875rem; min-height: 3.5rem; }
 .pg-diagnostics ul { list-style: none; padding: 0; margin: 0; }
@@ -357,11 +409,22 @@ th { background: var(--bg-elev); }
 
 .pg-viz h2 { margin-top: 0; }
 .pg-canvas {
+  position: relative;
   height: 22rem;
   background: var(--bg-code);
   border: 1px solid var(--bg-elev);
   border-radius: 6px;
   overflow: hidden;
+}
+/* decorative hint while nothing compiles — the canvas itself is aria-hidden */
+.pg-canvas[data-empty]::before {
+  content: "· the graph appears when the plan compiles ·";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--fg-faint);
+  font-size: 0.8125rem;
 }
 .pg-canvas canvas { display: block; width: 100%; height: 100%; }
 .pg-hint { font-size: 0.8125rem; color: var(--fg-faint); }
@@ -397,7 +460,7 @@ th { background: var(--bg-elev); }
   padding: 0.45rem var(--s2);
   cursor: pointer;
 }
-.pg-choices button:hover:not(:disabled), .pg-reset:hover { border-color: var(--accent); }
+.pg-choices button:hover:not(:disabled), .pg-reset:hover { border-color: var(--accent); color: var(--accent); }
 .pg-choices button:disabled { color: var(--fg-faint); cursor: default; }
 
 .pg-refusal { color: var(--red); margin: 0 0 var(--s1); }
@@ -436,7 +499,7 @@ th { background: var(--bg-elev); }
   border-radius: 3px;
   cursor: pointer;
 }
-.pg-tut-nav button:hover:not(:disabled) { border-color: var(--accent); }
+.pg-tut-nav button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .pg-tut-nav button:disabled { color: var(--fg-faint); cursor: default; }
 
 .pg-tut-title { margin: var(--s1) 0; font-size: 1.25rem; }
@@ -446,15 +509,6 @@ th { background: var(--bg-elev); }
 .pg-tut-status { color: var(--green); font-weight: 700; }
 
 /* ---- playground: full-width 50/50 workspace ---- */
-
-main.wide { max-width: none; padding-top: var(--s2); }
-
-main.wide .pg {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--s3);
-  align-items: start;
-}
-@media (max-width: 64rem) { main.wide .pg { grid-template-columns: minmax(0, 1fr); } }
 
 .pg-toolbar {
   display: flex;
@@ -491,11 +545,11 @@ main.wide .pg {
   cursor: pointer;
   margin-left: auto;
 }
-.pg-tut-enter:hover { border-color: var(--accent); }
+.pg-tut-enter:hover { border-color: var(--accent); color: var(--accent); }
 .pg-tut-enter[hidden] { display: none; }
 
-main.wide .pg textarea { min-height: 62vh; height: 62vh; }
-main.wide .pg-canvas { height: 44vh; }
+main.wide .pg textarea { min-height: 56vh; height: 56vh; }
+main.wide .pg-canvas { height: 40vh; }
 main.wide .pg-diagnostics { min-height: 2.5rem; }
 
 .pg-walk-controls {
@@ -518,3 +572,60 @@ main.wide .pg-diagnostics { min-height: 2.5rem; }
 .pg-rationale-row input { margin: 0 !important; }
 main.wide .pg-choices { min-height: 0; }
 main.wide .pg-log { max-height: 9rem; overflow-y: auto; margin-top: var(--s1); }
+
+/* ---- example mini-playgrounds: plan on the left, walk on the right ---- */
+
+.mini {
+  background: var(--bg-code);
+  border: 1px solid var(--bg-elev);
+  border-radius: 6px;
+  margin: var(--s3) 0;
+}
+
+.mini-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0;
+}
+@media (max-width: 64rem) { .mini-panes { grid-template-columns: minmax(0, 1fr); } }
+
+.mini-plan { border-right: 1px solid var(--bg-elev); display: flex; flex-direction: column; }
+@media (max-width: 64rem) { .mini-plan { border-right: none; border-bottom: 1px solid var(--bg-elev); } }
+
+.mini textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 26rem;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--fg);
+  background: transparent;
+  border: none;
+  border-radius: 0 0 0 6px;
+  padding: var(--s2);
+  resize: vertical;
+  tab-size: 2;
+}
+
+.mini-run { padding: var(--s2); display: flex; flex-direction: column; gap: var(--s1); }
+
+.mini .pg-diagnostics { margin-top: 0; min-height: 2.25rem; font-size: 0.8125rem; }
+.mini .pg-node { min-height: 2.5rem; font-size: 0.875rem; padding: 0; }
+.mini .pg-choices { min-height: 0; margin: 0; }
+.mini .pg-choices button { font-size: 0.8125rem; }
+.mini .pg-log { margin: var(--s1) 0 0; max-height: 10rem; overflow-y: auto; font-size: 0.8125rem; }
+.mini .pg-walk-controls { margin: 0; gap: var(--s1) var(--s2); }
+.mini .pg-actor { padding: 0.15rem var(--s1); }
+.mini .pg-rationale-row { min-width: 10rem; }
+.mini .pg-rationale-row input {
+  width: 100%;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--bg-elev);
+  border-radius: 4px;
+  padding: 0.25rem var(--s1);
+}
+.mini .pg-reset { font-size: 0.8125rem; padding: 0.25rem var(--s2); }

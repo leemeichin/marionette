@@ -1,0 +1,6 @@
+# Old URLs from the pre-consolidation site. Workers static assets honour
+# this file (https://developers.cloudflare.com/workers/static-assets/redirects/).
+/playground / 301
+/syntax /docs 301
+/walkthrough /docs 301
+/reference /docs 301

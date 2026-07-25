@@ -1,7 +1,8 @@
 <h1>getting-started</h1>
 <p class="lede">Install the command-line tool, write a small plan, and run
-it. Optional AI skills can draft plans from your notes and carry out the
-steps for you.</p>
+it — with any coding agent. The skills that teach an agent to draft and
+execute plans are plain Markdown, so Claude Code, Codex, and OpenCode all
+work.</p>
 
 <p>The examples below use a terminal. If command-line tools are new to you,
 copy each line that begins with <code>$</code> and run it in order. The
@@ -52,32 +53,73 @@ $ marionette summarize plan.mar           # read a plain-language summary
 $ marionette render plan.mar              # create a flowchart</code></pre>
 
 <p>If validation fails, every diagnostic carries a line number and a
-<code>help:</code> suggestion — see the
-<a href="/walkthrough#validate">walkthrough</a> for what that looks like,
-and the <a href="/reference#diagnostics">diagnostic table</a> for the full
-list.</p>
+<code>help:</code> suggestion — see
+<a href="/docs#check">docs · check it</a> for what that looks like, and
+the <a href="/docs#diagnostics">diagnostic table</a> for the full list.
+You can also paste the plan into the <a href="/">playground</a> and fix it
+live.</p>
 
-<h2 id="skills">3 · Optional: use Marionette with an AI assistant</h2>
+<h2 id="agents">3 · Set it up with your coding agent</h2>
 
-<p>You do not have to learn the plan syntax. The authoring skill turns
-ordinary notes into a checked draft. The execution skill helps an AI
-assistant work through the finished plan, record decisions, and stop when
-a person is needed. In a Claude Code session, install both with:</p>
+<p>You do not have to learn the plan syntax. Marionette ships two skills —
+plain Markdown playbooks any agent can follow. The
+<strong>authoring skill</strong> turns ordinary notes into a checked draft;
+the <strong>execution skill</strong> has the agent work through a finished
+plan, record decisions, and stop when a person is needed. Set them up once
+for your agent of choice:</p>
+
+<h3 id="claude-code">Claude Code</h3>
+
+<p>This repository is a single-plugin marketplace; the plugin installs both
+skills in every project. In any Claude Code session:</p>
 
 <pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>/plugin marketplace add leemeichin/marionette
 /plugin install marionette@marionette</code></pre>
 
-<p>Then give the authoring skill real notes, e.g.:</p>
+<h3 id="codex">Codex</h3>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>Use marionette-authoring. Plan this for me: we're migrating the billing
-service off Stripe Classic. Spike the new API first — if metered billing
-isn't supported we stay put. Up to two spike attempts. Finance signs off
-before any customer is switched, and we roll back if error rates spike.</code></pre>
+<p>Codex reads <code>AGENTS.md</code>. Copy the skills into your project
+and point to them:</p>
+
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ mkdir -p .agents/marionette
+$ curl -fsSL https://raw.githubusercontent.com/leemeichin/marionette/main/skills/marionette-authoring/SKILL.md \
+    -o .agents/marionette/authoring.md
+$ curl -fsSL https://raw.githubusercontent.com/leemeichin/marionette/main/skills/marionette-execution/SKILL.md \
+    -o .agents/marionette/execution.md</code></pre>
+
+<p>Then add two lines to <code>AGENTS.md</code> (create it in the project
+root if it doesn't exist):</p>
+
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>To plan a project as a Marionette trajectory (.mar), follow .agents/marionette/authoring.md.
+To execute or resume a .mar plan, follow .agents/marionette/execution.md.</code></pre>
+
+<h3 id="opencode">OpenCode</h3>
+
+<p>OpenCode also reads <code>AGENTS.md</code>, so the Codex setup above
+works as-is. If you prefer a global install, put the two files under
+<code>~/.config/opencode/</code> and reference them from your global
+<code>AGENTS.md</code> instead.</p>
+
+<h3 id="any-agent">Anything else</h3>
+
+<p>The skills assume nothing about the agent beyond reading files and
+running a CLI. Point your tool at the two <code>SKILL.md</code> files in
+<a href="https://github.com/leemeichin/marionette/tree/main/skills">skills/</a>
+however it ingests instructions — system prompt, rules file, or a plain
+"follow this document". The CLI is the enforcement layer, so the guarantees
+hold no matter which agent drives it.</p>
+
+<h3 id="first-notes">Then give it real notes</h3>
+
+<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>Use the marionette authoring skill. Plan this for me: we're migrating the
+billing service off Stripe Classic. Spike the new API first — if metered
+billing isn't supported we stay put. Up to two spike attempts. Finance
+signs off before any customer is switched, and we roll back if error
+rates spike.</code></pre>
 
 <p>The skill creates the <code>.mar</code> file, checks it, fixes any
 problems, and shows you a flowchart and summary. It clearly marks every
-decision that needs a person. For other ways to install the skills, see
-<a href="https://github.com/leemeichin/marionette/blob/main/docs/GETTING-STARTED.md">the full installation guide</a>.</p>
+decision that needs a person.</p>
 
 <h2 id="traverse">4 · Start and follow the plan</h2>
 
@@ -92,9 +134,9 @@ $ marionette render plan.mar            # show progress on the flowchart</code><
 <p>Marionette applies three important rules. An agent cannot take a choice
 marked <code>@human</code>. Every choice needs a written reason. If the
 plan changes after the run starts, Marionette stops until you accept the
-edit with <code>state rebind</code>. To let an AI assistant handle this
-process, use the execution skill. See the
-<a href="/execution">execution guide</a> for details.</p>
+edit with <code>state rebind</code>. To let your agent handle this loop,
+use the execution skill. See the <a href="/execution">execution guide</a>
+for the machine-readable interface.</p>
 
 <h2 id="ci">5 · Keep it honest in CI</h2>
 

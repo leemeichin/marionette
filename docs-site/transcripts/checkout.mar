@@ -1,5 +1,4 @@
 # project: checkout-revamp
-# summary: Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.
 # prompt: """
 Checkout conversion has been flat for two quarters. Rebuild the flow
 behind a flag and iterate on cohort evidence — five attempts max. I take
