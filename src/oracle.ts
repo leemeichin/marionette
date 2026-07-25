@@ -89,6 +89,57 @@ export async function oracleReport(facts: string): Promise<OracleReport> {
   };
 }
 
+/* ---- The rule-base walker (issue #21 phase C) ---------------------------
+ * Drives the walker semantics stated in spec/rules/marionette.pl §7 so the
+ * conformance suite can hold BOTH walkers (src/state.ts and the rules) to
+ * the same cases. Timestamps and the decision log stay driver-side.
+ */
+
+export interface WalkSnapshot {
+  current: string;
+  status: 'active' | 'completed';
+  variables: Record<string, number | boolean | string>;
+}
+
+export interface PrologWalker {
+  /** Returns the refusal code, or null when the operation succeeded. */
+  choose(ref: string, actor: string, hasRationale: boolean): string | null;
+  advance(): string | null;
+  snapshot(): WalkSnapshot;
+}
+
+const q = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+
+export async function prologWalker(facts: string): Promise<PrologWalker> {
+  const swipl = await withFacts(facts);
+  swipl.prolog.query('init_walk').once();
+
+  const outcome = (goal: string): string | null => {
+    const b = swipl.prolog.query(goal).once();
+    const code = String(b['Outcome']);
+    return code === 'ok' ? null : code;
+  };
+
+  return {
+    choose: (ref, actor, hasRationale) =>
+      outcome(`drive_choose(${q(ref)}, ${q(actor)}, ${hasRationale ? 'true' : 'false'}, Outcome)`),
+    advance: () => outcome('drive_advance(Outcome)'),
+    snapshot: () => {
+      const current = String(swipl.prolog.query('w_current(N)').once()['N']);
+      const status = String(swipl.prolog.query('w_status(S)').once()['S']) as WalkSnapshot['status'];
+      const variables: WalkSnapshot['variables'] = {};
+      for (const b of swipl.prolog.query('walk_var(Name, Type, V)')) {
+        const type = String(b['Type']);
+        variables[String(b['Name'])] =
+          type === 'number' ? Number(b['V'])
+          : type === 'boolean' ? String(b['V']) === 'true'
+          : String(b['V']);
+      }
+      return { current, status, variables };
+    },
+  };
+}
+
 /**
  * Run an arbitrary goal against a plan's fact base. Returns one bindings
  * object per solution; a variable-free goal yields [{}] for true, [] for

@@ -1,10 +1,21 @@
 # Walker conformance suite
 
 Runtime-agnostic conformance cases for the Phase 2 walker (PRD P1, issue #3).
-Any walker implementation — the TypeScript reference runtime in `src/state.ts`,
-a future Go binary, the pi agent's native ingestion — must pass every case in
-`cases/` to claim conformance. The TypeScript runner lives in
-`tests/conformance.test.ts`.
+Any walker implementation must pass every case in `cases/` to claim
+conformance — and **two independent implementations already do, on every CI
+run**: the TypeScript reference runtime (`src/state.ts`) and the rule-base
+walker (`spec/rules/marionette.pl` §7, running on the engine bundled with
+the package). `tests/conformance.test.ts` runs each case against both, so a
+walk-semantics bug has to be made twice, in two paradigms, to survive. A
+future implementation (a Go binary, the pi agent's native ingestion)
+targets the same cases.
+
+Scope note: the refusal codes `unknown-node`, `migration-blocked` and
+`invalid-state` concern state *files* (drift, rebinding, corruption) rather
+than walk operations, so they are exercised by the reference
+implementation's own tests, not by walk scripts; the rule-base walker
+leaves timestamps, log persistence and file formats to its driver by
+design — the rules own what may happen and what it changes.
 
 ## Case format
 

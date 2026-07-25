@@ -125,6 +125,18 @@ $ swipl spec/rules/marionette.pl plan.pl
 ?- false_gate(C), gate(C, E, Src), gate_status(E, all, unsat).
 ```
 
+Since issue #21 phase C the rule base also states **walker semantics**
+(§7 of `marionette.pl`): `init_walk`, `do_choose`/`do_advance`,
+`available/1` and `walk_blocked/2` over live state facts — the same
+contract `src/state.ts` implements, held to the same
+`spec/conformance/cases/` walk scripts, with both walkers run in CI. So a
+traversal question is queryable too:
+
+```prolog
+?- init_walk, do_choose("0", "agent", true, R).   % walk a step in the toplevel
+?- available(C).                                  % the live frontier
+```
+
 The building blocks (`can_reach/2` reachability, `on_same_cycle/2`,
 `gate_status/3`, `direction/3` monotonicity, `eval/3`) are all queryable, so
 ad-hoc questions compose without touching TypeScript. If your Prolog is
