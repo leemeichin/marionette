@@ -144,4 +144,17 @@ markdown — blank lines, lists and # characters are plain text.
 # delivery: pr-per-phase            // or branch-per-phase | single-pr | single-branch | none
 # delivery:branch: replatform/{phase}
 # report: per-phase                 // or at-checkpoints | at-end
+
+# timebox: 3d                       // node-level: budget for a speculative phase (m|h|d|w)
+# priority: high                    // node-level: critical | high | normal | low
+# wake: new "bug" issues in acme/shop   // node-level: what re-activates a standing phase
 </mar-src>
+
+<p>The pacing keys encode time <em>as evidence, never as a gate</em>: the
+walker never consults a clock. A <code>timebox</code> travels in the brief
+next to the phase's entry timestamp, and an overdue budget is the
+executor's cue to take the phase's abandon door honestly (a timeboxed
+phase therefore needs two exits — <code>MAR023</code> warns otherwise).
+<code>wake</code> tells executors what to watch so a service phase can
+park instead of polling; scheduling belongs to the executing platform,
+never the walker.</p>

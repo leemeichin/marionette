@@ -125,9 +125,13 @@ $ swipl spec/rules/marionette.pl plan.pl
 ?- false_gate(C), gate(C, E, Src), gate_status(E, all, unsat).
 ```
 
-The building blocks (`preach/2` reachability, `same_cycle_eff/2`,
+The building blocks (`can_reach/2` reachability, `on_same_cycle/2`,
 `gate_status/3`, `direction/3` monotonicity, `eval/3`) are all queryable, so
-ad-hoc questions compose without touching TypeScript.
+ad-hoc questions compose without touching TypeScript. If your Prolog is
+rusty, start with the "How to read this file" preamble at the top of
+`marionette.pl` — it covers the four constructs the rules lean on
+(negation as failure, if-then-else, tabling, `findall`) and the fact
+schema, and every section opens with prose stating what its clauses claim.
 
 ## Equivalence discipline
 

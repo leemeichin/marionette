@@ -152,6 +152,28 @@ $ marionette import issues.json -o plan.mar  # scaffold a plan from tracker issu
 $ marionette sync plan.mar --json     # → manifest: what your tracker should show
 ```
 
+## Ask the plan questions
+
+A compiled plan is a database of facts over a graph of state machines, so
+the graph checks are *specified* as logic rules over that database
+(`spec/rules/marionette.pl` — normative, per ADR-0003) and the same rules
+answer questions no fixed subcommand covers. The engine ships with the
+package (SWI-Prolog compiled to WebAssembly), so this works wherever
+`npm install` does:
+
+```console
+$ marionette query plan.mar 'unattended_completion'
+false.                                # a human holds a gate on every path to END
+$ marionette query plan.mar 'human_gate(C, Phase, Label)'
+C = "dogfood_gate#0", Label = "Phase 1 exit approved", Phase = "dogfood_gate"
+$ marionette oracle plan.mar          # the rule-base report: MAR findings, plus
+STRAND	line 25	once-only choice on a cycle can strand a traversal
+```
+
+The TypeScript validator and the rule base are held to each other in CI on
+every plan in this repo plus seeded-defect mutations of each — a validator
+bug now has to be made twice, in two paradigms, to slip through.
+
 Humans normally don't hand-write the DSL: the bundled **authoring skill**
 turns natural-language notes into a validated `.mar` draft, and `render` +
 `summarize` produce the graph and plain-English walkthrough a reviewer

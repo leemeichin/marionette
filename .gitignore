@@ -1,3 +1,10 @@
 node_modules/
 dist/
 *.tsbuildinfo
+
+# Derived outputs — regenerable from the committed .mar sources
+plans/*.trajectory.json
+plans/*.mmd
+plans/*.summary.md
+docs/dogfood/**/plan.mmd
+docs/dogfood/**/summary.txt

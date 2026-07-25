@@ -9,6 +9,17 @@ codes. The contracts behind them live in the repo:
 
 <demo-cast id="16-help" title="marionette help"></demo-cast>
 
+<p>Three of these deserve a note: a compiled plan is also a database of
+facts, and the graph checks are specified as logic rules over it
+(<code>spec/rules/marionette.pl</code> — the normative spec, runnable on
+the engine bundled with the package). <code>marionette facts</code> emits
+the fact base, <code>marionette oracle</code> runs the rule-base report,
+and <code>marionette query</code> asks one-shot questions no other
+subcommand answers — <code>'unattended_completion'</code> ("can the agent
+finish without a human?"), <code>'human_gate(C, Phase, Label)'</code>
+("what exactly does a human sign off on?"), <code>'cyclic(P)'</code>
+("which phases sit inside loops?").</p>
+
 <h2 id="exit-codes">Exit codes</h2>
 
 <div class="table-wrap">
@@ -50,6 +61,10 @@ state.</p>
   <tr><td><code>MAR017</code></td><td>warning</td><td>once-only (<code>*</code>) loop edge</td><td>make it sticky (<code>+</code>) so the loop can repeat</td></tr>
   <tr><td><code>MAR018</code></td><td>warning</td><td>malformed external ref (<code>github:</code>/<code>jira:</code>/<code>linear:</code>/<code>ref:</code>)</td><td>fix the value to the namespace's expected shape</td></tr>
   <tr><td><code>MAR019</code></td><td>warning</td><td>unknown <code>delivery:</code>/<code>report:</code> value</td><td>use a listed value; typos fall back to defaults loudly</td></tr>
+  <tr><td><code>MAR020</code></td><td>warning</td><td>unknown <code>tracker:</code> value</td><td>use <code>github</code>, <code>jira</code> or <code>linear</code></td></tr>
+  <tr><td><code>MAR021</code></td><td>warning</td><td>malformed <code>timebox:</code> value</td><td>single unit: <code>90m</code>, <code>4h</code>, <code>3d</code>, <code>2w</code></td></tr>
+  <tr><td><code>MAR022</code></td><td>warning</td><td>unknown <code>priority:</code> value</td><td>use <code>critical</code>, <code>high</code>, <code>normal</code> or <code>low</code></td></tr>
+  <tr><td><code>MAR023</code></td><td>warning</td><td>timeboxed phase with a single exit</td><td>give the spike an abandon door as well — or drop the timebox</td></tr>
 </table>
 </div>
 
