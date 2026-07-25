@@ -15,10 +15,40 @@ const transcripts = join(root, 'transcripts');
 
 export const PAGES = [
   { slug: 'index', nav: 'home', wide: true, title: 'Marionette — clear project plans for AI agents', desc: 'Write a plain-text project plan, try it in the browser playground, let an AI agent follow it, and keep important decisions with people.' },
-  { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI, write and validate your first plan, and set it up with Claude Code, Codex, or OpenCode.' },
-  { slug: 'docs', nav: 'docs', title: 'Docs — Marionette', desc: 'One page for the whole tool: write a .mar plan, check it with the compiler, run it with an agent, change it safely, and look anything up.' },
-  { slug: 'examples', nav: 'examples', title: 'Examples — Marionette', desc: 'Complete project plans you can edit and run in the browser: retries, fallback options, human approval, and larger migrations.' },
-  { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'Connect an AI agent or another program to Marionette, record results, pause for human decisions, and report completed work.' },
+  { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI, write and validate your first plan, and set it up with Claude Code, Codex, or OpenCode.',
+    sections: [
+      { id: 'cli', label: 'install the cli' },
+      { id: 'first-plan', label: 'first plan' },
+      { id: 'agents', label: 'your coding agent' },
+      { id: 'traverse', label: 'run the plan' },
+      { id: 'ci', label: 'ci' },
+    ] },
+  { slug: 'docs', nav: 'docs', title: 'Docs — Marionette', desc: 'One page for the whole tool: write a .mar plan, check it with the compiler, run it with an agent, change it safely, and look anything up.',
+    sections: [
+      { id: 'write', label: 'write a plan' },
+      { id: 'check', label: 'check it' },
+      { id: 'run', label: 'run it' },
+      { id: 'change', label: 'change it safely' },
+      { id: 'reference', label: 'reference' },
+    ] },
+  { slug: 'examples', nav: 'examples', title: 'Examples — Marionette', desc: 'Complete project plans you can edit and run in the browser: retries, fallback options, human approval, and larger migrations.',
+    sections: [
+      { id: 'checkout', label: 'checkout revamp' },
+      { id: 'build-mvp', label: 'the mvp loop' },
+      { id: 'meta', label: 'built this site' },
+      { id: 'paas', label: 'an 18-phase replatform' },
+      { id: 'use-cases', label: 'use-cases' },
+    ] },
+  { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'Connect an AI agent or another program to Marionette, record results, pause for human decisions, and report completed work.',
+    sections: [
+      { id: 'loop', label: 'the loop' },
+      { id: 'brief', label: 'the brief as json' },
+      { id: 'escalation', label: 'escalation' },
+      { id: 'runtime', label: 'the runtime' },
+      { id: 'delivery', label: 'delivery config' },
+      { id: 'refs', label: 'external refs' },
+      { id: 'conformance', label: 'conformance' },
+    ] },
   { slug: '404', nav: null, title: 'Not found — Marionette', desc: 'No such page.' },
 ];
 
@@ -123,7 +153,15 @@ function navFor(active) {
     .map((p) => {
       const href = p.slug === 'index' ? '/' : `/${p.slug}`;
       const current = p.slug === active ? ' aria-current="page"' : '';
-      return `    <li><a href="${href}"${current}>${p.nav}</a></li>`;
+      const link = `<a href="${href}"${current}>${p.nav}</a>`;
+      if (!p.sections?.length) return `    <li>${link}</li>`;
+      // Collapsible group: the summary carries the page link; the section
+      // list expands on the page you're on and collapses elsewhere.
+      const open = p.slug === active ? ' open' : '';
+      const subs = p.sections
+        .map((s) => `      <li><a class="nav-sub" href="${href}#${s.id}">${s.label}</a></li>`)
+        .join('\n');
+      return `    <li><details class="nav-group"${open}><summary>${link}</summary><ul>\n${subs}\n    </ul></details></li>`;
     })
     .join('\n');
 }
@@ -172,7 +210,7 @@ export function build() {
   for (const f of staged) cpSync(join(repoDist, f), join(dist, 'lib', f));
   // Example plans for the playground dropdown, sourced from transcripts/.
   const EXAMPLES = [
-    { file: 'checkout.mar', label: 'checkout-revamp — the walkthrough plan' },
+    { file: 'checkout.mar', label: 'checkout-revamp — the plan the docs follow' },
     { file: 'checkout-broken.mar', label: 'checkout-revamp — first draft (2 errors to fix)' },
     { file: 'build_mvp.mar', label: 'build-mvp — the MVP loop' },
     { file: 'paas_replatform.mar', label: 'paas-replatform — an 18-phase programme' },

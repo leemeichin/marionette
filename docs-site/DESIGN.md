@@ -83,7 +83,9 @@ reinforcement — safe for color-blind users.
   verbatim below.
 - Navigation is a persistent left rail (top bar on narrow viewports) styled
   as a file listing; current page marked with `aria-current="page"` and an
-  accent bar, not color alone.
+  accent bar, not color alone. Pages with subsections render as native
+  `<details>` groups in the rail — expanded on the page you're on,
+  collapsed elsewhere; the section links are plain `#anchor` links.
 
 ## Interaction & accessibility rules
 

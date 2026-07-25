@@ -121,6 +121,31 @@ body {
   font-weight: 700;
 }
 
+/* collapsible section groups */
+.site-nav details { margin: 0; }
+.site-nav summary {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+.site-nav summary::-webkit-details-marker { display: none; }
+.site-nav summary::after {
+  content: "▸";
+  margin-left: auto;
+  padding-right: var(--s1);
+  color: var(--fg-faint);
+  font-size: 0.75rem;
+  transition: transform 120ms;
+}
+.site-nav details[open] > summary::after { transform: rotate(90deg); }
+.site-nav summary a { flex: 1; }
+.site-nav .nav-sub {
+  padding: 0.2rem var(--s1) 0.2rem 1.6rem;
+  font-size: 0.8125rem;
+}
+.site-nav .nav-sub::before { content: "#"; color: var(--fg-faint); margin-right: 0.35rem; }
+
 /* One shared measure: prose, tables and example terminals all sit in the
    same centred column, so nothing juts past the text edge. */
 main {
@@ -130,10 +155,10 @@ main {
   justify-self: center;
 }
 
-/* Wide pages (the home playground) span the viewport; their prose lives in
-   .measure blocks so reading width stays sane. */
+/* Wide pages (the home playground) span the viewport; long-form text on
+   them splits into fluid columns (.cols) so every section shares the same
+   full width. */
 main.wide { max-width: none; justify-self: stretch; padding-top: var(--s3); }
-.measure { max-width: 56rem; margin-inline: auto; }
 
 .site-footer {
   padding: var(--s2) var(--s3);
@@ -191,28 +216,32 @@ kbd, code {
 
 pre code { background: none; padding: 0; }
 
-/* ---- on-page section nav (the docs page) ---- */
+/* ---- fluid text on wide pages: columns share the section's full width ---- */
 
-.subnav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1);
-  margin: 0 0 var(--s3);
-  padding: 0;
+.home-intro { margin-bottom: var(--s3); }
+.home-intro .lede { max-width: 80ch; }
+
+.cols {
+  column-count: 2;
+  column-gap: var(--s5);
+}
+.cols > p { margin-top: 0; break-inside: avoid; }
+@media (max-width: 64rem) { .cols { column-count: 1; } }
+
+.linkgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: var(--s2);
   list-style: none;
+  margin: var(--s2) 0 0;
+  padding: 0;
 }
-.subnav a {
-  display: inline-block;
-  padding: 0.2rem 0.75rem;
-  border: 1px solid var(--fg-faint);
-  border-radius: 999px;
-  color: var(--fg-dim);
-  text-decoration: none;
-  font-size: 0.875rem;
-}
-.subnav a:hover, .subnav a:focus-visible {
-  color: var(--accent);
-  border-color: var(--accent);
+.linkgrid li {
+  background: var(--bg-elev);
+  border: 1px solid var(--bg-code);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: var(--s2);
 }
 
 /* ---- code blocks (static, non-demo) ---- */
@@ -408,12 +437,35 @@ th { background: var(--bg-elev); }
 .pg-help { display: block; color: var(--cyan); }
 
 .pg-viz h2 { margin-top: 0; }
+
+/* The stage: the graph and the diagnostics share this box. A clean plan
+   shows the graph; warnings dock as a strip along the bottom; a plan that
+   doesn't compile fills the stage with its errors instead. */
+.pg-stage {
+  position: relative;
+  border: 1px solid var(--bg-elev);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-code);
+}
+.pg-stage .pg-diagnostics {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--s2);
+  background: var(--bg-code);
+  border-top: 1px dashed var(--bg-elev);
+}
+.pg-stage .pg-diagnostics[hidden] { display: none; }
+
 .pg-canvas {
   position: relative;
   height: 22rem;
   background: var(--bg-code);
-  border: 1px solid var(--bg-elev);
-  border-radius: 6px;
   overflow: hidden;
 }
 /* decorative hint while nothing compiles — the canvas itself is aria-hidden */
@@ -426,6 +478,8 @@ th { background: var(--bg-elev); }
   color: var(--fg-faint);
   font-size: 0.8125rem;
 }
+/* when diagnostics occupy the stage, they replace the hint */
+.pg-stage:has(.pg-diagnostics:not([hidden])) .pg-canvas::before { content: none; }
 .pg-canvas canvas { display: block; width: 100%; height: 100%; }
 .pg-hint { font-size: 0.8125rem; color: var(--fg-faint); }
 
@@ -469,55 +523,19 @@ th { background: var(--bg-elev); }
 .pg-log li { margin-bottom: var(--s1); }
 .pg-why { color: var(--fg-dim); }
 
-/* ---- playground tutorial ---- */
-
-.pg-tutorial {
-  background: var(--bg-elev);
-  border: 1px solid var(--bg-code);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  padding: var(--s2) var(--s3);
-  margin-bottom: var(--s3);
-}
-.pg-tutorial[hidden] { display: none; }
-
-.pg-tut-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  font-size: 0.8125rem;
-  color: var(--fg-faint);
-}
-.pg-tut-nav { margin-left: auto; display: flex; gap: var(--s1); }
-.pg-tut-nav button {
-  font: inherit;
-  font-size: 0.8125rem;
-  padding: 0.15rem 0.7rem;
-  background: var(--bg-code);
-  color: var(--fg);
-  border: 1px solid var(--fg-faint);
-  border-radius: 3px;
-  cursor: pointer;
-}
-.pg-tut-nav button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.pg-tut-nav button:disabled { color: var(--fg-faint); cursor: default; }
-
-.pg-tut-title { margin: var(--s1) 0; font-size: 1.25rem; }
-.pg-tut-title::before { content: none; }
-.pg-tut-text { margin: 0 0 var(--s1); max-width: 80ch; }
-.pg-tut-goal { margin: 0; color: var(--fg-dim); }
-.pg-tut-status { color: var(--green); font-weight: 700; }
-
 /* ---- playground: full-width 50/50 workspace ---- */
 
 .pg-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
   margin-bottom: var(--s1);
 }
 .pg-example-row {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: var(--s1);
   margin: 0;
@@ -532,25 +550,11 @@ th { background: var(--bg-elev); }
   border: 1px solid var(--fg-faint);
   border-radius: 3px;
   padding: 0.25rem var(--s1);
-  max-width: 26rem;
+  min-width: 0;
+  max-width: min(26rem, 100%);
 }
-.pg-tut-enter {
-  font: inherit;
-  font-size: 0.8125rem;
-  padding: 0.25rem 0.75rem;
-  background: var(--bg-code);
-  color: var(--fg);
-  border: 1px solid var(--fg-faint);
-  border-radius: 3px;
-  cursor: pointer;
-  margin-left: auto;
-}
-.pg-tut-enter:hover { border-color: var(--accent); color: var(--accent); }
-.pg-tut-enter[hidden] { display: none; }
-
 main.wide .pg textarea { min-height: 56vh; height: 56vh; }
 main.wide .pg-canvas { height: 40vh; }
-main.wide .pg-diagnostics { min-height: 2.5rem; }
 
 .pg-walk-controls {
   display: flex;

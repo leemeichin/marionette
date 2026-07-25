@@ -1,8 +1,9 @@
-<div class="measure">
+<div class="home-intro">
 <h1>marionette</h1>
 <p class="lede">Write down how a project should run, let an AI agent handle
 the routine steps, and keep important decisions with people.</p>
 
+<div class="cols">
 <p>A Marionette plan is a plain-text file: the stages of the work, the
 choices between them, and the rules for moving forward. Marionette checks
 the plan for missing or impossible paths before work begins, records every
@@ -10,28 +11,15 @@ decision and why it was made, and a choice marked <code>@human</code>
 always requires a person — the tool refuses to let an agent take it.</p>
 
 <p>Try it right here. The editor below runs the real compiler and walker in
-your browser: edit the plan, watch it re-check as you type, then take the
-choices yourself — or follow the short tutorial.</p>
+your browser: pick an example, edit it and watch it re-check as you type,
+then take the choices yourself — as the agent, or as the human the plan
+reserves decisions for.</p>
+</div>
 </div>
 
-<noscript><p class="measure"><strong>The playground needs JavaScript</strong> —
+<noscript><p><strong>The playground needs JavaScript</strong> —
 it runs the compiler in your browser. The <a href="/docs">docs</a> show the
 same flow as captured terminal sessions.</p></noscript>
-
-<section class="pg-tutorial" data-tutorial hidden>
-  <div class="pg-tut-bar">
-    <span class="pg-tut-where" data-tut-where></span>
-    <span class="pg-tut-nav">
-      <button type="button" data-tut-prev>← prev</button>
-      <button type="button" data-tut-next disabled>next →</button>
-      <button type="button" data-tut-toggle>free play</button>
-    </span>
-  </div>
-  <h2 class="pg-tut-title" data-tut-title></h2>
-  <p class="pg-tut-text" data-tut-text></p>
-  <p class="pg-tut-goal"><strong>Goal:</strong> <span data-tut-goal></span>
-    <span class="pg-tut-status" data-tut-status role="status"></span></p>
-</section>
 
 <div class="pg" data-playground>
   <section class="pg-editor" aria-label="Plan editor">
@@ -40,14 +28,15 @@ same flow as captured terminal sessions.</p></noscript>
         <span>load example</span>
         <select data-examples></select>
       </label>
-      <button type="button" class="pg-tut-enter" data-tut-enter hidden>tutorial</button>
     </div>
     <textarea id="pg-src" spellcheck="false" autocomplete="off" aria-label="playground.mar — edits compile as you type"></textarea>
-    <div class="pg-diagnostics" data-diagnostics aria-label="compiler diagnostics" role="log"></div>
   </section>
 
   <section class="pg-viz" aria-label="Graph and walk">
-    <div class="pg-canvas" data-canvas aria-hidden="true"></div>
+    <div class="pg-stage">
+      <div class="pg-canvas" data-canvas aria-hidden="true"></div>
+      <div class="pg-diagnostics" data-diagnostics aria-label="compiler diagnostics" role="log" hidden></div>
+    </div>
     <div class="pg-walk" data-walk>
       <div class="pg-walk-controls">
         <fieldset class="pg-actor">
@@ -67,10 +56,9 @@ same flow as captured terminal sessions.</p></noscript>
   </section>
 </div>
 
-<div class="measure">
 <h2 id="next">Where to go</h2>
 
-<ul>
+<ul class="linkgrid">
   <li><a href="/getting-started">getting-started</a> — install the CLI, write
     your first plan, and set it up with Claude Code, Codex, or OpenCode.</li>
   <li><a href="/docs">docs</a> — one structured page for the whole tool:
@@ -80,7 +68,6 @@ same flow as captured terminal sessions.</p></noscript>
   <li><a href="/execution">execution</a> — connect an agent or another
     program to Marionette.</li>
 </ul>
-</div>
 
 <script type="importmap">
 {"imports":{"three":"/vendor/three.module.min.js"}}
