@@ -3,9 +3,9 @@
   "plan": {
     "file": "checkout.mar",
     "project": "checkout-revamp",
-    "hash": "sha256:45a90f7fc02fd039909f2d0570bbe4f0f487112dfbe5cb045e9213b1291a1c83",
+    "hash": "sha256:7273a73bb2f854667b8818c3dad37d66f8e75a9ddfe20e731c3b38560ccc1970",
     "intent": {
-      "summary": "Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.",
+      "summary": null,
       "prompt": "Checkout conversion has been flat for two quarters. Rebuild the flow\nbehind a flag and iterate on cohort evidence — five attempts max. I take\nthe ship call, and if it never converts we go back to research rather\nthan grinding out attempt six."
     },
     "refs": [
@@ -44,7 +44,7 @@
     ],
     "timebox": null,
     "priority": null,
-    "enteredAt": "2026-07-25T11:35:53.520Z"
+    "enteredAt": "2026-07-25T13:27:19.246Z"
   },
   "delivery": {
     "mode": "none",

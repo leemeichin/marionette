@@ -14,14 +14,11 @@ const dist = join(root, 'dist');
 const transcripts = join(root, 'transcripts');
 
 export const PAGES = [
-  { slug: 'index', nav: 'readme', title: 'Marionette — clear project plans for AI agents', desc: 'Write a plain-text project plan, let an AI agent follow it, and keep important decisions with people.' },
-  { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI and skills, write and validate your first plan.' },
-  { slug: 'syntax', nav: 'syntax', title: 'Syntax reference — Marionette', desc: 'Look up each part of a .mar plan, with examples of stages, choices, conditions, retries, and human decisions.' },
-  { slug: 'walkthrough', slugAliases: [], nav: 'walkthrough', title: 'Walkthrough — Marionette', desc: 'Follow one project from first draft to completion: fix missing steps, let an AI agent do the work, and keep launch approval with a person.' },
-  { slug: 'playground', nav: 'playground', wide: true, title: 'Playground — Marionette', desc: 'Write a .mar plan, check it in your browser, view its flowchart, and try each choice.' },
+  { slug: 'index', nav: 'home', wide: true, title: 'Marionette — clear project plans for AI agents', desc: 'Write a plain-text project plan, try it in the browser playground, let an AI agent follow it, and keep important decisions with people.' },
+  { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI, write and validate your first plan, and set it up with Claude Code, Codex, or OpenCode.' },
+  { slug: 'docs', nav: 'docs', title: 'Docs — Marionette', desc: 'One page for the whole tool: write a .mar plan, check it with the compiler, run it with an agent, change it safely, and look anything up.' },
+  { slug: 'examples', nav: 'examples', title: 'Examples — Marionette', desc: 'Complete project plans you can edit and run in the browser: retries, fallback options, human approval, and larger migrations.' },
   { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'Connect an AI agent or another program to Marionette, record results, pause for human decisions, and report completed work.' },
-  { slug: 'examples', nav: 'examples', title: 'Examples & use-cases — Marionette', desc: 'Complete project plans showing retries, fallback options, human approval, and larger migrations.' },
-  { slug: 'reference', nav: 'reference', title: 'CLI reference — Marionette', desc: 'Look up commands, exit codes, and every Marionette error message (MAR001–MAR019).' },
   { slug: '404', nav: null, title: 'Not found — Marionette', desc: 'No such page.' },
 ];
 
@@ -31,6 +28,8 @@ const manifestById = Object.fromEntries(manifest.map((m) => [m.id, m]));
 function transcript(id) {
   return readFileSync(join(transcripts, `${id}.txt`), 'utf8');
 }
+
+const DOTS = '<span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span>';
 
 // <demo-cast id="01-validate-broken" title="…"></demo-cast>
 function renderDemo(id, title) {
@@ -43,7 +42,7 @@ function renderDemo(id, title) {
     .map((l) => `<span class="t-line">${ansiLineToHtml(l)}</span>`)
     .join('');
   return `<section class="term" data-demo="${id}" aria-label="${escapeHtml(title)} (terminal session)">
-<div class="term-bar"><span class="term-dots" aria-hidden="true">●●●</span><span class="term-title">${escapeHtml(title)}</span><span class="term-exit ${exitCls}">exit ${meta.exit}</span></div>
+<div class="term-bar">${DOTS}<span class="term-title">${escapeHtml(title)}</span><span class="term-exit ${exitCls}">exit ${meta.exit}</span></div>
 <div class="term-controls" hidden>
 <button type="button" data-act="play">▶ play</button>
 <button type="button" data-act="step">⇥ step</button>
@@ -63,9 +62,40 @@ function renderMarFile(file, title) {
 
 function renderMarBlock(source, title) {
   const bar = title
-    ? `<div class="term-bar"><span class="term-dots" aria-hidden="true">●●●</span><span class="term-title">${escapeHtml(title)}</span></div>`
+    ? `<div class="term-bar">${DOTS}<span class="term-title">${escapeHtml(title)}</span></div>`
     : '';
   return `<div class="term">${bar}<pre class="term-screen mar" tabindex="0" aria-label="plan source (scrollable)"><code>${highlightMar(source)}</code></pre></div>`;
+}
+
+// <mini-playground src="checkout.mar" title="…"></mini-playground>
+// An editable plan on the left, live diagnostics + walk on the right;
+// mini.js compiles and walks it with the real compiler under /lib.
+let miniSeq = 0;
+function renderMini(file, title) {
+  const source = readFileSync(join(transcripts, file), 'utf8');
+  const n = ++miniSeq;
+  return `<section class="mini" data-mini aria-label="${escapeHtml(title)} (editable example)">
+<div class="term-bar">${DOTS}<span class="term-title">${escapeHtml(title)}</span><span class="term-exit" data-mini-status></span></div>
+<div class="mini-panes">
+<div class="mini-plan">
+<textarea spellcheck="false" autocomplete="off" wrap="soft" aria-label="${escapeHtml(title)} — plan source; edits compile as you type">${escapeHtml(source)}</textarea>
+</div>
+<div class="mini-run">
+<div class="pg-diagnostics" data-diagnostics role="log" aria-label="compiler diagnostics"></div>
+<div class="pg-walk-controls">
+<fieldset class="pg-actor"><legend>acting as</legend>
+<label><input type="radio" name="mini-actor-${n}" value="agent" checked> agent</label>
+<label><input type="radio" name="mini-actor-${n}" value="human"> human</label>
+</fieldset>
+<label class="pg-rationale-row">rationale <input type="text" value="trying the example"></label>
+<button type="button" class="pg-reset" data-reset>↺ reset</button>
+</div>
+<div class="pg-node" data-node role="status"></div>
+<div class="pg-choices" data-choices></div>
+<ol class="pg-log" data-log aria-label="decision log"></ol>
+</div>
+</div>
+</section>`;
 }
 
 function expand(html) {
@@ -80,6 +110,10 @@ function expand(html) {
   html = html.replace(
     /<mar-src(?: title="([^"]+)")?>\n?([\s\S]*?)<\/mar-src>/g,
     (_, title, body) => renderMarBlock(body, title ?? null),
+  );
+  html = html.replace(
+    /<mini-playground src="([^"]+)" title="([^"]+)"><\/mini-playground>/g,
+    (_, file, title) => renderMini(file, title),
   );
   return html;
 }
@@ -122,13 +156,20 @@ export function build() {
   // playground. Hashing is WebCrypto (globalThis.crypto), so the same
   // modules run on Node and in the browser with no shims.
   const repoDist = join(root, '..', 'dist');
-  const LIB = ['types.js', 'hash.js', 'expr.js', 'gates.js', 'refs.js', 'suggest.js', 'parser.js', 'validate.js', 'compile.js', 'state.js', 'term.js'];
-  mkdirSync(join(dist, 'lib'), { recursive: true });
-  for (const f of LIB) {
+  // Entry points the browser imports; their local-import closure is staged
+  // so the list can't drift when the compiler grows a module.
+  const LIB = ['compile.js', 'state.js'];
+  const staged = new Set();
+  const stage = (f) => {
+    if (staged.has(f)) return;
+    staged.add(f);
     const src = join(repoDist, f);
     if (!existsSync(src)) throw new Error(`missing ${src} — run \`npm run build\` at the repo root first`);
-    cpSync(src, join(dist, 'lib', f));
-  }
+    for (const m of readFileSync(src, 'utf8').matchAll(/from '\.\/([\w-]+\.js)'/g)) stage(m[1]);
+  };
+  for (const f of LIB) stage(f);
+  mkdirSync(join(dist, 'lib'), { recursive: true });
+  for (const f of staged) cpSync(join(repoDist, f), join(dist, 'lib', f));
   // Example plans for the playground dropdown, sourced from transcripts/.
   const EXAMPLES = [
     { file: 'checkout.mar', label: 'checkout-revamp — the walkthrough plan' },

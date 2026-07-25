@@ -281,8 +281,8 @@ Release it to the first users.
   },
   {
     title: '7 · Anchor the intent',
-    text: 'A plan should not operate in a vacuum. Open the preamble with # summary: (one line) and the original ask in a fenced block — # prompt: """ on its own line, markdown, then """ to close. Reviewers see these first; executors receive them in every work packet.',
-    goal: 'plan declares # summary: and # prompt:, 0 errors',
+    text: 'A plan should not operate in a vacuum. Put the original ask, verbatim, in the preamble as a fenced block: # prompt: """ on its own line, the markdown, then """ to close. Fenced values work on any metadata key. Reviewers read the prompt first; executors receive it in every work packet.',
+    goal: 'plan declares # prompt:, 0 errors',
     starter: `=== build_it ===
 Build the smallest useful version.
 * [It works] @human -> ship_it
@@ -292,7 +292,7 @@ Build the smallest useful version.
 Release it to the first users.
 -> END
 `,
-    check: (c) => Boolean(c.ok && c.trajectory && c.trajectory.meta['summary'] && c.trajectory.meta['prompt']),
+    check: (c) => Boolean(c.ok && c.trajectory && c.trajectory.meta['prompt']),
   },
 ];
 
@@ -393,6 +393,7 @@ function makeViz(host, reduced) {
 
   function setGraph(trajectory) {
     clear();
+    delete host.dataset.empty;
     const pos = layout(trajectory);
     graph = { trajectory, nodesById: new Map(), edges: [], pos };
 
@@ -505,6 +506,7 @@ function makeViz(host, reduced) {
 
   function clear() {
     if (raf) { cancelAnimationFrame(raf); raf = null; }
+    host.dataset.empty = '';
     scene.clear();
     scene.add(new THREE.AmbientLight(0xffffff, 1.6));
     const k = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -582,6 +584,12 @@ function makeTutorial(root, srcEl, onLessonLoad) {
     persist();
     show();
     if (!free) load();
+    else if (srcEl.value === LESSONS[idx].starter) {
+      // leaving the tutorial with an untouched starter: show the example
+      // the (now visible) picker claims is loaded, not the lesson fragment
+      srcEl.value = EXAMPLES[0].source;
+      onLessonLoad();
+    }
   });
   enterBtn?.addEventListener('click', () => {
     free = false;

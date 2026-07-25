@@ -1,0 +1,378 @@
+<h1>docs</h1>
+<p class="lede">Everything in one place: write a plan, let the compiler
+check it, run it with an agent, change it mid-flight, and look anything up.
+The terminal recordings are verbatim captures of the real CLI.</p>
+
+<nav aria-label="On this page">
+<ul class="subnav">
+  <li><a href="#write">write a plan</a></li>
+  <li><a href="#check">check it</a></li>
+  <li><a href="#run">run it</a></li>
+  <li><a href="#change">change it safely</a></li>
+  <li><a href="#reference">reference</a></li>
+</ul>
+</nav>
+
+<p>Marionette has three parts, and this page follows them in order:</p>
+
+<div class="table-wrap">
+<table>
+  <caption class="visually-hidden">The parts of a Marionette project</caption>
+  <tr><th scope="col">Part</th><th scope="col">What it does</th></tr>
+  <tr><td>Plan file</td><td>Describes the work, the choices, and the decisions reserved for people</td></tr>
+  <tr><td>Checker</td><td>Finds missing steps, dead ends, and retry paths that may never finish</td></tr>
+  <tr><td>Runner</td><td>Shows the agent what to do next and records each decision</td></tr>
+</table>
+</div>
+
+<h2 id="write">Write a plan</h2>
+
+<p>A plan is a plain-text <code>.mar</code> file. Each named section is a
+stage of the work — not an individual task — and the choices at the end of
+a stage decide what happens next. You can write one by hand or ask an AI to
+draft it from notes; either way the file stays readable, reviewable, and
+stored with your project. Every construct at a glance:</p>
+
+<mar-src title="anatomy.mar — every construct at a glance">
+// Comments run to the end of the line.
+# project: my-project          // plan-level metadata tag (preamble)
+VAR iteration = 0              // typed variables: number, boolean, "string"
+VAR approved = false
+
+-> build_mvp                   // optional explicit start (default: first phase)
+
+=== build_mvp ===              // a phase (node)
+Ship the smallest testable slice.       // prose body: what this phase is
+# github:issue: 12                      // node-level metadata tag
+~ iteration += 1                        // mutation, applied on entry (=, +=, -=)
+* [Metrics green] @human -> beta_launch          // once-only choice, human checkpoint
++ {iteration < 3} [Go again] ~loop~ -> build_mvp // sticky choice, gated, declared loop
+* {iteration >= 3} [Three strikes] -> pivot
+
+=== beta_launch ===
+Launch to the beta cohort.
+-> END                         // fallthrough divert; END terminates the plan
+
+=== pivot ===
+* [Pivot] @human ~loop~ -> build_mvp
+* [Kill it] @human -> END
+</mar-src>
+
+<h3 id="constructs">Constructs</h3>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Construct</th><th scope="col">Syntax</th><th scope="col">Notes</th></tr>
+  <tr><td>Phase</td><td><code>=== name ===</code></td>
+      <td>Unique <code>[A-Za-z_]\w*</code> id; trailing <code>===</code> optional. <code>END</code> is reserved.</td></tr>
+  <tr><td>Body</td><td>prose lines</td>
+      <td>Joined verbatim; the first line becomes the node title in renders. This prose is the executing agent's task description.</td></tr>
+  <tr><td>Variable</td><td><code>VAR name = literal</code></td>
+      <td>Preamble only. Type inferred from the literal (number, <code>true</code>/<code>false</code>, <code>"string"</code>).</td></tr>
+  <tr><td>Mutation</td><td><code>~ name = expr</code> · <code>~ name += expr</code> · <code>~ name -= expr</code></td>
+      <td>Applied in order when the phase is <strong>entered</strong>. <code>+=</code>/<code>-=</code> require numbers.</td></tr>
+  <tr><td>Choice (once)</td><td><code>* [Label] -&gt; target</code></td>
+      <td>May be taken at most once per traversal.</td></tr>
+  <tr><td>Choice (sticky)</td><td><code>+ [Label] -&gt; target</code></td>
+      <td>Repeatable. Use for loop edges — and for every choice a traversal can revisit.</td></tr>
+  <tr><td>Gate</td><td><code>{expr}</code> before or after the label</td>
+      <td>The choice is available only while the expression is true.</td></tr>
+  <tr><td>Human checkpoint</td><td><code>@human</code> on a choice</td>
+      <td>The agent must pause and escalate; only a human may record this decision. Enforced by the walker.</td></tr>
+  <tr><td>Loop</td><td><code>~loop~</code> on a choice</td>
+      <td>Declares an intentional cycle. A cycle counts as declared when <em>any one</em> of its edges carries <code>~loop~</code> (convention: the returning edge). Undeclared cycles are compile errors.</td></tr>
+  <tr><td>Divert</td><td><code>-&gt; target</code> on its own line</td>
+      <td>Fallthrough edge. At most one per phase; must come after the choices.</td></tr>
+  <tr><td>End</td><td><code>-&gt; END</code></td>
+      <td>Terminal. Reaching it completes the plan.</td></tr>
+  <tr><td>Metadata</td><td><code># key: value</code> · <code># tag</code> · <code># key: """</code>…<code>"""</code></td>
+      <td>Plan-level in the preamble, node-level inside a phase. Namespaced keys (<code>github:issue</code>) are the extension mechanism. Repeated keys accumulate into a list.</td></tr>
+</table>
+</div>
+
+<h3 id="expressions">Expressions</h3>
+
+<p>Operands: numbers (<code>3</code>, <code>1.5</code>), booleans,
+<code>"strings"</code>, variables. Operators, loosest to tightest:
+<code>||</code>/<code>or</code> · <code>&amp;&amp;</code>/<code>and</code> ·
+<code>==</code> <code>!=</code> · <code>&lt;</code> <code>&lt;=</code>
+<code>&gt;</code> <code>&gt;=</code> · <code>+</code> <code>-</code> ·
+<code>*</code> <code>/</code> <code>%</code> · unary
+<code>!</code>/<code>not</code>, <code>-</code> · <code>( )</code>.
+Comparisons are type-checked at runtime; <code>+</code> concatenates
+strings.</p>
+
+<h3 id="metadata">Metadata &amp; quote blocks</h3>
+
+<p><strong>Any</strong> metadata key — plan-level or node-level — accepts a
+fenced <code>"""</code> quote block for well-formed multiline text; an
+unterminated fence is a parse error. Use it wherever a value is prose
+rather than an identifier: keep lines short and readable instead of packing
+a paragraph onto one line. The most important use is <code>prompt</code> —
+the original ask, verbatim — which anchors the plan to its origin:
+<code>summarize</code> leads with it and the executor's brief carries it as
+<code>plan.intent</code>, so the file never operates in a vacuum. (A
+one-line <code>summary</code> key also exists; add it only when a long
+prompt needs an abstract — don't restate the prompt.) The provider
+namespaces normalise into structured refs and delivery config (see
+<a href="/execution">execution</a>); all other namespaces pass through
+untouched as extension metadata.</p>
+
+<mar-src title="metadata vocabulary">
+# prompt: """
+The original ask, verbatim. A fenced value is a container for
+markdown — blank lines, lists and # characters are plain text.
+"""
+
+# github:repo: acme/platform        // context for github refs
+# github:issue: 22                  // → https://github.com/acme/platform/issues/22
+# github:pr: other/repo#9           // explicit repo wins over context
+# jira:site: https://acme.atlassian.net
+# jira: PROJ-123, PROJ-124          // comma-separated lists allowed
+# linear:workspace: acme
+# linear: ENG-42
+# ref: https://wiki.acme.dev/brief  // generic link
+
+# delivery: pr-per-phase            // or branch-per-phase | single-pr | single-branch | none
+# delivery:branch: replatform/{phase}
+# report: per-phase                 // or at-checkpoints | at-end
+
+# timebox: 3d                       // node-level: budget for a speculative phase (m|h|d|w)
+# priority: high                    // node-level: critical | high | normal | low
+# wake: new "bug" issues in acme/shop   // node-level: what re-activates a standing phase
+</mar-src>
+
+<p>The pacing keys encode time <em>as evidence, never as a gate</em>: the
+walker never consults a clock. A <code>timebox</code> travels in the brief
+next to the phase's entry timestamp, and an overdue budget is the
+executor's cue to take the phase's abandon door honestly (a timeboxed
+phase therefore needs two exits — <code>MAR023</code> warns otherwise).
+<code>wake</code> tells executors what to watch so a service phase can
+park instead of polling; scheduling belongs to the executing platform,
+never the walker.</p>
+
+<h3 id="loops">Loops</h3>
+
+<p>A declared loop passes when its cycle has at least one exit that is
+ungated, or whose gate is trivially decidable and satisfiable — the
+canonical shape is a <strong>monotonic counter</strong>:
+<code>~ i += 1</code> inside the loop with an exit gate
+<code>{i &gt;= 3}</code>. A loop-continue gate that provably shuts
+(<code>{i &lt; 3}</code> with an increasing <code>i</code>) also counts, on
+any edge of the cycle. Everything else is enumerated as an unverified-gate
+warning. Resetting a counter (<code>~ i = 0</code>) anywhere makes its
+gates non-monotonic and therefore unverifiable — those warn by design;
+review them manually.</p>
+
+<p>Authoring rule of thumb: keep every choice on a path a traversal can
+revisit sticky (<code>+</code>). A once-only (<code>*</code>) choice inside
+a cycle is consumed on the first pass and can strand a later iteration at
+runtime; the compiler warns (<code>MAR017</code>) only when the
+<code>~loop~</code> edge itself is once-only.</p>
+
+<h2 id="check">Check it</h2>
+
+<p>The <code>validate</code> command checks whether every stage can be
+reached and whether every path eventually goes somewhere. Here is a first
+draft of a checkout-improvement plan with two honest mistakes — the retry
+path has not been marked as intentional, and the rollout stage has no next
+step:</p>
+
+<mar-file src="checkout-broken.mar" title="checkout.mar — first draft"></mar-file>
+
+<demo-cast id="01-validate-broken" title="validate — two structural errors"></demo-cast>
+
+<p>The first error asks whether returning to an earlier stage is deliberate
+and, if so, when the retries should stop. The second asks what happens
+after rollout. Marionette will not give an incomplete plan to an agent.
+Here is the fixed plan — the team may try up to five versions, a person
+approves the launch or a change of direction, and every route has a clear
+ending:</p>
+
+<mar-file src="checkout.mar" title="checkout.mar — fixed"></mar-file>
+
+<demo-cast id="02-validate-clean" title="validate --strict — clean"></demo-cast>
+
+<p>Reviewers do not have to read the plan file. The <code>summarize</code>
+command explains the route in plain language and highlights every decision
+reserved for a person; <code>render</code> draws a flowchart, in which
+<code>✋</code> marks a human decision and <code>↻</code> marks a retry
+path:</p>
+
+<demo-cast id="04-summarize" title="summarize — the reviewer's view"></demo-cast>
+
+<h3 id="guarantees">What the compiler guarantees</h3>
+
+<p><strong>Structural errors</strong> fail the build: dead ends, unreachable
+phases, undefined targets and variables, duplicates, undeclared cycles,
+loops with no exit or provably-unsatisfiable exits, <code>@human</code>
+choices with no escalation path, type mismatches.
+<strong>Warnings</strong> ask for review — or fail the build with
+<code>--strict</code>. Zero <em>errors</em> is the authoring bar, and a
+plan whose only diagnostics are expected <code>MAR014</code> dynamic-fact
+warnings (real-world facts the compiler cannot decide — it never claims
+"verified" for gates beyond constant expressions and monotonic counters) is
+a legitimate end state. The full table is in the
+<a href="#diagnostics">reference below</a>.</p>
+
+<h2 id="run">Run it</h2>
+
+<p><code>state init</code> starts a run and creates a small progress file.
+The run begins in the first stage; its attempt counter changes to 1, and
+Marionette shows which choices are available and which are currently
+blocked:</p>
+
+<demo-cast id="06-state-init" title="state init — start and show the first choices"></demo-cast>
+
+<p>The agent does not inspect that file. It runs <code>brief</code> to get
+its next assignment: the current instructions, useful values such as the
+attempt count, the choices available now, and the command to record the
+result. (Programs get the same thing as JSON — see
+<a href="/execution">execution</a>.)</p>
+
+<demo-cast id="07-brief" title="brief — the agent's next assignment"></demo-cast>
+
+<p>Choice <code>[0]</code> would approve the launch, and it is marked
+<code>@human</code>. When the agent tries to take it, Marionette refuses —
+the error is named <code>human-checkpoint</code>, and no progress is
+recorded. This rule is enforced by the tool itself; it does not depend on
+the agent remembering an instruction:</p>
+
+<demo-cast id="08-choose-refused" title="state choose — the agent cannot approve launch"></demo-cast>
+
+<p>The agent can take an allowed choice instead — every choice records who
+made it and why, so anyone checking the project sees the decision and the
+remaining number of tries. When the evidence is in, a person takes the
+launch choice and records the reason; Marionette keeps their name, the
+decision, and the evidence in the project's history:</p>
+
+<demo-cast id="11-choose-human" title="state choose — a human records the ship decision"></demo-cast>
+
+<p>Three rules apply throughout: an agent cannot take a choice marked
+<code>@human</code>; every choice needs a written reason; and if the plan
+changes after the run starts, Marionette stops until you accept the edit.
+That last one is next.</p>
+
+<h2 id="change">Change it safely</h2>
+
+<p>Plans change mid-flight. Marionette fingerprints the compiled plan, and
+any semantic edit changes the fingerprint: every walk command then stops
+with exit code 3 rather than applying the old progress record to a
+different plan. This mismatch is called <em>drift</em>:</p>
+
+<demo-cast id="14-drift" title="state show — the plan changed during the run"></demo-cast>
+
+<p>If the edit is intentional, <code>state rebind</code> migrates the
+progress file onto the new plan, <strong>keeping the decision
+history</strong>, and lists what changed. Vanished taken-choices are
+dropped (and reported), removed variables dropped, new variables added at
+their initials, type-changed variables reset. It refuses
+(<code>migration-blocked</code>) when the current phase no longer exists —
+that reconciliation needs a human. To start over instead, discarding
+history: <code>state init --force</code>.</p>
+
+<demo-cast id="15-rebind" title="state rebind — accept the edit and keep the history"></demo-cast>
+
+<h2 id="reference">Reference</h2>
+
+<h3 id="cli">Command surface</h3>
+
+<demo-cast id="16-help" title="marionette help"></demo-cast>
+
+<p>Three of these deserve a note: a compiled plan is also a database of
+facts, and the graph checks are specified as logic rules over it
+(<code>spec/rules/marionette.pl</code> — the normative spec, runnable on
+the engine bundled with the package). <code>marionette facts</code> emits
+the fact base, <code>marionette oracle</code> runs the rule-base report,
+and <code>marionette query</code> asks one-shot questions no other
+subcommand answers — <code>'unattended_completion'</code> ("can the agent
+finish without a human?"), <code>'human_gate(C, Phase, Label)'</code>
+("what exactly does a human sign off on?"), <code>'cyclic(P)'</code>
+("which phases sit inside loops?").</p>
+
+<h3 id="exit-codes">Exit codes</h3>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
+  <tr><td><code>0</code></td><td>success (warnings allowed unless <code>--strict</code>)</td></tr>
+  <tr><td><code>1</code></td><td>validation errors (or warnings with <code>--strict</code>); refused walk operations</td></tr>
+  <tr><td><code>2</code></td><td>usage or I/O errors</td></tr>
+  <tr><td><code>3</code></td><td>plan/state drift detected — reconcile with <code>state rebind</code> (or <code>state init --force</code>)</td></tr>
+</table>
+</div>
+
+<h3 id="diagnostics">Compiler diagnostics</h3>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Code</th><th scope="col">Severity</th><th scope="col">Meaning</th><th scope="col">Usual fix</th></tr>
+  <tr><td><code>MAR001</code></td><td>error</td><td>parse error</td><td>fix the line the message points at</td></tr>
+  <tr><td><code>MAR002</code></td><td>error</td><td>duplicate phase id</td><td>rename one of the phases</td></tr>
+  <tr><td><code>MAR003</code></td><td>error</td><td>undefined divert/choice target</td><td>typo — take the <em>did you mean</em> suggestion, or define the phase</td></tr>
+  <tr><td><code>MAR004</code></td><td>error</td><td>undefined variable in a gate or mutation</td><td>declare it with <code>VAR</code> in the preamble</td></tr>
+  <tr><td><code>MAR005</code></td><td>error</td><td>duplicate variable declaration</td><td>remove the extra <code>VAR</code></td></tr>
+  <tr><td><code>MAR006</code></td><td>error</td><td>dead end: phase with no choices and no divert</td><td>add an exit choice or <code>-&gt; END</code></td></tr>
+  <tr><td><code>MAR007</code></td><td>error</td><td>unreachable phase</td><td>link it from a real decision, or delete it</td></tr>
+  <tr><td><code>MAR008</code></td><td>error</td><td>undeclared cycle</td><td>if the loop is intentional, add <code>~loop~</code> to the returning choice; otherwise re-point the edge</td></tr>
+  <tr><td><code>MAR009</code></td><td>error</td><td>declared loop with no exit</td><td>add a counter-gated or <code>@human</code> sibling exit</td></tr>
+  <tr><td><code>MAR010</code></td><td>error</td><td>loop exit gate provably unsatisfiable</td><td>fix the gate so the counter can actually reach it</td></tr>
+  <tr><td><code>MAR011</code></td><td>warning</td><td>constant-false gate</td><td>the choice can never be taken — fix or remove it</td></tr>
+  <tr><td><code>MAR012</code></td><td>error</td><td><code>@human</code> choice with no escalation path</td><td>give the choice a <code>-&gt; target</code></td></tr>
+  <tr><td><code>MAR013</code></td><td>warning</td><td><code>~loop~</code> on an edge that isn't part of a cycle</td><td>drop the mark, or point the edge where you meant</td></tr>
+  <tr><td><code>MAR014</code></td><td>warning</td><td>unverified gate (dynamic fact the compiler can't decide)</td><td>expected for real-world facts — review manually, don't churn the plan to silence it</td></tr>
+  <tr><td><code>MAR015</code></td><td>error</td><td>type mismatch in an expression or mutation</td><td>align the literal/variable types</td></tr>
+  <tr><td><code>MAR016</code></td><td>warning</td><td>unused variable</td><td>gate on it, or delete it</td></tr>
+  <tr><td><code>MAR017</code></td><td>warning</td><td>once-only (<code>*</code>) loop edge</td><td>make it sticky (<code>+</code>) so the loop can repeat</td></tr>
+  <tr><td><code>MAR018</code></td><td>warning</td><td>malformed external ref (<code>github:</code>/<code>jira:</code>/<code>linear:</code>/<code>ref:</code>)</td><td>fix the value to the namespace's expected shape</td></tr>
+  <tr><td><code>MAR019</code></td><td>warning</td><td>unknown <code>delivery:</code>/<code>report:</code> value</td><td>use a listed value; typos fall back to defaults loudly</td></tr>
+  <tr><td><code>MAR020</code></td><td>warning</td><td>unknown <code>tracker:</code> value</td><td>use <code>github</code>, <code>jira</code> or <code>linear</code></td></tr>
+  <tr><td><code>MAR021</code></td><td>warning</td><td>malformed <code>timebox:</code> value</td><td>single unit: <code>90m</code>, <code>4h</code>, <code>3d</code>, <code>2w</code></td></tr>
+  <tr><td><code>MAR022</code></td><td>warning</td><td>unknown <code>priority:</code> value</td><td>use <code>critical</code>, <code>high</code>, <code>normal</code> or <code>low</code></td></tr>
+  <tr><td><code>MAR023</code></td><td>warning</td><td>timeboxed phase with a single exit</td><td>give the spike an abandon door as well — or drop the timebox</td></tr>
+</table>
+</div>
+
+<h3 id="walk-errors">Walker refusal codes</h3>
+
+<p>Refusals are machine-coded so executors can react programmatically, and
+a refused operation never mutates state. (The runtime protocol carries its
+own error codes on the same principles — e.g. <code>forbidden</code> for an
+agent connection at an <code>@human</code> checkpoint,
+<code>stale-revision</code> for an outdated <code>expectedRevision</code> —
+see <code>spec/runtime-protocol.schema.json</code>.)</p>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">Code</th><th scope="col">Meaning</th></tr>
+  <tr><td><code>completed</code></td><td>the plan has already reached END</td></tr>
+  <tr><td><code>unknown-node</code></td><td>state points at a node absent from the compiled plan</td></tr>
+  <tr><td><code>unknown-choice</code></td><td>no choice matches the given reference</td></tr>
+  <tr><td><code>ambiguous-choice</code></td><td>a label prefix matched more than one choice</td></tr>
+  <tr><td><code>gate-blocked</code></td><td>the choice's gate is currently false (or failed to evaluate)</td></tr>
+  <tr><td><code>once-exhausted</code></td><td>a once-only (<code>*</code>) choice was already taken</td></tr>
+  <tr><td><code>human-checkpoint</code></td><td>an agent tried to take an <code>@human</code> choice</td></tr>
+  <tr><td><code>rationale-required</code></td><td>the step is missing its auditable rationale</td></tr>
+  <tr><td><code>no-divert</code></td><td><code>advance</code> called on a node without a fallthrough divert</td></tr>
+  <tr><td><code>migration-blocked</code></td><td>state cannot be rebound onto the edited plan (current phase gone) — needs a human</td></tr>
+</table>
+</div>
+
+<h3 id="files">Files on disk</h3>
+
+<div class="table-wrap">
+<table>
+  <tr><th scope="col">File</th><th scope="col">What it is</th></tr>
+  <tr><td><code>plan.mar</code></td><td>the script — durable, diffable source of truth</td></tr>
+  <tr><td><code>plan.trajectory.json</code></td><td>compiled contract (<code>marionette compile</code>); content-hashed</td></tr>
+  <tr><td><code>plan.state.json</code></td><td>traversal state + decision log, bound to the trajectory hash</td></tr>
+  <tr><td><code>.marionette/graphs/&lt;hash&gt;.trajectory.json</code></td><td>runtime store: compiled trajectories archived by content hash</td></tr>
+  <tr><td><code>.marionette/runs/&lt;run-id&gt;/events.jsonl</code></td><td>runtime store: append-only event journal (authoritative)</td></tr>
+  <tr><td><code>.marionette/runs/&lt;run-id&gt;/snapshot.json</code></td><td>runtime store: fsynced snapshot, rebuilt from the journal on resume</td></tr>
+</table>
+</div>
+
+<p>The contracts behind all of this live in the repo:
+<code>spec/trajectory.schema.json</code> (the compiled plan),
+<code>spec/brief.schema.json</code> (the work packet), and
+<code>spec/conformance/</code> (walker behaviour).</p>

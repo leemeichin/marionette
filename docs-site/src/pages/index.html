@@ -1,73 +1,88 @@
+<div class="measure">
 <h1>marionette</h1>
 <p class="lede">Write down how a project should run, let an AI agent handle
 the routine steps, and keep important decisions with people.</p>
 
-<p>Marionette turns a plain-text project plan into a set of steps that an
-AI agent can follow. The plan describes the stages of the work, the
-choices between them, and any rules for moving forward. Marionette checks
-the plan for missing or impossible paths before work begins. A choice
-marked <code>@human</code> always requires a person: the tool will refuse
-to let an agent take it.</p>
+<p>A Marionette plan is a plain-text file: the stages of the work, the
+choices between them, and the rules for moving forward. Marionette checks
+the plan for missing or impossible paths before work begins, records every
+decision and why it was made, and a choice marked <code>@human</code>
+always requires a person — the tool refuses to let an agent take it.</p>
 
-<p>You can write the plan yourself or ask an AI to draft one from your
-notes. Either way, the file stays readable, reviewable, and stored with
-your project. Marionette also records what happened and why, so you can
-see how the project reached its current stage.</p>
-
-<div class="table-wrap">
-<table>
-  <caption class="visually-hidden">The parts of a Marionette project</caption>
-  <tr><th scope="col">Part</th><th scope="col">What it does</th></tr>
-  <tr><td>Plan file</td><td>Describes the work, the choices, and the decisions reserved for people</td></tr>
-  <tr><td>Checker</td><td>Finds missing steps, dead ends, and retry paths that may never finish</td></tr>
-  <tr><td>Runner</td><td>Shows the agent what to do next and records each decision</td></tr>
-</table>
+<p>Try it right here. The editor below runs the real compiler and walker in
+your browser: edit the plan, watch it re-check as you type, then take the
+choices yourself — or follow the short tutorial.</p>
 </div>
 
-<h2 id="a-plan">A plan is a file</h2>
+<noscript><p class="measure"><strong>The playground needs JavaScript</strong> —
+it runs the compiler in your browser. The <a href="/docs">docs</a> show the
+same flow as captured terminal sessions.</p></noscript>
 
-<p>The original request goes at the top. Each section then describes one
-stage of work and what can happen next. This example allows up to five
-attempts to improve checkout. A person decides whether to launch or return
-to research, and every route has a clear ending.</p>
+<section class="pg-tutorial" data-tutorial hidden>
+  <div class="pg-tut-bar">
+    <span class="pg-tut-where" data-tut-where></span>
+    <span class="pg-tut-nav">
+      <button type="button" data-tut-prev>← prev</button>
+      <button type="button" data-tut-next disabled>next →</button>
+      <button type="button" data-tut-toggle>free play</button>
+    </span>
+  </div>
+  <h2 class="pg-tut-title" data-tut-title></h2>
+  <p class="pg-tut-text" data-tut-text></p>
+  <p class="pg-tut-goal"><strong>Goal:</strong> <span data-tut-goal></span>
+    <span class="pg-tut-status" data-tut-status role="status"></span></p>
+</section>
 
-<mar-file src="checkout.mar" title="checkout.mar"></mar-file>
+<div class="pg" data-playground>
+  <section class="pg-editor" aria-label="Plan editor">
+    <div class="pg-toolbar">
+      <label class="pg-example-row" data-examples-row>
+        <span>load example</span>
+        <select data-examples></select>
+      </label>
+      <button type="button" class="pg-tut-enter" data-tut-enter hidden>tutorial</button>
+    </div>
+    <textarea id="pg-src" spellcheck="false" autocomplete="off" aria-label="playground.mar — edits compile as you type"></textarea>
+    <div class="pg-diagnostics" data-diagnostics aria-label="compiler diagnostics" role="log"></div>
+  </section>
 
-<h2 id="compiler">Catch problems before work starts</h2>
+  <section class="pg-viz" aria-label="Graph and walk">
+    <div class="pg-canvas" data-canvas aria-hidden="true"></div>
+    <div class="pg-walk" data-walk>
+      <div class="pg-walk-controls">
+        <fieldset class="pg-actor">
+          <legend>acting as</legend>
+          <label><input type="radio" name="pg-actor" value="agent" checked> agent</label>
+          <label><input type="radio" name="pg-actor" value="human"> human</label>
+        </fieldset>
+        <label class="pg-rationale-row">rationale
+          <input id="pg-rationale" type="text" value="exploring in the playground">
+        </label>
+        <button type="button" class="pg-reset" data-reset>↺ reset</button>
+      </div>
+      <div class="pg-node" data-node role="status"></div>
+      <div class="pg-choices" data-choices></div>
+      <ol class="pg-log" data-log aria-label="decision log"></ol>
+    </div>
+  </section>
+</div>
 
-<p>Marionette catches stages that lead nowhere, steps that can never be
-reached, retries with no stopping point, and human decisions with no next
-step. Each error includes a line number and a suggested fix. This is a
-recording of the real tool; press play or move through it one step at a
-time:</p>
-
-<demo-cast id="01-validate-broken" title="validate — a broken plan fails the build"></demo-cast>
-
-<h2 id="enforced">Important decisions stay with people</h2>
-
-<p>Once the plan passes its checks, an agent works through it one stage at
-a time and records a reason for every choice. At a choice marked
-<code>@human</code>, Marionette stops the agent and asks for a person's
-decision:</p>
-
-<demo-cast id="08-choose-refused" title="state choose — the walker refuses an agent at @human"></demo-cast>
-
+<div class="measure">
 <h2 id="next">Where to go</h2>
 
 <ul>
-  <li><a href="/walkthrough">walkthrough</a> — one plan taken end to end:
-    write it, find and fix problems, give it to an agent, approve the
-    launch, and safely change it later.</li>
-  <li><a href="/getting-started">getting-started</a> — install the CLI and
-    the authoring/execution skills, write your first plan.</li>
-  <li><a href="/syntax">syntax</a> — look up the parts of a
-    <code>.mar</code> plan.</li>
-  <li><a href="/playground">playground</a> — write a plan and your browser
-    checks it, draws a flowchart, and lets you try each choice.</li>
+  <li><a href="/getting-started">getting-started</a> — install the CLI, write
+    your first plan, and set it up with Claude Code, Codex, or OpenCode.</li>
+  <li><a href="/docs">docs</a> — one structured page for the whole tool:
+    write, check, run, change, and look anything up.</li>
+  <li><a href="/examples">examples</a> — complete plans you can edit and run
+    right on the page, including the plan that built this site.</li>
   <li><a href="/execution">execution</a> — connect an agent or another
     program to Marionette.</li>
-  <li><a href="/examples">examples</a> — complete plans for common projects,
-    including the plan that built this site.</li>
-  <li><a href="/reference">reference</a> — CLI commands, exit codes, all
-    error messages.</li>
 </ul>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"/vendor/three.module.min.js"}}
+</script>
+<script type="module" src="/playground.js"></script>

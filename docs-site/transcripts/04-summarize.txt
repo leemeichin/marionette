@@ -1,7 +1,5 @@
 # Plan summary: checkout.mar
 
-**Intent:** Lift checkout conversion behind a feature flag — up to five evidence-driven iterations, a human ship gate, and a forced rethink when the budget runs dry.
-
 > Checkout conversion has been flat for two quarters. Rebuild the flow
 > behind a flag and iterate on cohort evidence — five attempts max. I take
 > the ship call, and if it never converts we go back to research rather
@@ -13,7 +11,7 @@ Starts at **build_checkout**. 3 phases, 2 decision points (phases with 2+ choice
 - **Declared loops:** build_checkout → build_checkout ("Conversion flat — iterate"); rethink → build_checkout ("New direction agreed")
 - **Gates:** 2 gated choices, of which 0 unverified (review manually)
 - **Variables:** attempts: number = 0
-- **Contract hash:** `sha256:45a90f7fc02f…`
+- **Contract hash:** `sha256:7273a73bb2f8…`
 
 ## Walkthrough
 

@@ -11,9 +11,10 @@ checked programmatically against WCAG 2.x AA (≥ 4.5:1) by
    (`transcripts/`), rendered by mapping ANSI SGR codes to token colors —
    never hand-drawn mock-ups. If the CLI doesn't print it, the site doesn't
    show it.
-2. **Full-viewport tty, watercolour palette.** One monospace stack
-   everywhere. The default theme is a cool paper-white with pastel accents;
-   the dark theme is slate-blue with the same pastels. `prefers-color-scheme`
+2. **Full-viewport tty, vivid ink.** One monospace stack everywhere. The
+   default theme is a cool periwinkle-white with saturated accents (indigo,
+   emerald, raspberry, amber, azure, violet); the dark theme is a deep
+   indigo-navy with bright versions of the same hues. `prefers-color-scheme`
    is honoured, with a manual override persisted in `localStorage` and
    applied before first paint. No warm/olive cast anywhere.
 3. **No decoration that costs legibility.** No scanlines, no glow, no CRT
@@ -28,26 +29,28 @@ checked programmatically against WCAG 2.x AA (≥ 4.5:1) by
 Defined once as CSS custom properties in `public/tokens.css`, switched by
 `[data-theme]` on `<html>` (and by `prefers-color-scheme` when unset).
 
-| Token | Light (default, paper) | Dark (slate) | Role |
+| Token | Light (default, paper) | Dark (indigo-navy) | Role |
 |---|---|---|---|
-| `--bg` | `#f8fafc` | `#14171d` | page background |
-| `--bg-elev` | `#eef2f8` | `#1b202a` | terminal chrome, panels, nav |
-| `--bg-code` | `#f1f5fa` | `#212734` | code/transcript background |
-| `--fg` | `#2c3644` | `#dee4ee` | body text |
-| `--fg-dim` | `#51606f` | `#a3aebf` | ANSI dim, secondary text |
-| `--fg-faint` | `#5c6a79` | `#96a1b2` | comments, metadata |
-| `--green` | `#1e7566` | `#93d9b2` | ANSI green, success marks |
-| `--red` | `#b04a5e` | `#f4a9b4` | ANSI red, errors |
-| `--yellow` | `#7d661f` | `#e8d3a4` | ANSI yellow (warning bytes only — never decorative) |
-| `--cyan` | `#22708a` | `#a1d6e8` | ANSI cyan, keywords, gates |
-| `--magenta` | `#8b4d9e` | `#d8b6ec` | ANSI magenta, `@human` |
-| `--accent` | `#1e7566` | `#93d9b2` | links, active nav, prompt `$`, phases |
-| `--focus` | `#145c50` | `#aee8ff` | focus rings |
+| `--bg` | `#f7f8ff` | `#12151f` | page background |
+| `--bg-elev` | `#eceffd` | `#191e2e` | terminal chrome, panels, nav |
+| `--bg-code` | `#f1f3fe` | `#1f2639` | code/transcript background |
+| `--fg` | `#252c40` | `#e4e9f9` | body text |
+| `--fg-dim` | `#4a5474` | `#a9b4d4` | ANSI dim, secondary text |
+| `--fg-faint` | `#555f7e` | `#9aa5c5` | comments, metadata |
+| `--green` | `#0c7a43` | `#43dd8f` | ANSI green, success marks |
+| `--red` | `#c22a5a` | `#ff92ac` | ANSI red, errors |
+| `--yellow` | `#8a5a00` | `#ffc75e` | ANSI yellow (warning bytes; traffic-light dot) |
+| `--cyan` | `#0561b8` | `#57c4f5` | ANSI cyan, keywords, gates |
+| `--magenta` | `#8b2fc9` | `#d29bff` | ANSI magenta, `@human`, h3 markers |
+| `--accent` | `#5b3df5` | `#a4a0ff` | links, active nav, prompt `$`, phases, h1/h2 markers |
+| `--focus` | `#3c22d1` | `#7ee2ff` | focus rings |
 
 Verified: every foreground token ≥ 4.5:1 on every background token, both
-themes (worst pair: light `--red` on `--bg-elev` at 4.69:1). The `.mar`
-syntax tint uses only accent/cyan/magenta/green — yellow appears solely
-when the CLI itself emitted a warning byte.
+themes (worst pair: light `--green` on `--bg-elev` at 4.72:1). The `.mar`
+syntax tint uses only accent/cyan/magenta/green. Terminal title bars carry
+red/yellow/green traffic-light dots — purely decorative (`aria-hidden`
+empty elements), never a semantic channel; the header carries a thin
+accent→magenta→cyan→green gradient rule for the same reason.
 
 ANSI mapping: `31`→red · `32`→green · `33`→yellow · `35`→magenta ·
 `36`→cyan · `1`→bold (weight 700, same color) · `2`→dim (`--fg-dim`).
@@ -62,8 +65,11 @@ reinforcement — safe for color-blind users.
 - Base `16px`; scale `0.8125rem` (fine print) · `1rem` (body & code) ·
   `1.25rem` (h3) · `1.5rem` (h2) · `2rem` (h1). Line-height `1.6` prose,
   `1.45` transcripts.
-- Prose measure capped at `72ch`; transcripts scroll horizontally in their
-  own `overflow-x: auto` container — the page never scrolls sideways.
+- One shared measure: prose, tables and example terminals sit in the same
+  centred `56rem` column, so nothing juts past the text edge. Transcript
+  and `.mar` lines wrap (`pre-wrap`) instead of scrolling sideways; the
+  `overflow-x` container remains only as a zoomed/narrow fallback — the
+  page never scrolls sideways.
 - Spacing on an `0.5rem` grid (`--s1..--s6` = 0.5/1/1.5/2/3/4 rem).
 - All sizes in `rem`; layout is flex/grid and holds from 320px up. Zoom to
   200% loses nothing (WCAG 1.4.4/1.4.10).
@@ -116,11 +122,15 @@ link, one `h1`, labelled buttons, `lang`, alt text).
 
 ## Playground
 
-`/playground` runs the real compiler and walker in the browser: the tsc
-output ships under `/lib` and runs unmodified — the compiler hashes with
-WebCrypto (`globalThis.crypto.subtle`), the same code path on Node ≥ 20
-and in browsers. The graph view is Three.js (vendored, loaded only on
-that page). The
-DOM controls are the accessible interface — the canvas is `aria-hidden`
-garnish. Refusals are the walker's own (`human-checkpoint`, gate blocks,
-once-exhaustion); nothing is simulated.
+The home page (`/`) runs the real compiler and walker in the browser: the
+tsc output ships under `/lib` and runs unmodified — the compiler hashes
+with WebCrypto (`globalThis.crypto.subtle`), the same code path on Node
+≥ 20 and in browsers. The graph view is Three.js (vendored, loaded only on
+that page). The DOM controls are the accessible interface — the canvas is
+`aria-hidden` garnish. Refusals are the walker's own (`human-checkpoint`,
+gate blocks, once-exhaustion); nothing is simulated.
+
+The examples page embeds the same engine as **mini playgrounds**
+(`<mini-playground>` → `public/mini.js`): an editable plan pane on the
+left, live diagnostics and the walk panel on the right, no 3D canvas.
+Without JS the plan source is still fully readable in the textarea.
