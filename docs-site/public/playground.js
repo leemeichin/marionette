@@ -1,7 +1,9 @@
 // The playground: the real compiler + walker (tsc output under /lib,
 // hashing via WebCrypto so the modules run unmodified) with a Three.js view of
 // the graph. The DOM controls are the accessible interface; the canvas is
-// aria-hidden garnish. No autoplay; reduced motion = no tweens.
+// aria-hidden garnish. Diagnostics render in the same stage as the graph:
+// while the plan doesn't compile, the errors occupy the space the graph
+// would. No autoplay; reduced motion = no tweens.
 import * as THREE from 'three';
 import { compile } from '/lib/compile.js';
 import { initState, frontier, takeChoice, advance, WalkError } from '/lib/state.js';
@@ -25,9 +27,6 @@ function boot(el) {
   let compileSeq = 0;
   const viz = makeViz(canvasHost, reduced);
 
-  let refusalSeen = false;
-  const tut = makeTutorial(el, srcEl, () => { refusalSeen = false; recompile(); });
-
   const exampleSel = el.querySelector('[data-examples]');
   for (const [i, ex] of EXAMPLES.entries()) {
     const opt = document.createElement('option');
@@ -37,11 +36,9 @@ function boot(el) {
   }
   exampleSel.addEventListener('change', () => {
     srcEl.value = EXAMPLES[Number(exampleSel.value)].source;
-    refusalSeen = false;
-    tut.exitToFreePlay();
     recompile();
   });
-  if (!tut.active) srcEl.value = EXAMPLES[0].source;
+  srcEl.value = EXAMPLES[0].source;
   srcEl.addEventListener('input', debounce(recompile, 250));
   resetEl.addEventListener('click', () => {
     if (!trajectory) return;
@@ -68,7 +65,6 @@ function boot(el) {
       nodeEl.innerHTML = '';
       choicesEl.innerHTML = '';
       logEl.innerHTML = '';
-      tut.judge({ ok: false, trajectory: null, state: null, refusalSeen });
       return;
     }
     const changed = !trajectory || trajectory.hash !== result.trajectory.hash;
@@ -82,17 +78,22 @@ function boot(el) {
   }
 
   function renderDiagnostics(diagnostics) {
+    // The panel shares the stage with the graph: hidden while the plan is
+    // clean (the rendered graph is the confirmation), a bottom strip for
+    // warnings, the whole stage when compilation fails.
     if (diagnostics.length === 0) {
-      diagEl.innerHTML = '<p class="pg-ok">✓ 0 errors, 0 warnings — the plan compiles</p>';
+      diagEl.hidden = true;
+      diagEl.innerHTML = '';
       return;
     }
     const items = diagnostics.map((d) => {
       const cls = d.severity === 'error' ? 'pg-err' : 'pg-warn';
       const where = d.line != null ? `playground.mar:${d.line}: ` : '';
       const help = d.suggestion ? `<span class="pg-help">help: ${esc(d.suggestion)}</span>` : '';
-      return `<li class="${cls}"><strong>${where}${d.severity}[${esc(d.code)}]</strong>: ${esc(d.message)}${help}</li>`;
+      return `<li class="${cls}"><strong>${where}${d.severity}[${esc(d.code)}]</strong>: ${esc(d.message)} ${help}</li>`;
     });
     diagEl.innerHTML = `<ul>${items.join('')}</ul>`;
+    diagEl.hidden = false;
   }
 
   function actor() {
@@ -104,7 +105,7 @@ function boot(el) {
     try {
       fn();
     } catch (e) {
-      if (e instanceof WalkError) { refusal = e; refusalSeen = true; }
+      if (e instanceof WalkError) refusal = e;
       else throw e;
     }
     renderWalk();
@@ -160,141 +161,9 @@ function boot(el) {
     }).join('');
 
     viz.setWalk(state);
-    tut.judge(context());
-  }
-
-  function context() {
-    const result = { ok: Boolean(trajectory), trajectory, state, refusalSeen };
-    return result;
   }
 }
 
-
-/* ---------- tutorial ---------- */
-
-const LESSONS = [
-  {
-    title: '1 · A plan is phases with exits',
-    text: 'A phase is === name ===, its prose is the task, and every phase must lead somewhere — an exit choice or a divert. This draft has a dead end, and the compiler below is telling you exactly where. Fix it: give ship_it a divert to END (a line containing only "-> END").',
-    goal: 'the plan compiles: 0 errors',
-    starter: `=== build_it ===
-Build the smallest useful version.
-* [It works] -> ship_it
-
-=== ship_it ===
-Release it to the first users.
-`,
-    check: (c) => Boolean(c.ok && c.trajectory),
-  },
-  {
-    title: '2 · Decisions are choices',
-    text: 'A choice is * [Label] -> target (once-only) or + [Label] -> target (repeatable). Labels are evidence claims a reviewer will read verbatim. Give build_it a second choice: * [Fundamental problem] -> rethink — and give rethink a body and its own exit to END.',
-    goal: 'a phase with 2+ choices, still 0 errors',
-    starter: `=== build_it ===
-Build the smallest useful version.
-* [It works] -> ship_it
-
-=== ship_it ===
-Release it to the first users.
--> END
-`,
-    check: (c) => Boolean(c.ok && c.trajectory && c.trajectory.nodes.some((n) => n.choices.length >= 2)),
-  },
-  {
-    title: '3 · Variables gate the paths',
-    text: 'Declare VAR attempts = 0 in the preamble (above the first phase), tick it on entry with ~ attempts += 1 inside build_it, and gate a choice with {attempts >= 2} so it only opens after two visits. Gates compute availability from live state — an executor cannot wish them open.',
-    goal: 'a declared variable and at least one gated choice, 0 errors',
-    starter: `=== build_it ===
-Build the smallest useful version.
-* [It works] -> ship_it
-* [Fundamental problem] -> rethink
-
-=== rethink ===
-Take it back to first principles.
-* [New angle found] -> ship_it
-
-=== ship_it ===
-Release it to the first users.
--> END
-`,
-    check: (c) => Boolean(c.ok && c.trajectory &&
-      Object.keys(c.trajectory.variables).length > 0 &&
-      c.trajectory.nodes.some((n) => n.choices.some((ch) => ch.gate))),
-  },
-  {
-    title: '4 · Loops are declared and bounded',
-    text: 'This plan iterates — and the compiler refuses it: the cycle is undeclared (MAR008). Mark the returning choice with ~loop~ and make it sticky (+). The counter and the {attempts >= 3} escape already bound it, so the compiler can prove the loop exits.',
-    goal: 'the cycle is declared (~loop~) and the plan compiles',
-    starter: `VAR attempts = 0
-
-=== build_it ===
-Build the smallest useful version.
-~ attempts += 1
-* [It works] -> ship_it
-* {attempts < 3} [Not yet — iterate] -> build_it
-* {attempts >= 3} [Three strikes, stop] -> END
-
-=== ship_it ===
-Release it to the first users.
--> END
-`,
-    check: (c) => Boolean(c.ok && c.trajectory && c.trajectory.nodes.some((n) => n.choices.some((ch) => ch.loop))),
-  },
-  {
-    title: '5 · The human holds the gates',
-    text: 'Mark the ship decision @human: * [It works] @human -> ship_it. That single word is an enforced autonomy boundary — the walker will refuse an agent taking it, as you are about to see. The compiler also checks every @human choice has somewhere to escalate to.',
-    goal: 'at least one @human choice, 0 errors',
-    starter: `VAR attempts = 0
-
-=== build_it ===
-Build the smallest useful version.
-~ attempts += 1
-* [It works] -> ship_it
-+ {attempts < 3} [Not yet — iterate] ~loop~ -> build_it
-* {attempts >= 3} [Three strikes, stop] -> END
-
-=== ship_it ===
-Release it to the first users.
--> END
-`,
-    check: (c) => Boolean(c.ok && c.trajectory && c.trajectory.nodes.some((n) => n.choices.some((ch) => ch.human))),
-  },
-  {
-    title: '6 · Walk it — and get refused',
-    text: 'Now be the executor, in the panel on the right. As agent, click the @human choice: the walker refuses with a machine code — that is the boundary working, not an error in your plan. Take the loop once, then switch the actor to human, take the gate with a rationale, and advance to END.',
-    goal: 'witness a human-checkpoint refusal, then complete the plan with a human-recorded gate',
-    starter: `VAR attempts = 0
-
-=== build_it ===
-Build the smallest useful version.
-~ attempts += 1
-* [It works] @human -> ship_it
-+ {attempts < 3} [Not yet — iterate] ~loop~ -> build_it
-* {attempts >= 3} [Three strikes, stop] -> END
-
-=== ship_it ===
-Release it to the first users.
--> END
-`,
-    check: (c) => Boolean(c.refusalSeen && c.state && c.state.status === 'completed' &&
-      c.state.log.some((e) => e.actor !== 'agent' && e.actor !== 'system' && e.choice)),
-  },
-  {
-    title: '7 · Anchor the intent',
-    text: 'A plan should not operate in a vacuum. Put the original ask, verbatim, in the preamble as a fenced block: # prompt: """ on its own line, the markdown, then """ to close. Fenced values work on any metadata key. Reviewers read the prompt first; executors receive it in every work packet.',
-    goal: 'plan declares # prompt:, 0 errors',
-    starter: `=== build_it ===
-Build the smallest useful version.
-* [It works] @human -> ship_it
-* [Park it] -> END
-
-=== ship_it ===
-Release it to the first users.
--> END
-`,
-    check: (c) => Boolean(c.ok && c.trajectory && c.trajectory.meta['prompt']),
-  },
-];
 
 /* ---------- three.js view ---------- */
 
@@ -522,107 +391,6 @@ function makeViz(host, reduced) {
   function render() { renderer.render(scene, camera); }
   resize();
   return { setGraph, setWalk, retheme, clear };
-}
-
-
-function makeTutorial(root, srcEl, onLessonLoad) {
-  const panel = root.ownerDocument.querySelector('[data-tutorial]');
-  if (!panel) return { active: false, judge() {}, exitToFreePlay() {} };
-  const els = {
-    where: panel.querySelector('[data-tut-where]'),
-    title: panel.querySelector('[data-tut-title]'),
-    text: panel.querySelector('[data-tut-text]'),
-    goal: panel.querySelector('[data-tut-goal]'),
-    status: panel.querySelector('[data-tut-status]'),
-    prev: panel.querySelector('[data-tut-prev]'),
-    next: panel.querySelector('[data-tut-next]'),
-    toggle: panel.querySelector('[data-tut-toggle]'),
-  };
-  const KEY = 'marionette-tutorial';
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { /* fresh */ }
-  let idx = Math.min(Number(saved.lesson) || 0, LESSONS.length - 1);
-  let free = saved.free === true;
-  let passed = false;
-
-  function persist() {
-    try { localStorage.setItem(KEY, JSON.stringify({ lesson: idx, free })); } catch (e) { /* ignore */ }
-  }
-
-  function load() {
-    const l = LESSONS[idx];
-    els.where.textContent = `tutorial ${idx + 1}/${LESSONS.length}`;
-    els.title.textContent = l.title;
-    els.text.textContent = l.text;
-    els.goal.textContent = l.goal;
-    els.status.textContent = '';
-    els.prev.disabled = idx === 0;
-    els.next.disabled = true;
-    els.next.textContent = idx === LESSONS.length - 1 ? 'finish ✓' : 'next →';
-    passed = false;
-    srcEl.value = l.starter;
-    onLessonLoad();
-  }
-
-  const examplesRow = root.querySelector('[data-examples-row]');
-  const enterBtn = root.querySelector('[data-tut-enter]');
-
-  function show() {
-    panel.hidden = free;
-    els.toggle.textContent = free ? 'tutorial' : 'free play';
-    if (examplesRow) examplesRow.hidden = !free;
-    if (enterBtn) enterBtn.hidden = !free;
-  }
-
-  els.prev.addEventListener('click', () => { if (idx > 0) { idx--; persist(); load(); } });
-  els.next.addEventListener('click', () => {
-    if (idx < LESSONS.length - 1) { idx++; persist(); load(); }
-    else { free = true; persist(); show(); }
-  });
-  els.toggle.addEventListener('click', () => {
-    free = !free;
-    persist();
-    show();
-    if (!free) load();
-    else if (srcEl.value === LESSONS[idx].starter) {
-      // leaving the tutorial with an untouched starter: show the example
-      // the (now visible) picker claims is loaded, not the lesson fragment
-      srcEl.value = EXAMPLES[0].source;
-      onLessonLoad();
-    }
-  });
-  enterBtn?.addEventListener('click', () => {
-    free = false;
-    persist();
-    show();
-    load();
-  });
-
-  show();
-  if (!free) load();
-
-  return {
-    active: !free,
-    exitToFreePlay() {
-      if (free) return;
-      free = true;
-      persist();
-      show();
-    },
-    judge(ctx) {
-      if (panel.hidden) return;
-      const ok = LESSONS[idx].check(ctx);
-      if (ok && !passed) {
-        passed = true;
-        els.status.textContent = ' ✓ done — hit next';
-        els.next.disabled = false;
-      } else if (!ok && passed) {
-        passed = false;
-        els.status.textContent = '';
-        els.next.disabled = true;
-      }
-    },
-  };
 }
 
 /* ---------- utils ---------- */
