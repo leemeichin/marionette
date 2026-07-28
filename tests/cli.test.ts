@@ -87,12 +87,12 @@ test('runtime CLI exposes a clean NDJSON process surface', async () => {
   ].join('\n'));
   const input = [
     JSON.stringify({
-      protocol: '0.2.0',
+      protocol: '0.3.0',
       id: 1,
       op: 'initialize',
       client: { name: 'cli-test', version: '1' },
     }),
-    JSON.stringify({ protocol: '0.2.0', id: 2, op: 'next', profile: 'signal' }),
+    JSON.stringify({ protocol: '0.3.0', id: 2, op: 'next', profile: 'signal' }),
     '',
   ].join('\n');
   const result = spawnSync(

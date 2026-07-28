@@ -43,6 +43,16 @@ test('runtime command engine is immutable and emits graph-bound lifecycle events
   assert.deepEqual(result.events.map((item) => item.kind), ['decision.committed', 'node.entered', 'human.required']);
   assert.equal(result.events[0].graph.choiceId, 'build#1');
   assert.equal(result.events[0].principal?.uri, 'pibarm://session/s7');
+  assert.equal(result.events[2].data['expectedRevision'], 1);
+  assert.match(result.events[2].data['id'] as string, /\/escalation\/\d+$/);
+  assert.deepEqual(result.events[2].data['choices'], [{
+    id: 'build#0',
+    label: 'Ship',
+    target: 'END',
+  }]);
+  const projection = result.result.projection as Awaited<ReturnType<typeof buildRuntimeProjection>>;
+  assert.equal(projection.escalation?.id, result.events[2].data['id']);
+  assert.equal(projection.escalation?.expectedRevision, 1);
 });
 
 test('runtime binds human authority to the principal rather than request data', async () => {

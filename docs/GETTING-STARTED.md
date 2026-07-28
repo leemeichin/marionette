@@ -107,7 +107,25 @@ To hand the traversal to an agent, use the execution skill: it loops on
 `marionette brief --json`, honours the plan's `# delivery:`/`# report:`
 config, and escalates `@human` checkpoints instead of taking them.
 
-## 5. When something feels wrong
+## 5. Run it in Pi
+
+Marionette is a Pi package: it contributes both skills and an extension with
+an agent-bound walker tool plus a trusted human decision command.
+
+```console
+$ pi install git:github.com/leemeichin/marionette
+$ pi \
+    --marionette-plan plan.mar \
+    --marionette-run first-run \
+    --marionette-human <your-name>
+```
+
+You can also bind later with `/marionette-start plan.mar first-run`. When the
+run reaches `@human`, Pi displays the exact choices and parks the agent; answer
+with `/marionette-decide`. See [`RUNTIME.md`](RUNTIME.md) for the wire and
+restart contract.
+
+## 6. When something feels wrong
 
 That's the dogfood signal we want. File it on the repo — tag the issue with
 the plan node it relates to if applicable (`# github:issue:` in

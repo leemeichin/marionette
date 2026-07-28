@@ -132,8 +132,32 @@ test('brief: awaiting-human when every available choice is @human, with escalati
   assert.equal(brief.status, 'awaiting-human');
   assert.ok(brief.escalation);
   assert.deepEqual(brief.escalation!.choices, ['b#0']);
+  assert.deepEqual(brief.escalation!.fallbacks, []);
+  assert.match(brief.escalation!.how, /no implicit timeout or fallback/i);
   assert.match(brief.escalation!.how, /--actor <name>/);
   assert.match(renderBrief(brief), /escalation required/);
+});
+
+test('brief: escalation reports only graph-authored timeout fallbacks', async () => {
+  const { trajectory } = await compile(`
+=== approval ===
+Approval is required.
+* [Approve] @human -> END
+timeout 1h [Expire safely] -> END
+`);
+  const state = await initState(trajectory!, 'system', AT);
+  const brief = await buildBrief(trajectory!, state, {
+    at: '2026-01-01T00:30:00.000Z',
+  });
+
+  assert.equal(brief.status, 'awaiting-human');
+  assert.deepEqual(brief.escalation?.fallbacks, [{
+    choice: 'approval#1',
+    label: 'Expire safely',
+    target: 'END',
+    dueAt: '2026-01-01T01:00:00.000Z',
+  }]);
+  assert.match(brief.escalation!.how, /graph-authored timeout/i);
 });
 
 test('brief: stranded when nothing is available and there is no automatic next step', async () => {

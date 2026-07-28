@@ -2,7 +2,7 @@ import type { Ref, Value } from './types.js';
 import type { BriefStatus } from './brief.js';
 import type { WalkErrorCode } from './state.js';
 
-export const RUNTIME_PROTOCOL_VERSION = '0.2.0';
+export const RUNTIME_PROTOCOL_VERSION = '0.3.0';
 
 export type RuntimeRole = 'agent' | 'human' | 'system';
 export type ProjectionProfile = 'signal' | 'work' | 'debug';
@@ -145,6 +145,36 @@ export interface RuntimeChoiceProjection {
   } | null;
 }
 
+export interface RuntimeEscalation {
+  /** Stable for one activation of an @human checkpoint. */
+  id: string;
+  /**
+   * Revision a human response must claim. Hosts should fetch `next` before
+   * responding because graph-linked records can advance the revision without
+   * changing the checkpoint activation.
+   */
+  expectedRevision: number;
+  reason: string;
+  choices: Array<{
+    id: string;
+    label: string;
+    target?: string;
+  }>;
+  /**
+   * Only graph-authored timeout choices can end a silent escalation. Empty
+   * means the run remains parked indefinitely.
+   */
+  fallbacks: Array<{
+    choiceId: string;
+    label: string;
+    target?: string;
+    dueAt: string | null;
+  }>;
+  response: {
+    operation: 'choose';
+  };
+}
+
 export interface RuntimeProjection {
   runId: string;
   revision: number;
@@ -162,6 +192,8 @@ export interface RuntimeProjection {
   choices: RuntimeChoiceProjection[];
   next: { target: string } | null;
   observations: Array<{ name: string; type: string }>;
+  /** Present exactly when status is awaiting-human. */
+  escalation: RuntimeEscalation | null;
   variables?: Record<string, Value>;
   progress?: { steps: number; nodesVisited: number; nodesTotal: number; path: string[] };
   truncated: boolean;
