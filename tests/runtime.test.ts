@@ -120,3 +120,72 @@ test('runtime can attach a graph-linked record without advancing the walker', as
   assert.equal(result.events[0].kind, 'record.attached');
   assert.equal(result.events[0].graph.nodeId, 'build');
 });
+
+test('runtime records typed observations and unlocks a late-bound frontier', async () => {
+  const dynamic = (await compile(`
+VAR remaining: number = ?
+=== work ===
+~ remaining -= 1
+while {remaining > 0} -> work
+else -> END
+`)).trajectory!;
+  const initial = createRuntimeSnapshot(dynamic, { runId: 'run-observe', at: AT });
+  assert.deepEqual(initial.events.map((item) => item.kind),
+    ['run.started', 'node.entered', 'observation.required']);
+  assert.equal(buildRuntimeProjection(dynamic, initial).status, 'awaiting-observation');
+
+  const result = await executeRuntimeRequest(dynamic, initial, AGENT, {
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 6,
+    op: 'observe',
+    name: 'remaining',
+    value: 2,
+    rationale: 'captured two units of work',
+    expectedRevision: 0,
+    idempotencyKey: 'observation-1',
+  }, { at: AT });
+  assert.equal(result.snapshot.state.variables['remaining'], 1);
+  assert.equal(result.snapshot.revision, 1);
+  assert.deepEqual(result.events.map((item) => item.kind), ['observation.recorded']);
+  assert.equal(result.result.projection &&
+    (result.result.projection as { status: string }).status, 'active');
+});
+
+test('runtime projections and writes use the same timeout evaluation time', async () => {
+  const timed = (await compile(`
+=== experiment ===
++ [Retry] ~loop~ -> experiment
+timeout 1h [Budget spent] -> END
+`)).trajectory!;
+  const initial = createRuntimeSnapshot(timed, { runId: 'run-timeout', at: AT });
+
+  const before = await executeRuntimeRequest(timed, initial, AGENT, {
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 7,
+    op: 'next',
+    profile: 'debug',
+  }, { at: '2026-07-23T20:30:00.000Z' });
+  const beforeProjection = before.result.projection as ReturnType<typeof buildRuntimeProjection>;
+  assert.equal(beforeProjection.choices[0].blocked, undefined);
+  assert.equal(beforeProjection.choices[1].blocked?.code, 'timeout-pending');
+
+  const after = await executeRuntimeRequest(timed, initial, AGENT, {
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 8,
+    op: 'next',
+    profile: 'debug',
+  }, { at: '2026-07-23T21:30:00.000Z' });
+  const afterProjection = after.result.projection as ReturnType<typeof buildRuntimeProjection>;
+  assert.equal(afterProjection.choices[0].blocked?.code, 'timed-out');
+  assert.equal(afterProjection.choices[1].blocked, undefined);
+
+  const completed = await executeRuntimeRequest(timed, initial, AGENT, {
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 9,
+    op: 'choose',
+    choiceId: 'experiment#1',
+    rationale: 'hard budget elapsed',
+    expectedRevision: 0,
+  }, { at: '2026-07-23T21:30:00.000Z' });
+  assert.equal(completed.snapshot.state.status, 'completed');
+});

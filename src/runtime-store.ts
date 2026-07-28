@@ -4,7 +4,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { trajectoryHash } from './compile.js';
-import { initState, takeChoice, advance } from './state.js';
+import { initState, takeChoice, advance, observe } from './state.js';
 import type { PlanState, Trajectory } from './types.js';
 import type {
   RuntimeEvent, RuntimePrincipal,
@@ -321,7 +321,9 @@ function replayRuntimeEvents(
   const idempotency: Record<string, RuntimeIdempotencyRecord> = {};
 
   for (const item of events) {
-    if (item.kind !== 'decision.committed' && item.kind !== 'record.attached') continue;
+    if (item.kind !== 'decision.committed' &&
+        item.kind !== 'observation.recorded' &&
+        item.kind !== 'record.attached') continue;
     revision++;
     if (item.kind === 'decision.committed') {
       const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
@@ -331,6 +333,20 @@ function replayRuntimeEvents(
       } else {
         advance(trajectory, state, { actor, rationale, at: item.at });
       }
+    } else if (item.kind === 'observation.recorded') {
+      const name = item.data['name'];
+      const value = item.data['value'];
+      const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
+      const actor = item.principal?.role === 'agent' ? 'agent' : item.principal?.id ?? 'system';
+      if (typeof name !== 'string' ||
+          (typeof value !== 'number' && typeof value !== 'boolean' && typeof value !== 'string') ||
+          (typeof value === 'number' && !Number.isFinite(value))) {
+        throw new RuntimeStoreError(
+          `observation event ${item.seq} has an invalid name or value`,
+          'corrupt-journal',
+        );
+      }
+      observe(trajectory, state, name, value, { actor, rationale, at: item.at });
     }
     const key = item.data['idempotencyKey'];
     const fingerprint = item.data['commandFingerprint'];

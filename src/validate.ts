@@ -88,6 +88,16 @@ export function analyzePlan(plan: ParsedPlan, options: { priorErrors?: boolean }
     }
   };
   for (const node of nodes) {
+    for (const observation of node.observations) {
+      usedVars.add(observation.var);
+      if (!(observation.var in variables)) {
+        error(observation.line, CODES.UNDEFINED_VARIABLE, {
+          name: observation.var,
+          context: `observation checkpoint "? ${observation.var}"`,
+          candidates: varCandidates,
+        });
+      }
+    }
     for (const action of node.actions) {
       usedVars.add(action.var);
       if (!(action.var in variables)) {

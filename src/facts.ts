@@ -66,28 +66,31 @@ const ACTION_OPS: Record<string, string> = { '=': 'assign', '+=': 'inc', '-=': '
  *
  *   plan_start(Node).
  *   node(Node, Line, Ord).
- *   variable(Name, Type, Initial, Line).
+ *   variable(Name, Type, Initial|late_bound, Line).
  *   action(Node, Var, assign|inc|dec, Expr, Line).
+ *   observation(Node, Var, Line).
  *   choice(Id, Node, Target, Line, Ord).      % Ord: global source order
  *   label(Id, Label).
  *   sticky(Id).  human(Id).  loop_marked(Id).
  *   gate(Id, Expr, Source).
  *   next_step(Node, Target, Line).
  *   timebox(Node, Seconds).                   % valid # timebox: only
+ *   timeout_choice(Choice, Seconds, Source).  % syntactic timeout edge
  *   priority(Node, critical|high|normal|low). % valid # priority: only
  */
 export function emitFacts(plan: ParsedPlan): string {
   const lines: string[] = [
     ':- encoding(utf8).',
     '% Marionette fact base - generated, do not edit.',
-    ':- discontiguous plan_start/1, node/3, variable/4, action/5, choice/5,',
+    ':- discontiguous plan_start/1, node/3, variable/4, action/5, observation/3, choice/5,',
     '   label/2, sticky/1, human/1, loop_marked/1, gate/3, next_step/3,',
-    '   timebox/2, priority/2.',
+    '   timebox/2, timeout_choice/3, priority/2.',
   ];
   if (plan.start) lines.push(`plan_start(${atom(plan.start)}).`);
 
   for (const [name, decl] of Object.entries(plan.variables)) {
-    lines.push(`variable(${atom(name)}, ${decl.type}, ${value(decl.initial)}, ${decl.line}).`);
+    const initial = decl.initial === null ? 'late_bound' : value(decl.initial);
+    lines.push(`variable(${atom(name)}, ${decl.type}, ${initial}, ${decl.line}).`);
   }
 
   let choiceOrd = 0;
@@ -96,6 +99,9 @@ export function emitFacts(plan: ParsedPlan): string {
     for (const action of node.actions) {
       lines.push(`action(${atom(node.id)}, ${atom(action.var)}, ${ACTION_OPS[action.op]}, ${exprTerm(action.value)}, ${action.line}).`);
     }
+    for (const observation of node.observations) {
+      lines.push(`observation(${atom(node.id)}, ${atom(observation.var)}, ${observation.line}).`);
+    }
     for (const choice of node.choices) {
       lines.push(`choice(${atom(choice.id)}, ${atom(node.id)}, ${atom(choice.target)}, ${choice.line}, ${choiceOrd++}).`);
       lines.push(`label(${atom(choice.id)}, ${str(choice.label)}).`);
@@ -103,6 +109,9 @@ export function emitFacts(plan: ParsedPlan): string {
       if (choice.human) lines.push(`human(${atom(choice.id)}).`);
       if (choice.loop) lines.push(`loop_marked(${atom(choice.id)}).`);
       if (choice.gate) lines.push(`gate(${atom(choice.id)}, ${exprTerm(choice.gate.ast)}, ${str(choice.gate.source)}).`);
+      if (choice.timeout) {
+        lines.push(`timeout_choice(${atom(choice.id)}, ${choice.timeout.seconds}, ${str(choice.timeout.source)}).`);
+      }
     }
     const timebox = resolveTimebox(node.meta);
     if (timebox) lines.push(`timebox(${atom(node.id)}, ${timebox.seconds}).`);

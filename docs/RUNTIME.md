@@ -6,8 +6,8 @@ host communicates with it over newline-delimited JSON (NDJSON), consumes most
 lifecycle events programmatically, and injects only the compact projection the
 model needs.
 
-The DSL and trajectory contract are unchanged. The runtime consumes the same
-validated trajectory JSON as `brief` and `state`.
+The runtime consumes the same validated trajectory JSON as `brief` and
+`state`, including late-bound observations and temporal exits.
 
 ## Start or resume a run
 
@@ -58,7 +58,7 @@ bounded at 64 KiB.
 The first request initializes the connection:
 
 ```json
-{"protocol":"0.1.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
+{"protocol":"0.2.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
 ```
 
 After initialization, the host uses:
@@ -67,6 +67,8 @@ After initialization, the host uses:
 - `choose` — take an exact choice id with rationale, expected revision and
   optional idempotency key.
 - `advance` — follow the automatic next step with the same write controls.
+- `observe` — supply a requested scalar value with its source/evidence in the
+  rationale. This does not move the walker.
 - `record` — attach a graph-linked record without moving the walker.
 - `events` — replay journal events after a sequence cursor.
 
@@ -76,7 +78,7 @@ push handling can ignore those and use `events` by cursor.
 
 ## Compact context profiles
 
-`next`, `choose`, and `advance` accept `profile`:
+`next`, `choose`, `advance`, and `observe` accept `profile`:
 
 - `signal` — status, node identity and currently available choices. It omits
   node prose, targets, variables and history.
@@ -88,19 +90,19 @@ prose. Truncated projections contain `truncated: true`, an `omitted` summary
 and a `bodyRef` that can be resolved against the archived trajectory.
 
 ```json
-{"protocol":"0.1.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
+{"protocol":"0.2.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
 ```
 
 The host should keep event traffic outside model context. Wake or prompt the
-model only for actionable states such as a new node, `human.required`,
-`run.stranded`, or `run.completed`.
+model only for actionable states such as a new node, `observation.required`,
+`human.required`, `run.stranded`, or `run.completed`.
 
 ## Writes, identity and retries
 
 A choice command is intentionally small:
 
 ```json
-{"protocol":"0.1.0","id":3,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":2,"idempotencyKey":"turn-42","profile":"signal"}
+{"protocol":"0.2.0","id":3,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":2,"idempotencyKey":"turn-42","profile":"signal"}
 ```
 
 - Choice ids must be exact; CLI label prefixes are not accepted.
@@ -110,14 +112,40 @@ A choice command is intentionally small:
 - Reusing a key for different command content is refused.
 - The process-bound principal—not request data—is recorded as the actor.
 
+An observation command fills exactly one value requested by the projection:
+
+```json
+{"protocol":"0.2.0","id":4,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":3,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
+```
+
+Values are typed scalars: number, boolean, or string. An initial declaration
+such as `VAR remaining: number = ?` suspends entry to the start phase until it
+is supplied. A node-level `? remaining` requests a refresh only when that
+checkpoint is reached; the value then remains stable while the captured batch
+is drained. Each successful observation emits `observation.recorded` and is
+kept in a separate audit stream from branch decisions.
+
 `record` provides pibarm-style graph-linked decision records without advancing:
 
 ```json
-{"protocol":"0.1.0","id":4,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":3,"idempotencyKey":"adr-7"}
+{"protocol":"0.2.0","id":5,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":4,"idempotencyKey":"adr-7"}
 ```
 
 Every event carries the immutable trajectory hash, current node/choice when
 applicable, and a `marionette://trajectory/...` URI.
+
+## Timeouts
+
+`timeout 3d -> fallback` is a hard temporal edge. The projection reports it as
+blocked with `timeout-pending` before the phase budget expires. Once expired,
+ordinary choices and automatic next steps are blocked with `timed-out`, and
+the timeout edge becomes available. A direct self-loop retains the activation
+time; leaving the phase and later entering it starts a new budget.
+
+The runtime evaluates time when processing the next command. It deliberately
+does not schedule its own wake-up; a long-lived host may schedule one and call
+`next` at expiry. Legacy `# timebox:` metadata remains advisory and does not
+have these semantics.
 
 ## Persistence and recovery
 

@@ -172,11 +172,18 @@ export function refusalText(shape: RefusalShape): string {
 /** Availability explanations shown on blocked frontier entries. */
 export function blockedText(
   shape: { kind: 'once-exhausted' } | { kind: 'gate-false'; source: string; value: string }
-       | { kind: 'gate-error'; source: string; error: string },
+       | { kind: 'gate-error'; source: string; error: string }
+       | { kind: 'observation-required'; names: string[] }
+       | { kind: 'timeout-pending'; source: string; remaining: string }
+       | { kind: 'timed-out'; source: string },
 ): string {
   switch (shape.kind) {
     case 'once-exhausted': return 'already taken (once-only choice)';
     case 'gate-false': return `gate {${shape.source}} is ${shape.value}`;
     case 'gate-error': return `gate {${shape.source}} failed to evaluate: ${shape.error}`;
+    case 'observation-required': return `runtime observation required: ${shape.names.join(', ')}`;
+    case 'timeout-pending':
+      return `timeout ${shape.source} has not elapsed (${shape.remaining} remaining)`;
+    case 'timed-out': return `phase timeout ${shape.source} has elapsed`;
   }
 }

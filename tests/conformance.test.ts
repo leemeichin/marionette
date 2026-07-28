@@ -16,7 +16,7 @@ import { compile } from '../src/compile.js';
 import { parsePlan } from '../src/parser.js';
 import { emitFacts } from '../src/facts.js';
 import { prologWalker } from '../src/oracle.js';
-import { WalkError, advance, initState, takeChoice } from '../src/state.js';
+import { WalkError, advance, initState, observe, takeChoice } from '../src/state.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const casesDir = join(root, 'spec', 'conformance', 'cases');
@@ -24,6 +24,8 @@ const casesDir = join(root, 'spec', 'conformance', 'cases');
 interface Step {
   choose?: string;
   advance?: boolean;
+  observe?: { name: string; value: Value };
+  elapsed?: number;
   actor?: string;
   rationale?: string;
   expect?: {
@@ -31,6 +33,7 @@ interface Step {
     current?: string;
     status?: string;
     variables?: Record<string, Value>;
+    pendingObservations?: string[];
   };
 }
 
@@ -63,7 +66,10 @@ for (const file of caseFiles) {
 
     spec.steps.forEach((step, i) => {
       const where = `${spec.case} step ${i}`;
-      const opts = { actor: step.actor ?? 'agent', rationale: step.rationale, at: AT };
+      const at = step.elapsed === undefined
+        ? AT
+        : new Date(Date.parse(AT) + step.elapsed * 1000).toISOString();
+      const opts = { actor: step.actor ?? 'agent', rationale: step.rationale, at };
       const logBefore = state.log.length;
 
       if (step.expect?.error) {
@@ -90,6 +96,7 @@ for (const file of caseFiles) {
         current: state.current,
         status: state.status,
         variables: state.variables,
+        pendingObservations: state.pendingObservations,
       });
     });
   });
@@ -102,10 +109,13 @@ for (const file of caseFiles) {
 
     for (const [i, step] of spec.steps.entries()) {
       const where = `${spec.case} step ${i} (rules)`;
+      if (step.elapsed !== undefined) walker.setElapsed(step.elapsed);
       const refused = step.choose !== undefined
         ? walker.choose(step.choose, step.actor ?? 'agent', step.rationale !== undefined)
         : step.advance
           ? walker.advance()
+          : step.observe
+            ? walker.observe(step.observe.name, step.observe.value, step.rationale !== undefined)
           : null;
 
       if (step.expect?.error) {
@@ -125,7 +135,12 @@ for (const file of caseFiles) {
 function checkState(
   where: string,
   step: Step,
-  actual: { current: string; status: string; variables: Record<string, Value> },
+  actual: {
+    current: string;
+    status: string;
+    variables: Record<string, Value>;
+    pendingObservations?: string[];
+  },
 ): void {
   const expect = step.expect ?? {};
   if (expect.current !== undefined) {
@@ -137,6 +152,10 @@ function checkState(
   for (const [name, value] of Object.entries(expect.variables ?? {})) {
     assert.deepEqual(actual.variables[name], value, `${where}: variable ${name}`);
   }
+  if (expect.pendingObservations !== undefined) {
+    assert.deepEqual(actual.pendingObservations, expect.pendingObservations,
+      `${where}: pending observations`);
+  }
 }
 
 function runOp(
@@ -147,4 +166,7 @@ function runOp(
 ): void {
   if (step.choose !== undefined) takeChoice(trajectory, state, step.choose, opts);
   else if (step.advance) advance(trajectory, state, opts);
+  else if (step.observe) {
+    observe(trajectory, state, step.observe.name, step.observe.value, opts);
+  }
 }

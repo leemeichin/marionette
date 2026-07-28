@@ -7,7 +7,7 @@ project moves through, the decisions that connect them, and the conditions
 under which each path opens. You write a plan as a small, legible script (or
 let an AI draft it from your notes); a compiler validates it into a canonical
 JSON graph; an AI agent then executes the project by *walking* that graph —
-bounded, auditable, and unable to route around the plan. Decisions marked
+controlled, auditable, and unable to route around the plan. Decisions marked
 `@human` are ones the agent cannot take: it must stop and escalate to you.
 
 The design is borrowed from [Ink](https://github.com/inkle/ink), the
@@ -18,8 +18,9 @@ chooses its way through your project — and the human holds the gates.
 ## What that looks like
 
 A plan is a `.mar` file: phases (`=== name ===`), choices (`*` once-only,
-`+` repeatable), gates (`{expr}`), declared loops (`~loop~`), and human
-checkpoints (`@human`).
+`+` repeatable), gates (`{expr}`), declared loops (`~loop~`), paired
+`while`/`until` branches, runtime observations (`? value`), hard
+`timeout` exits, and human checkpoints (`@human`).
 
 ```
 # project: checkout-revamp
@@ -139,12 +140,13 @@ onto the new graph with a report of what changed, keeping the decision log.
 
 ```console
 $ marionette validate plan.mar        # dead ends, unreachable phases, undeclared
-                                      # cycles, unbounded loops → compile errors
+                                      # cycles, loops without exits → compile errors
 $ marionette compile plan.mar         # → plan.trajectory.json (the contract)
 $ marionette render plan.mar          # → Mermaid graph, human gates highlighted
 $ marionette summarize plan.mar       # → plain-language review summary
 $ marionette state init plan.mar      # → plan.state.json bound by content hash
 $ marionette brief plan.mar --json    # → work packet: what an executor does next
+$ marionette state observe plan.mar remaining 7 --actor agent --rationale "queue query"
 $ marionette state choose plan.mar 1 --actor agent --rationale "metrics red, iterate"
 $ marionette state rebind plan.mar    # migrate state onto an edited plan, keeping the log
 $ marionette start plan.mar --run agent-1  # start a local agent runtime

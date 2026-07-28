@@ -11,7 +11,7 @@
 
 import type { Trajectory, TrajectoryNode, Ref, Value } from './types.js';
 import { END } from './types.js';
-import { frontier, visitedPath, type AvailableChoice } from './state.js';
+import { enteredAt, frontier, visitedPath, type AvailableChoice } from './state.js';
 import type { PlanState } from './types.js';
 import {
   resolveDelivery, resolvePriority, resolveTimebox,
@@ -23,6 +23,10 @@ import { styleFor } from './term.js';
 export type BriefStatus =
   /** The executor can act: at least one autonomous step is available. */
   | 'active'
+  /** Runtime values must be supplied before the frontier can be evaluated. */
+  | 'awaiting-observation'
+  /** No ordinary route is open yet; a timeout edge will open later. */
+  | 'waiting-timeout'
   /** Only @human choices are available: escalate and pause. */
   | 'awaiting-human'
   /** Nothing is available and there is no automatic next step: the traversal is stuck. */
@@ -43,7 +47,14 @@ export interface BriefChoice {
   gate: string | null;
   available: boolean;
   blocked: string | null;
-  blockedCode: 'once-exhausted' | 'gate-blocked' | null;
+  blockedCode:
+    | 'once-exhausted'
+    | 'gate-blocked'
+    | 'observation-required'
+    | 'timeout-pending'
+    | 'timed-out'
+    | null;
+  timeout: { source: string; seconds: number } | null;
 }
 
 export interface Escalation {
@@ -65,6 +76,8 @@ export interface Brief {
   };
   status: BriefStatus;
   variables: Record<string, Value>;
+  /** Values the runtime is currently waiting for, with their declared types. */
+  pendingObservations: Array<{ name: string; type: string }>;
   /** The current phase (null once the plan has completed). */
   node: {
     id: string;
@@ -99,6 +112,7 @@ export interface Brief {
   protocol: {
     choose: string;
     advance: string;
+    observe: string;
     rules: string[];
   };
 }
@@ -116,6 +130,8 @@ const metaText = (v: string | string[] | undefined): string | null =>
 export interface BriefOptions {
   /** Plan path used in the protocol command templates. */
   file?: string;
+  /** Evaluation time for syntactic timeout edges. */
+  at?: string;
 }
 
 export function buildBrief(trajectory: Trajectory, state: PlanState, options: BriefOptions = {}): Brief {
@@ -124,7 +140,7 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
   const node = completed ? undefined : trajectory.nodes.find((n) => n.id === state.current);
   const nodeById = (id: string) => trajectory.nodes.find((n) => n.id === id);
 
-  const options_ = completed ? [] : frontier(trajectory, state);
+  const options_ = completed ? [] : frontier(trajectory, state, { at: options.at });
   const choices: BriefChoice[] = options_.map((a: AvailableChoice, index: number) => ({
     index,
     id: a.choice.id,
@@ -138,6 +154,7 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
     available: a.blocked === null,
     blocked: a.blocked,
     blockedCode: a.blockedCode,
+    timeout: a.choice.timeout ?? null,
   }));
 
   const available = choices.filter((c) => c.available);
@@ -149,6 +166,10 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
   let escalation: Escalation | null = null;
   if (completed) {
     status = 'completed';
+  } else if (state.pendingObservations.length > 0) {
+    status = 'awaiting-observation';
+  } else if (available.length === 0 && choices.some((c) => c.blockedCode === 'timeout-pending')) {
+    status = 'waiting-timeout';
   } else if (available.length === 0 && !next) {
     status = 'stranded';
   } else if (available.length > 0 && available.every((c) => c.human)) {
@@ -179,6 +200,10 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
     },
     status,
     variables: state.variables,
+    pendingObservations: state.pendingObservations.map((name) => ({
+      name,
+      type: trajectory.variables[name]?.type ?? 'unknown',
+    })),
     node: node
       ? {
           id: node.id,
@@ -204,8 +229,10 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
     protocol: {
       choose: `marionette state choose ${file} <choice> --actor <name> --rationale <text>`,
       advance: `marionette state advance ${file} --actor <name> --rationale <text>`,
+      observe: `marionette state observe ${file} <name> <json-value> --actor <name> --rationale <text>`,
       rules: [
         'do the work the current phase describes before recording an outcome',
+        'supply only observations the brief requests, with the source in the rationale',
         'record every taken branch with an honest rationale (it is the audit trail)',
         'never take an @human choice as the agent: escalate and wait for a human decision',
         'gates are computed from the variables above: if a choice is blocked, it is not an option',
@@ -213,19 +240,6 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
       ],
     },
   };
-}
-
-/**
- * When traversal entered the given phase: the latest log entry that moved
- * there (a choose has a choice id; init/advance have a null label; amendment
- * entries have neither and are skipped).
- */
-function enteredAt(state: PlanState, nodeId: string): string | null {
-  for (let i = state.log.length - 1; i >= 0; i--) {
-    const entry = state.log[i];
-    if (entry.to === nodeId && (entry.choice !== null || entry.label === null)) return entry.at;
-  }
-  return null;
 }
 
 /** Render a millisecond span in the largest sensible single unit. */
@@ -246,6 +260,8 @@ export function renderBrief(brief: Brief, style?: Style): string {
 
   const badge =
     brief.status === 'completed' ? s.green('completed ✓')
+    : brief.status === 'awaiting-observation' ? s.yellow('awaiting runtime observation ?')
+    : brief.status === 'waiting-timeout' ? s.yellow('waiting for timeout')
     : brief.status === 'awaiting-human' ? s.magenta('awaiting human decision ✋')
     : brief.status === 'stranded' ? s.red('stranded — no available step')
     : s.cyan('active');
@@ -264,9 +280,8 @@ export function renderBrief(brief: Brief, style?: Style): string {
     }
     const d = brief.delivery;
     lines.push(s.dim(`delivery: ${d.mode} · report ${d.report}${d.branch ? ` · branch ${d.branch}` : ''}`));
-    // The one place "now" appears: rendered pacing. The JSON brief stays a
-    // pure function of state (timebox + enteredAt; consumers do their own
-    // arithmetic), and the walker never sees the clock at all.
+    // Legacy #timebox pacing remains consumer-side. Syntactic timeout edges
+    // are evaluated separately by frontier() against the requested "now".
     if (brief.node.timebox || brief.node.priority) {
       const bits: string[] = [];
       if (brief.node.timebox) {
@@ -289,6 +304,11 @@ export function renderBrief(brief: Brief, style?: Style): string {
   if (vars.length > 0) {
     lines.push('variables: ' + vars.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', '));
   }
+  if (brief.pendingObservations.length > 0) {
+    lines.push('observations required: ' +
+      brief.pendingObservations.map((item) => `${item.name}:${item.type}`).join(', '));
+    lines.push(s.dim(`  supply with: ${brief.protocol.observe}`));
+  }
 
   if (brief.frontier.length > 0) {
     lines.push('');
@@ -298,6 +318,7 @@ export function renderBrief(brief: Brief, style?: Style): string {
         c.human ? s.magenta('@human') : null,
         c.loop ? s.cyan('~loop~') : null,
         c.gate ? s.dim(`{${c.gate}}`) : null,
+        c.timeout ? s.yellow(`timeout ${c.timeout.source}`) : null,
       ].filter(Boolean).join(' ');
       const to = c.target === END ? 'END' : `${c.target}${c.targetTitle ? s.dim(` — ${c.targetTitle}`) : ''}`;
       const line = `  [${c.index}] ${c.label}${marks ? ' ' + marks : ''} -> ${to}`;

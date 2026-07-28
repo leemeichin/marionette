@@ -23,7 +23,11 @@ export type MutationOp = '=' | '+=' | '-=';
 
 export interface VariableDecl {
   type: VarType;
-  initial: Value;
+  /**
+   * A literal starts with a durable value. `null` is a late-bound `?`
+   * initializer: the runtime must observe a value before traversal can begin.
+   */
+  initial: Value | null;
   line: number;
 }
 
@@ -41,6 +45,20 @@ export interface Action {
   line: number;
 }
 
+/** A runtime observation checkpoint (`? name`) reached at the end of a phase. */
+export interface Observation {
+  var: string;
+  line: number;
+}
+
+/** A syntactic timeout edge (`timeout 3d -> fallback`). */
+export interface Timeout {
+  /** Original duration spelling, for rendering. */
+  source: string;
+  /** Normalised duration. */
+  seconds: number;
+}
+
 export interface Choice {
   /** Stable id: `<nodeId>#<index>`. */
   id: string;
@@ -52,6 +70,8 @@ export interface Choice {
   human: boolean;
   /** Declared loop edge (`~loop~`): the author asserts this edge intentionally revisits earlier work. */
   loop: boolean;
+  /** Temporal availability for a `timeout` edge; null for ordinary choices. */
+  timeout: Timeout | null;
   /** Target node id, or "END". */
   target: string;
   line: number;
@@ -83,6 +103,8 @@ export interface TrajectoryNode {
   body: string;
   /** Mutations applied when the node is entered. */
   actions: Action[];
+  /** Values the executor must refresh after doing this phase's work. */
+  observations: Observation[];
   choices: Choice[];
   /** Automatic route taken when the phase is complete. */
   next: NextStep | null;
@@ -112,7 +134,7 @@ export interface Trajectory {
   refs: Ref[];
 }
 
-export const SPEC_VERSION = '0.3.0';
+export const SPEC_VERSION = '0.4.0';
 export const END = 'END';
 
 export type Severity = 'error' | 'warning';
@@ -180,6 +202,16 @@ export interface LogEntry {
   rationale: string | null;
 }
 
+/** Audited externally supplied value, separate from branch decisions. */
+export interface ObservationEntry {
+  at: string;
+  actor: string;
+  node: string | null;
+  variable: string;
+  value: Value;
+  rationale: string | null;
+}
+
 /** plan.state.json — traversal state bound to a compiled trajectory by content hash. */
 export interface PlanState {
   /** Hash of the trajectory this state was recorded against. */
@@ -187,6 +219,12 @@ export interface PlanState {
   status: 'active' | 'completed';
   current: string;
   variables: Record<string, Value>;
+  /** Late-bound or explicitly refreshed values that must be supplied. */
+  pendingObservations: string[];
+  /** Late-bound initializers suspend start-node entry actions until resolved. */
+  pendingEntry: boolean;
+  /** Runtime observations are auditable without pretending they are graph transitions. */
+  observations: ObservationEntry[];
   /** Ids of once-only (`*`) choices already taken. */
   taken: string[];
   log: LogEntry[];

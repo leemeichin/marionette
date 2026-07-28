@@ -1,0 +1,15 @@
+{
+  "case": "dynamic-observation",
+  "description": "Late-bound values suspend entry, remain stable through a batch, and refresh only at an explicit observation checkpoint.",
+  "plan": "tests/fixtures/dynamic_loop.mar",
+  "steps": [
+    { "expect": { "current": "work", "status": "active", "pendingObservations": ["remaining"] } },
+    { "choose": "work#0", "actor": "agent", "rationale": "too early", "expect": { "error": "observation-required" } },
+    { "observe": { "name": "remaining", "value": 2 }, "actor": "agent", "expect": { "error": "rationale-required" } },
+    { "observe": { "name": "remaining", "value": 2 }, "actor": "agent", "rationale": "captured two units", "expect": { "variables": { "remaining": 1 }, "pendingObservations": [] } },
+    { "choose": "work#0", "actor": "agent", "rationale": "first unit complete", "expect": { "current": "work", "variables": { "remaining": 0 } } },
+    { "choose": "work#1", "actor": "agent", "rationale": "batch exhausted", "expect": { "current": "refresh", "pendingObservations": ["remaining"] } },
+    { "observe": { "name": "remaining", "value": 0 }, "actor": "agent", "rationale": "refresh is empty", "expect": { "pendingObservations": [], "variables": { "remaining": 0 } } },
+    { "choose": "refresh#1", "actor": "agent", "rationale": "no work remains", "expect": { "current": "END", "status": "completed" } }
+  ]
+}

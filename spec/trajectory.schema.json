@@ -35,7 +35,10 @@
         "additionalProperties": false,
         "properties": {
           "type": { "enum": ["number", "boolean", "string"] },
-          "initial": { "$ref": "#/$defs/value" },
+          "initial": {
+            "description": "Literal initial value, or null for a late-bound runtime value.",
+            "oneOf": [{ "$ref": "#/$defs/value" }, { "type": "null" }]
+          },
           "line": { "type": "integer" }
         }
       }
@@ -87,7 +90,7 @@
     },
     "node": {
       "type": "object",
-      "required": ["id", "body", "actions", "choices", "next", "meta", "refs"],
+      "required": ["id", "body", "actions", "observations", "choices", "next", "meta", "refs"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
@@ -96,6 +99,11 @@
           "type": "array",
           "description": "Mutations applied when the node is entered, in order.",
           "items": { "$ref": "#/$defs/action" }
+        },
+        "observations": {
+          "type": "array",
+          "description": "Runtime values invalidated and requested after this phase's work.",
+          "items": { "$ref": "#/$defs/observation" }
         },
         "choices": {
           "type": "array",
@@ -127,7 +135,7 @@
     },
     "choice": {
       "type": "object",
-      "required": ["id", "label", "sticky", "gate", "human", "loop", "target"],
+      "required": ["id", "label", "sticky", "gate", "human", "loop", "timeout", "target"],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -151,6 +159,21 @@
           "type": "boolean",
           "description": "Declared loop edge (`~loop~`): intentionally revisits earlier phases. Undeclared cycles are a compile error."
         },
+        "timeout": {
+          "description": "Syntactic timeout edge availability, or null.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["source", "seconds"],
+              "additionalProperties": false,
+              "properties": {
+                "source": { "type": "string" },
+                "seconds": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            }
+          ]
+        },
         "target": { "$ref": "#/$defs/target" },
         "line": { "type": "integer" }
       }
@@ -173,6 +196,15 @@
         "op": { "enum": ["=", "+=", "-="] },
         "value": { "$ref": "#/$defs/expr" },
         "source": { "type": "string", "description": "Original expression text." },
+        "line": { "type": "integer" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": ["var"],
+      "additionalProperties": false,
+      "properties": {
+        "var": { "type": "string" },
         "line": { "type": "integer" }
       }
     },

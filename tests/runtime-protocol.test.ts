@@ -72,3 +72,26 @@ test('graph references bind node and choice to one immutable trajectory', async 
     uri: 'marionette://trajectory/sha256%3Aabc/node/build/choice/build%230',
   });
 });
+
+test('runtime protocol accepts typed observation writes and rejects structured values', async () => {
+  const request = parseRuntimeRequest({
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 9,
+    op: 'observe',
+    name: 'remaining',
+    value: 3,
+    rationale: 'fresh external snapshot',
+    expectedRevision: 2,
+  });
+  assert.equal(request.op, 'observe');
+  if (request.op === 'observe') assert.equal(request.value, 3);
+  assert.throws(() => parseRuntimeRequest({
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 10,
+    op: 'observe',
+    name: 'remaining',
+    value: [1, 2],
+    rationale: 'invalid',
+    expectedRevision: 2,
+  }), ProtocolError);
+});

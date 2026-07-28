@@ -22,7 +22,7 @@ import { styleFor } from './term.js';
 import { buildBrief, renderBrief } from './brief.js';
 import {
   DriftError, WalkError, advance, bindState, frontier, initState, parseState,
-  rebindState, serializeState, takeChoice,
+  observe, rebindState, serializeState, takeChoice,
 } from './state.js';
 import {
   ImportError, parseImportSpec, scaffoldPlan, type ImportMode,
@@ -44,7 +44,7 @@ const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
 const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'sync', 'import', 'start', 'stop', 'state', 'help', 'version'];
-const STATE_SUBCOMMANDS = ['init', 'show', 'choose', 'advance', 'rebind'];
+const STATE_SUBCOMMANDS = ['init', 'show', 'observe', 'choose', 'advance', 'rebind'];
 const SYNC_SUBCOMMANDS = ['status', 'bind', 'link', 'mark'];
 
 function readTextFile(file: string, what = 'plan'): string {
@@ -87,6 +87,7 @@ Usage:
   marionette stop      <plan.mar|.json> --run <id> [--store dir]
   marionette state init    <plan.mar|.json> [--state f] [--force]
   marionette state show    <plan.mar|.json> [--state f]
+  marionette state observe <plan.mar|.json> <name> <json-value> --actor <name> --rationale <text> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
   marionette state rebind  <plan.mar|.json> [--actor <name>] [--rationale <text>] [--state f]
@@ -200,6 +201,10 @@ function printFrontier(trajectory: Trajectory, state: PlanState): void {
   if (vars.length > 0) {
     process.stdout.write('variables: ' + vars.map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ') + '\n');
   }
+  if (state.pendingObservations.length > 0) {
+    process.stdout.write('observations required: ' + state.pendingObservations.map((name) =>
+      `${name}:${trajectory.variables[name]?.type ?? 'unknown'}`).join(', ') + '\n');
+  }
   if (state.status === 'completed') return;
   const options = frontier(trajectory, state);
   if (options.length === 0) {
@@ -209,8 +214,12 @@ function printFrontier(trajectory: Trajectory, state: PlanState): void {
   process.stdout.write('choices:\n');
   for (let i = 0; i < options.length; i++) {
     const { choice, blocked } = options[i];
-    const marks = [choice.human ? out.magenta('@human') : null, choice.loop ? out.cyan('~loop~') : null,
-      choice.gate ? out.dim(`{${choice.gate.source}}`) : null].filter(Boolean).join(' ');
+    const marks = [
+      choice.human ? out.magenta('@human') : null,
+      choice.loop ? out.cyan('~loop~') : null,
+      choice.gate ? out.dim(`{${choice.gate.source}}`) : null,
+      choice.timeout ? out.yellow(`timeout ${choice.timeout.source}`) : null,
+    ].filter(Boolean).join(' ');
     const line = `  [${i}] ${choice.label}${marks ? ' ' + marks : ''} -> ${choice.target}`;
     process.stdout.write(blocked ? out.dim(`${line}  [unavailable: ${blocked}]`) + '\n' : line + '\n');
   }
@@ -619,7 +628,11 @@ export async function run(argv: string[]): Promise<number> {
         const [sub, ...stateRest] = rest;
         const { positional, flags } = parseArgs(stateRest);
         const file = positional[0];
-        if (!sub || !file) throw new UsageError('state: expected "state <init|show|choose|advance> <plan>"');
+        if (!sub || !file) {
+          throw new UsageError(
+            'state: expected "state <init|show|observe|choose|advance|rebind> <plan>"',
+          );
+        }
         const { trajectory, ok, diagnostics, source } = await readSource(file);
         if (!ok) {
           process.stderr.write(formatDiagnostics(diagnostics, file, { source, style: err }) + '\n');
@@ -661,6 +674,7 @@ export async function run(argv: string[]): Promise<number> {
           note('dropped taken choices', report.droppedTaken);
           note('dropped variables', Object.keys(report.droppedVariables));
           note('added variables', Object.entries(report.addedVariables).map(([k, v]) => `${k}=${JSON.stringify(v)}`));
+          note('added observations', report.addedObservations);
           note('reset variables (type changed)', report.resetVariables);
           note('visited phases no longer in the plan', report.missingVisited);
           printFrontier(trajectory, state);
@@ -669,6 +683,29 @@ export async function run(argv: string[]): Promise<number> {
 
         const state = loadState(trajectory, sf);
         if (sub === 'show') {
+          printFrontier(trajectory, state);
+          return 0;
+        }
+        if (sub === 'observe') {
+          const name = positional[1];
+          const raw = positional[2];
+          if (!name || raw === undefined) {
+            throw new UsageError('state observe: expected <name> <json-value>');
+          }
+          let value: unknown;
+          try {
+            value = JSON.parse(raw);
+          } catch {
+            throw new UsageError('state observe: <json-value> must be valid JSON');
+          }
+          if ((typeof value !== 'number' && typeof value !== 'boolean' && typeof value !== 'string') ||
+              (typeof value === 'number' && !Number.isFinite(value))) {
+            throw new UsageError('state observe: value must be a finite number, boolean, or string');
+          }
+          const actor = typeof flags['actor'] === 'string' ? flags['actor'] : 'agent';
+          const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
+          observe(trajectory, state, name, value, { actor, rationale });
+          writeFileSync(sf, serializeState(state));
           printFrontier(trajectory, state);
           return 0;
         }

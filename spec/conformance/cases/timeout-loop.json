@@ -1,0 +1,11 @@
+{
+  "case": "timeout-loop",
+  "description": "A timeout edge is blocked before its deadline and becomes the authoritative route afterwards; self-loops do not reset the phase activation.",
+  "plan": "tests/fixtures/timeout_loop.mar",
+  "steps": [
+    { "choose": "experiment#1", "elapsed": 0, "actor": "agent", "rationale": "too soon", "expect": { "error": "timeout-pending" } },
+    { "choose": "experiment#0", "elapsed": 1800, "actor": "agent", "rationale": "one more attempt", "expect": { "current": "experiment" } },
+    { "choose": "experiment#0", "elapsed": 7200, "actor": "agent", "rationale": "too late", "expect": { "error": "timed-out" } },
+    { "choose": "experiment#1", "elapsed": 7200, "actor": "agent", "rationale": "budget elapsed", "expect": { "current": "END", "status": "completed" } }
+  ]
+}

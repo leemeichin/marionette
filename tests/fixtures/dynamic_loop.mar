@@ -1,0 +1,13 @@
+VAR remaining: number = ?
+
+=== work ===
+Consume one unit from the current batch.
+~ remaining -= 1
+while {remaining > 0} -> work
+else -> refresh
+
+=== refresh ===
+Refresh the external value only after the batch is exhausted.
+? remaining
+while {remaining > 0} -> work
+else -> END

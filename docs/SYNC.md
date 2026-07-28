@@ -105,21 +105,33 @@ The counter is monotonic, so the compiler *verifies* the loop is bounded
 (zero warnings under `--strict`): exactly one iteration per issue, one
 recorded rationale per iteration.
 
-### The dynamic-queue pattern (goal-driven)
+### The live-queue pattern (snapshot, drain, refresh)
 
-When the queue is live (issues arrive while you work), snapshot counting is
-wrong. The evidence-gated variant is already valid DSL and costs two lines:
+When the total is not known until runtime, make the observation cadence part
+of the plan. Fetch one count, drain that captured batch, then refresh:
 
 ```
+VAR remaining: number = ?
+
 === triage ===
-Query the tracker for open issues labelled `bug`; fix the next one.
-+ [Fixed one, queue not empty] ~loop~ -> triage
-* [Queue empty] -> harden
+Fix the next item from the captured batch.
+~ remaining -= 1
+while {remaining > 0} -> triage
+else -> refresh_queue
+
+=== refresh_queue ===
+Query the tracker once for the current open count.
+? remaining
+while {remaining > 0} -> triage
+else -> harden
 ```
 
-The bound here is honesty rather than arithmetic — the ungated exit keeps
-the compiler satisfied, and each iteration's rationale (with the issue id)
-is the audit trail. Add a monotonic safety counter if you want a hard cap.
+The initial late-bound declaration suspends traversal until the host supplies
+the first count. The later `? remaining` refreshes only after the current
+batch has been flushed, avoiding a tracker lookup and its context cost on
+every item. Each observation records its source and each iteration records
+the item handled. The mechanism is generic despite this tracker example: the
+same form works for any externally measured scalar.
 
 ## Direction 2: plan → tracker (audit export)
 
@@ -185,8 +197,9 @@ one stream — pick per host, don't mix both on the same run.
 - **Not a live connection.** Nothing polls, nothing webhooks. Sync runs
   when an executor runs it, and degrades to "here is what *would* sync".
 - **Not bidirectional state.** Tracker-side edits (re-opened issues,
-  changed titles) never mutate the plan; the plan is the source of truth
-  for structure, the tracker for conversation. Externally-fed variables
-  remain parked ([`PARKING.md`](PARKING.md)).
+  changed titles) never mutate traversal automatically; the plan is the
+  source of truth for structure, the tracker for conversation. A plan may
+  request a typed runtime observation at an explicit `?` checkpoint, but
+  the host performs and audits that lookup.
 - **Not a substitute for refs.** `# github:issue:` etc. keep working as
   plain cross-references on plans that never sync.

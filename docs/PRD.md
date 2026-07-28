@@ -18,7 +18,7 @@ Marionette borrows Ink's three-layer architecture and flips the player:
 
 | Layer | Ink | Marionette |
 |---|---|---|
-| Language | Narrative script (knots, choices, arrow transitions, state) | Trajectory script: phases, decision points, gates, state, human checkpoints, bounded loops |
+| Language | Narrative script (knots, choices, arrow transitions, state) | Trajectory script: phases, decision points, gates, observed state, human checkpoints, controlled loops and temporal exits |
 | Compiler | inklecate → story JSON | `marionette compile` → **trajectory JSON (the contract)** + static validation |
 | Runtime/player | Human player in a game | **AI agent** walking the graph; humans author, review, and gate |
 
@@ -27,7 +27,7 @@ Marionette borrows Ink's three-layer architecture and flips the player:
 ### Core design decisions (settled)
 
 1. **File storage, service-free.** A plan is `plan.mar` (script) + `plan.state.json` (traversal state) side by side. Git-compatible but not git-required. The state file references the compiled graph **by content hash**, so the runtime detects plan/state version drift and triggers reconciliation instead of misapplying history.
-2. **DAG by default; loops are intentional.** Cycles are a compile error unless marked (`~loop~`). A declared loop must have at least one sibling exit path whose gate is satisfiable (e.g., a monotonic counter), else: *potential infinite loop* error. Each loop traversal is a distinct decision-log entry.
+2. **DAG by default; loops are intentional.** Cycles are a compile error unless marked (`~loop~`). Fixed retry budgets use monotonic counters; `while`/`until` express condition-driven loops whose values may be refreshed at explicit runtime observation checkpoints. Every loop still needs an exit path, and each traversal is a distinct decision-log entry.
 3. **Human checkpoints are first-class.** `@human` marks a choice the agent cannot take autonomously — it must pause and escalate. The autonomy boundary is thereby authored, versioned, and diffable.
 4. **Syntax is masked by UX.** Humans normally don't hand-write the DSL. Authoring is NL → draft script (skill-assisted); review is rendered graph + plain-language summary. The DSL remains the durable, diffable source of truth.
 5. **The compiled JSON is the seam.** Authoring/validation (Phase 1) produces it; agent ingestion (Phase 2) consumes it. Spec the schema first; the phases decouple.
@@ -45,7 +45,7 @@ Ship the smallest testable slice.
 
 ## 3. Goals
 
-- **G1 — Soundness:** 100% of compiled plans are structurally valid; no dead ends, unreachable phases, undefined targets/variables, or unbounded loops can pass the compiler.
+- **G1 — Soundness:** 100% of compiled plans are structurally valid; no dead ends, unreachable phases, undefined targets/variables, undeclared cycles, or loops without exits can pass the compiler.
 - **G2 — Agent-native:** A reference agent (pi agent proving ground) can ingest the trajectory JSON and traverse it end-to-end, honoring gates and escalating at `@human` checkpoints, with zero plan-specific prompt engineering.
 - **G3 — Legibility:** A reviewer with no DSL knowledge can understand a rendered plan (graph + summary) in under 5 minutes for a ≤50-node trajectory.
 - **G4 — Audit trail:** Every taken branch (including loop iterations and escalations) records actor, timestamp, and rationale.
@@ -64,13 +64,14 @@ Ship the smallest testable slice.
 
 **Persona A — PM / founder (author & gatekeeper)**
 - As a PM, I want to describe my project in natural language and get a draft trajectory script so that I never hand-write syntax.
-- As a PM, I want compile-time errors for dead ends, unreachable phases, and unbounded loops so that my contingency plan provably has an exit for every scenario.
+- As a PM, I want compile-time errors for dead ends, unreachable phases, undeclared cycles, and loops without exits so every iteration has an authored way out.
 - As a PM, I want to mark decisions `@human` so that the agent's autonomy boundary is explicit and reviewable.
 - As a PM, I want a migration report when I edit a live plan so that recorded history reconciles safely with the new graph.
 
 **Persona B — AI agent (player)**
 - As an agent, I want a validated JSON graph with evaluable gates so that "what can I do next" is computed, not inferred.
-- As an agent, I want bounded loops with exit conditions so that iteration is a guardrailed retry, not an open loop.
+- As an agent, I want fixed retry loops and condition-driven `while`/`until` loops to share the same enforced exits and audit trail.
+- As an agent, I want the plan to request fresh typed observations only at authored checkpoints so external facts are current without repeated lookups.
 - As an agent, I want a defined escalation action at `@human` nodes so that pausing is a protocol, not a judgment call.
 
 **Persona C — Reviewer / stakeholder**
@@ -103,7 +104,7 @@ Ship the smallest testable slice.
 ### Future Considerations (P2)
 
 - Richer gate satisfiability analysis (or inherited from Ink engine — see OQ1)
-- Integrations: node status ↔ Jira/Linear/GitHub; variables fed by external data
+- Integrations that can satisfy typed observation requests automatically
 - Branch probabilities/weights → expected-value analysis
 - Multi-plan portfolios; cross-trajectory transitions
 - Multi-agent traversal (role-scoped choices beyond `@human`)

@@ -87,12 +87,12 @@ test('runtime CLI exposes a clean NDJSON process surface', async () => {
   ].join('\n'));
   const input = [
     JSON.stringify({
-      protocol: '0.1.0',
+      protocol: '0.2.0',
       id: 1,
       op: 'initialize',
       client: { name: 'cli-test', version: '1' },
     }),
-    JSON.stringify({ protocol: '0.1.0', id: 2, op: 'next', profile: 'signal' }),
+    JSON.stringify({ protocol: '0.2.0', id: 2, op: 'next', profile: 'signal' }),
     '',
   ].join('\n');
   const result = spawnSync(
@@ -119,4 +119,36 @@ test('runtime CLI exposes a clean NDJSON process surface', async () => {
   assert.match(help.stdout, /marionette stop/);
   const stopped = cli(['stop', 'plan.mar', '--run', 'cli-run', '--store', join(dir, 'store')], dir);
   assert.equal(stopped.code, 0);
+});
+
+test('state observe records a late-bound scalar through the CLI', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'marionette-observe-cli-'));
+  writeFileSync(join(dir, 'dynamic.mar'), [
+    'VAR remaining: number = ?',
+    '=== work ===',
+    '~ remaining -= 1',
+    'while {remaining > 0} -> work',
+    'else -> END',
+    '',
+  ].join('\n'));
+
+  const initialized = cli(['state', 'init', 'dynamic.mar'], dir);
+  assert.equal(initialized.code, 0, initialized.stderr);
+  assert.match(initialized.stdout, /observations required: remaining:number/);
+
+  const observed = cli([
+    'state', 'observe', 'dynamic.mar', 'remaining', '2',
+    '--actor', 'agent', '--rationale', 'queue query returned two items',
+  ], dir);
+  assert.equal(observed.code, 0, observed.stderr);
+  const state = JSON.parse(readFileSync(join(dir, 'dynamic.state.json'), 'utf8'));
+  assert.equal(state.variables.remaining, 1);
+  assert.equal(state.observations[0].rationale, 'queue query returned two items');
+
+  const nonFinite = cli([
+    'state', 'observe', 'dynamic.mar', 'remaining', '1e400',
+    '--actor', 'agent', '--rationale', 'invalid result',
+  ], dir);
+  assert.equal(nonFinite.code, 2);
+  assert.match(nonFinite.stderr, /finite number/);
 });
