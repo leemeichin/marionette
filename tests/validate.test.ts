@@ -43,6 +43,56 @@ VAR iteration = 0
   assert.match(hit.suggestion ?? '', /iteration/);
 });
 
+test('reference errors do not mask independent graph findings', async () => {
+  const result = await compile(`
+VAR attempts = 0
+=== start ===
+* [Broken shortcut] -> finsh
+* [Begin] -> retry
+=== retry ===
+~ attempts += 1
++ {attempts < 3} [Again] -> retry
+* {attemps >= 3} [Done] -> finish
+=== finish ===
+This phase has no exit.
+`);
+
+  assert.ok(result.diagnostics.some((d) => d.code === CODES.UNDEFINED_TARGET));
+  assert.ok(result.diagnostics.some((d) => d.code === CODES.UNDEFINED_VARIABLE));
+  assert.equal(result.diagnostics.filter((d) => d.code === CODES.UNDECLARED_CYCLE).length, 1);
+  assert.ok(result.diagnostics.some((d) =>
+    d.code === CODES.DEAD_END && d.message.includes('"finish"')));
+  assert.ok(!result.diagnostics.some((d) => d.code === CODES.UNVERIFIED_GATE),
+    'the invalid gate itself must not create a secondary warning');
+});
+
+test('partial graph analysis does not infer findings through broken references', async () => {
+  const result = await compile(`
+VAR enabled = false
+=== start ===
+-> finsh
+=== finish ===
+* {enabld} [Back] -> start
+* [Done] -> END
+`);
+
+  assert.ok(result.diagnostics.some((d) => d.code === CODES.UNDEFINED_TARGET));
+  assert.ok(result.diagnostics.some((d) => d.code === CODES.UNDEFINED_VARIABLE));
+  const unsafe = new Set([
+    CODES.DEAD_END,
+    CODES.UNREACHABLE,
+    CODES.UNDECLARED_CYCLE,
+    CODES.LOOP_WITHOUT_EXIT,
+    CODES.LOOP_EXIT_UNSATISFIABLE,
+    CODES.CONSTANT_FALSE_GATE,
+    CODES.LOOP_NOT_A_CYCLE,
+    CODES.UNVERIFIED_GATE,
+    CODES.LOOP_ONCE_ONLY,
+    CODES.TIMEBOX_WITHOUT_ALTERNATIVE,
+  ]);
+  assert.deepEqual(result.diagnostics.filter((d) => unsafe.has(d.code)), []);
+});
+
 test('MAR005 duplicate variable', async () => {
   await expectDiagnostic(`
 VAR x = 1

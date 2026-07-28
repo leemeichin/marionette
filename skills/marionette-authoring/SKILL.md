@@ -44,24 +44,28 @@ Below, `marionette` means whichever form resolved.
    `help:` suggestion — and validate again. Budget one revision loop; if the
    second attempt still errors, show the user the remaining diagnostics
    instead of silently iterating. Two things to know about that loop:
-   - **Reference errors mask graph diagnostics.** Undefined targets or
-     variables (MAR003/MAR004) stop the validator before dead-end, cycle
-     and loop analysis runs. When you fix them, don't just patch the listed
-     lines — re-check the whole draft against the conventions below
-     (exits, `~loop~`, sticky edges), or the next validate will surface a
-     second wave of structural errors and burn the budget.
+   - **Reference errors produce a conservative partial graph pass.**
+     Undefined targets or variables (MAR003/MAR004) no longer hide
+     independent dead ends and cycles. Findings that depend on the broken
+     edge are withheld rather than guessed, so fix the references and
+     validate again before treating the graph as clean.
    - **Expected warnings still fail `--strict`.** Zero *errors* is the bar;
      a plan whose only diagnostics are expected MAR014 dynamic-fact
      warnings is a legitimate end state — surface those warnings to the
      user and stop, even though the strict exit code is 1. Don't restructure
      a correct plan just to silence them.
-4. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
+4. **Check cycle stickiness:** `marionette oracle <plan>.mar`. The oracle
+   repeats the rule-base diagnostics and adds `STRAND` findings for
+   once-only (`*`) choices anywhere on a cycle. For each `STRAND`, either
+   change the choice to sticky (`+`) or keep it once-only deliberately and
+   call out why exhausting that route cannot strand the traversal.
+5. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
    contract), `render` (Mermaid), and `summarize` (plain language). Present
    the summary and graph to the user, calling out every `@human` checkpoint
    and any "unverified gate" warnings for manual review.
-5. **Only if the user wants to start traversal:**
+6. **Only if the user wants to start traversal:**
    `marionette state init <plan>.mar`.
-6. **Log the outcome** (dogfood metric): tell the user whether the first
+7. **Log the outcome** (dogfood metric): tell the user whether the first
    validate pass succeeded with zero errors — that is the "first-session
    compile success" data point the Marionette project tracks.
 
@@ -209,9 +213,11 @@ transcribe tickets into DSL by hand — fetch and scaffold
   **Sticky edges inside cycles:** every choice on a path the traversal can
   revisit should be sticky (`+`), not just the `~loop~` edge. A once-only
   (`*`) choice inside a multi-phase cycle is consumed on the first pass and
-  can strand the second iteration at runtime — and the compiler only warns
-  (MAR017) about the `~loop~` edge itself, so this one is on you. Reserve
-  `*` for edges on straight-line, visited-once paths.
+  can strand the second iteration at runtime. Validation warns (MAR017) when
+  the marked `~loop~` edge itself is once-only; the required oracle pass adds
+  `STRAND` for once-only choices elsewhere on the cycle. Reserve `*` for
+  straight-line paths or intentional one-shot routes whose exhaustion cannot
+  strand a later visit.
 - **Gates use declared variables only.** Declare every variable with `VAR`
   in the preamble: use a typed literal for authored state, or
   `VAR name: type = ?` for a runtime observation. Prefer gates the compiler can verify
@@ -243,6 +249,7 @@ transcribe tickets into DSL by hand — fetch and scaffold
 | MAR012 | `@human` with no escalation path | give the choice a `-> target` |
 | MAR014 (warn) | unverified gate | expected for dynamic facts — surface to the user, don't churn |
 | MAR017 (warn) | once-only loop edge | change `*` to `+` |
+| STRAND (oracle) | once-only choice anywhere on a cycle | change to `+`, or document why the one-shot route is safe |
 
 ## Example transformation
 
