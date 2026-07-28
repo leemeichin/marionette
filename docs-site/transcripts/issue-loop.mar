@@ -2,17 +2,17 @@
 VAR remaining: number = ?
 
 === work_issue ===
-Work the next issue from the captured batch: move it to "In progress",
+Work the next ready issue: move it to "In progress",
 implement it, open a pull request, and move the issue to "In review".
 ~ remaining -= 1
-while {remaining > 0} [Pick up the next captured issue] -> work_issue
-else [Batch flushed] -> refresh_queue
+while {remaining > 0} -> work_issue
+else [Check for newly ready issues] -> refresh_queue
 
 === refresh_queue ===
-Count the ready issues once, after the captured batch has been flushed.
+Count the ready issues.
 ? remaining
-while {remaining > 0} [A new batch is ready] -> work_issue
-else [Queue is clear] -> share_update
+while {remaining > 0} -> work_issue
+else -> share_update
 
 === share_update ===
 Post a short status update with links to the open pull requests.

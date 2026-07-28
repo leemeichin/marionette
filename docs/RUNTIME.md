@@ -121,9 +121,9 @@ An observation command fills exactly one value requested by the projection:
 Values are typed scalars: number, boolean, or string. An initial declaration
 such as `VAR remaining: number = ?` suspends entry to the start phase until it
 is supplied. A node-level `? remaining` requests a refresh only when that
-checkpoint is reached; the value then remains stable while the captured batch
-is drained. Each successful observation emits `observation.recorded` and is
-kept in a separate audit stream from branch decisions.
+checkpoint is reached; the value then remains stable until the loop reaches
+the refresh phase. Each successful observation emits `observation.recorded`
+and is kept in a separate audit stream from branch decisions.
 
 `record` provides pibarm-style graph-linked decision records without advancing:
 

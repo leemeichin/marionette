@@ -77,7 +77,7 @@ while {remaining > 0} -> work
 else -> refresh
 
 === refresh ===
-Refresh the external count once, after the captured batch is exhausted.
+Refresh the external count.
 ? remaining
 while {remaining > 0} -> work
 else -> END

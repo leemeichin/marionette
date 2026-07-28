@@ -25,14 +25,15 @@ right.</p>
 
 <p>A compact agent workflow: pick an issue, update its status, implement
 it, open a pull request, and repeat. The number of ready issues is supplied
-at runtime: the plan drains that captured batch, then refreshes the queue
-once instead of paying for another lookup after every issue.</p>
+at runtime: the loop works through that count, then checks the queue again
+instead of paying for another lookup after every issue.</p>
 
 <div class="callout">
   <p class="callout-title">Read it from top to bottom</p>
   <p><code>VAR remaining: number = ?</code> asks for the initial count.
-  <code>while</code> drains it, and <code>? remaining</code> requests a
-  fresh count only after the current batch has been flushed.</p>
+  <code>while</code> continues while that count is non-zero. The optional
+  “Check for newly ready issues” label clarifies the next action for the
+  agent; the loop itself controls when that route is available.</p>
 </div>
 
 <mini-playground src="issue-loop.mar" title="issue-loop.mar"></mini-playground>

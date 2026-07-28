@@ -105,16 +105,17 @@ The counter is monotonic, so the compiler *verifies* the loop is bounded
 (zero warnings under `--strict`): exactly one iteration per issue, one
 recorded rationale per iteration.
 
-### The live-queue pattern (snapshot, drain, refresh)
+### The live-queue pattern
 
 When the total is not known until runtime, make the observation cadence part
-of the plan. Fetch one count, drain that captured batch, then refresh:
+of the plan. Observe the current count, process the ready items, then let the
+loop return to the tracker when it is time to check again:
 
 ```
 VAR remaining: number = ?
 
 === triage ===
-Fix the next item from the captured batch.
+Fix the next ready item.
 ~ remaining -= 1
 while {remaining > 0} -> triage
 else -> refresh_queue
@@ -127,11 +128,11 @@ else -> harden
 ```
 
 The initial late-bound declaration suspends traversal until the host supplies
-the first count. The later `? remaining` refreshes only after the current
-batch has been flushed, avoiding a tracker lookup and its context cost on
-every item. Each observation records its source and each iteration records
-the item handled. The mechanism is generic despite this tracker example: the
-same form works for any externally measured scalar.
+the first count. The loop reaches `? remaining` only when `remaining` reaches
+zero, avoiding a tracker lookup and its context cost on every item. Each
+observation records its source and each iteration records the item handled.
+The mechanism is generic despite this tracker example: the same form works
+for any externally measured scalar.
 
 ## Direction 2: plan → tracker (audit export)
 
