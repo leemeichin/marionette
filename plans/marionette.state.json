@@ -1,5 +1,5 @@
 {
-  "hash": "sha256:4275ff5eb0b139495a611d08685511824278041e8040b775f0b05b0fdb02751c",
+  "hash": "sha256:9100394e74675da0b2f15ec84ba4a21cbfd75a4cf4cfd8173d06e6b7212f5c78",
   "status": "active",
   "current": "escalation_protocol",
   "variables": {
@@ -56,6 +56,18 @@
       "label": "Walker passes conformance tests",
       "rationale": "Conformance suite (spec/conformance) merged to main in PR #9: walker passes all cases incl. the 44-step baseline traversal; refusal codes, state-unchanged-on-refusal and one-log-entry-per-step verified in CI",
       "to": "escalation_protocol"
+    },
+    {
+      "at": "2026-07-28T09:33:06.084Z",
+      "actor": "lee",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:4275ff5eb0b1… → sha256:9100394e7467…",
+      "to": "escalation_protocol",
+      "rationale": "Approved dynamic observations, while/until loops, timeout syntax, and documentation updates for merge in PR #25"
     }
-  ]
+  ],
+  "pendingObservations": [],
+  "pendingEntry": false,
+  "observations": []
 }
