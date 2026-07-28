@@ -188,10 +188,11 @@ export async function buildRuntimeProjection(
   const brief = await buildBrief(trajectory, snapshot.state, { at: options.at });
   const omitted: string[] = [];
   let truncated = false;
-  const maxItems = options.budget?.maxItems ?? 8;
-  const sourceChoices = profile === 'debug'
-    ? brief.frontier
-    : brief.frontier.filter((choice) => choice.available);
+  const maxItems = options.budget?.maxItems ??
+    (profile === 'signal' ? 8 : Number.POSITIVE_INFINITY);
+  const sourceChoices = profile === 'signal'
+    ? brief.frontier.filter((choice) => choice.available)
+    : brief.frontier;
   const selectedChoices = sourceChoices.slice(0, maxItems);
   if (selectedChoices.length < sourceChoices.length) {
     truncated = true;
@@ -207,7 +208,7 @@ export async function buildRuntimeProjection(
     : null;
 
   if (node && profile !== 'signal') {
-    const maxBodyChars = options.budget?.maxBodyChars ?? 4_000;
+    const maxBodyChars = options.budget?.maxBodyChars ?? Number.POSITIVE_INFINITY;
     node.body = brief.node!.body.length > maxBodyChars
       ? brief.node!.body.slice(0, maxBodyChars)
       : brief.node!.body;
@@ -216,6 +217,9 @@ export async function buildRuntimeProjection(
       omitted.push(`node.body:${brief.node!.body.length - node.body.length}`);
     }
     node.refs = brief.node!.refs;
+    node.timebox = brief.node!.timebox;
+    node.priority = brief.node!.priority;
+    node.enteredAt = brief.node!.enteredAt;
     if (profile === 'debug') node.meta = brief.node!.meta;
   }
 
@@ -239,23 +243,42 @@ export async function buildRuntimeProjection(
     cursor: snapshot.events.at(-1)?.seq ?? 0,
     graphHash: trajectory.hash,
     status: brief.status,
+    plan: profile === 'signal' ? undefined : brief.plan,
     node,
+    delivery: profile === 'signal' ? undefined : brief.delivery,
     choices: selectedChoices.map((choice) => ({
       id: choice.id,
       label: choice.label,
       human: choice.human,
       target: profile === 'signal' ? undefined : choice.target,
-      gate: profile === 'debug' ? choice.gate : undefined,
+      targetTitle: profile === 'signal' ? undefined : choice.targetTitle,
+      sticky: profile === 'signal' ? undefined : choice.sticky,
+      loop: profile === 'signal' ? undefined : choice.loop,
+      available: profile === 'signal' ? undefined : choice.available,
+      gate: profile === 'signal' ? undefined : choice.gate,
       timeout: profile === 'signal' ? undefined : choice.timeout,
-      blocked: profile === 'debug' && choice.blocked && choice.blockedCode
+      dueAt: profile === 'signal' || !choice.timeout
+        ? undefined
+        : snapshot.state.activationStartedAt === null
+          ? null
+          : new Date(
+              Date.parse(snapshot.state.activationStartedAt) +
+              choice.timeout.seconds * 1_000,
+            ).toISOString(),
+      blocked: profile !== 'signal' && choice.blocked && choice.blockedCode
         ? { code: choice.blockedCode, reason: choice.blocked }
         : undefined,
     })),
-    next: brief.next ? { target: brief.next.target } : null,
+    next: brief.next
+      ? {
+          target: brief.next.target,
+          targetTitle: profile === 'signal' ? undefined : brief.next.targetTitle,
+        }
+      : null,
     observations: brief.pendingObservations,
     escalation,
-    variables: profile === 'debug' ? brief.variables : undefined,
-    progress: profile === 'debug' ? brief.progress : undefined,
+    variables: profile === 'signal' ? undefined : brief.variables,
+    progress: profile === 'signal' ? undefined : brief.progress,
     truncated,
     omitted,
   };

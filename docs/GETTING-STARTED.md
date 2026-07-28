@@ -123,7 +123,12 @@ $ pi \
 You can also bind later with `/marionette-start plan.mar first-run`. When the
 run reaches `@human`, Pi displays the exact choices and parks the agent; answer
 with `/marionette-decide`. See [`RUNTIME.md`](RUNTIME.md) for the wire and
-restart contract.
+restart contract. `/marionette-stop` unbinds the session without deleting the
+runtime run.
+
+While a run is bound, `marionette_walk` is its sole traversal interface. Do
+not mix in `marionette brief` or `marionette state ...`; those commands are
+the standalone CLI workflow and persist a different state file.
 
 ## 6. When something feels wrong
 

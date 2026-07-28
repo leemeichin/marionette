@@ -30,6 +30,19 @@ export class RuntimeRunController {
     return this.snapshot;
   }
 
+  /**
+   * Refresh the in-memory view without racing commands already queued on this
+   * controller. The journal remains authoritative when another trusted host
+   * has committed since this instance last executed.
+   */
+  reload(load: () => Promise<RuntimeSnapshot>): Promise<void> {
+    const pending = this.tail.then(async () => {
+      this.snapshot = await load();
+    });
+    this.tail = pending.then(() => undefined, () => undefined);
+    return pending;
+  }
+
   execute(
     principal: RuntimePrincipal,
     request: RuntimeRequest,
