@@ -51,6 +51,22 @@ export {
   type PiAgentBridgeOptions,
 } from './pi-agent.js';
 export {
+  MARIONETTE_PI_INTEGRATION_VERSION,
+  MARIONETTE_PI_EVENT_CHANNEL,
+  MARIONETTE_PI_READY_CHANNEL,
+  MARIONETTE_PI_DISCOVER_CHANNEL,
+  type MarionettePiBinding,
+  type MarionettePiReceipt,
+  type MarionettePiError,
+  type MarionettePiEventKind,
+  type MarionettePiEvent,
+  type MarionettePiAgentCommand,
+  type MarionettePiHumanDecision,
+  type MarionettePiBindRequest,
+  type MarionettePiHostApi,
+  type MarionettePiDiscoveryRequest,
+} from './pi-integration.js';
+export {
   RUNTIME_STORE_VERSION, MAX_EVENT_BYTES, RuntimeStoreError, runtimePaths,
   archiveTrajectory, resolveArchivedTrajectory, initializeRuntimeStore,
   loadRuntimeStore, commitRuntimeStore, readRuntimeEvents, runtimeStoreSize,

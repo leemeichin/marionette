@@ -99,3 +99,49 @@ test('Pi bridge traverses a 15-phase run with a loop and durable human handoff',
     assert.equal(completed.status, 'completed');
     assert.equal(completed.escalation, null);
   }));
+
+test('Pi bridge exposes protocol capabilities, records, events, and external refresh', () =>
+  withPlan(async (file, storeRoot) => {
+    const first = await PiAgentBridge.open({
+      planFile: file,
+      runId: 'host-contract',
+      sessionId: 'session-1',
+      storeRoot,
+    });
+    const initialized = await first.initialize({ name: 'pibarm', version: '1' });
+    assert.deepEqual(
+      (initialized.result.capabilities as { operations: string[] }).operations,
+      ['next', 'choose', 'advance', 'observe', 'record', 'events'],
+    );
+
+    const attached = await first.record(
+      'architecture-decision',
+      'Use the versioned Pi integration envelope',
+      'record-1',
+      { rationale: 'pibarm needs one stable notification shape' },
+    );
+    assert.equal(attached.events[0].kind, 'record.attached');
+
+    const second = await PiAgentBridge.open({
+      planFile: file,
+      runId: 'host-contract',
+      sessionId: 'session-2',
+      storeRoot,
+    });
+    await second.choose('phase_1#0', 'phase one complete', 'external-step');
+
+    const refreshed = projectionOf(await first.next());
+    assert.equal(refreshed.node?.id, 'phase_2');
+    assert.equal(refreshed.revision, 2);
+
+    const history = await first.events(2, 10);
+    const events = history.result.events as Array<{ kind: string }>;
+    assert.ok(events.some((event) => event.kind === 'record.attached'));
+    assert.ok(events.some((event) => event.kind === 'decision.committed'));
+
+    await Promise.all([
+      first.choose('phase_2#0', 'phase two complete', 'concurrent-step-2'),
+      first.choose('phase_3#0', 'phase three complete', 'concurrent-step-3'),
+    ]);
+    assert.equal(projectionOf(await first.next()).node?.id, 'phase_4');
+  }));

@@ -1,5 +1,5 @@
 import type { Ref, Value } from './types.js';
-import type { BriefStatus } from './brief.js';
+import type { Brief, BriefStatus } from './brief.js';
 import type { WalkErrorCode } from './state.js';
 
 export const RUNTIME_PROTOCOL_VERSION = '0.3.0';
@@ -132,8 +132,14 @@ export interface RuntimeChoiceProjection {
   label: string;
   human: boolean;
   target?: string;
+  targetTitle?: string | null;
+  sticky?: boolean;
+  loop?: boolean;
+  available?: boolean;
   gate?: string | null;
   timeout?: { source: string; seconds: number } | null;
+  /** Absolute opening time for a graph-authored timeout edge. */
+  dueAt?: string | null;
   blocked?: {
     code:
       | 'once-exhausted'
@@ -181,6 +187,8 @@ export interface RuntimeProjection {
   cursor: number;
   graphHash: string;
   status: BriefStatus;
+  /** Executor context, omitted only from the compact signal profile. */
+  plan?: Brief['plan'];
   node: {
     id: string;
     title: string;
@@ -188,9 +196,14 @@ export interface RuntimeProjection {
     bodyRef?: string;
     refs?: Ref[];
     meta?: Record<string, string | string[]>;
+    timebox?: NonNullable<Brief['node']>['timebox'];
+    priority?: NonNullable<Brief['node']>['priority'];
+    enteredAt?: string | null;
   } | null;
+  /** Effective delivery/reporting policy, omitted only from signal projections. */
+  delivery?: Brief['delivery'];
   choices: RuntimeChoiceProjection[];
-  next: { target: string } | null;
+  next: { target: string; targetTitle?: string | null } | null;
   observations: Array<{ name: string; type: string }>;
   /** Present exactly when status is awaiting-human. */
   escalation: RuntimeEscalation | null;

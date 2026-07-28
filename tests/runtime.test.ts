@@ -98,6 +98,8 @@ test('runtime projections progressively disclose context and enforce budgets', a
   const signal = await buildRuntimeProjection(trajectory, initial, { profile: 'signal' });
   assert.equal(signal.node?.body, undefined);
   assert.equal(signal.variables, undefined);
+  assert.equal(signal.plan, undefined);
+  assert.equal(signal.delivery, undefined);
   assert.deepEqual(signal.choices.map((choice) => choice.id), ['build#0', 'build#1']);
 
   const work = await buildRuntimeProjection(trajectory, initial, {
@@ -108,10 +110,19 @@ test('runtime projections progressively disclose context and enforce budgets', a
   assert.equal(work.choices.length, 1);
   assert.equal(work.truncated, true);
   assert.deepEqual(work.omitted, ['choices:1', 'node.body:4']);
+  assert.equal(work.plan?.intent.summary, null);
+  assert.ok(work.delivery);
+  assert.deepEqual(work.variables, { n: 1 });
+  assert.ok(work.progress);
 
   const debug = await buildRuntimeProjection(trajectory, initial, { profile: 'debug' });
   assert.deepEqual(debug.variables, { n: 1 });
   assert.ok(debug.progress);
+
+  const completeWork = await buildRuntimeProjection(trajectory, initial, { profile: 'work' });
+  assert.equal(completeWork.node?.body, 'Build it.');
+  assert.equal(completeWork.choices.length, 2);
+  assert.equal(completeWork.truncated, false);
 });
 
 test('runtime can attach a graph-linked record without advancing the walker', async () => {
@@ -178,6 +189,7 @@ timeout 1h [Budget spent] -> END
   const beforeProjection = before.result.projection as Awaited<ReturnType<typeof buildRuntimeProjection>>;
   assert.equal(beforeProjection.choices[0].blocked, undefined);
   assert.equal(beforeProjection.choices[1].blocked?.code, 'timeout-pending');
+  assert.equal(beforeProjection.choices[1].dueAt, '2026-07-23T21:00:00.000Z');
 
   const after = await executeRuntimeRequest(timed, initial, AGENT, {
     protocol: RUNTIME_PROTOCOL_VERSION,
@@ -198,4 +210,39 @@ timeout 1h [Budget spent] -> END
     expectedRevision: 0,
   }, { at: '2026-07-23T21:30:00.000Z' });
   assert.equal(completed.snapshot.state.status, 'completed');
+});
+
+test('work projections carry timeout wake data and stranded diagnostics', async () => {
+  const waiting = (await compile(`
+=== wait ===
+timeout 1h [Window opens] -> END
+`)).trajectory!;
+  const waitingState = await createRuntimeSnapshot(waiting, {
+    runId: 'run-waiting',
+    at: '2026-07-23T21:00:00.000Z',
+  });
+  const waitingProjection = await buildRuntimeProjection(waiting, waitingState, {
+    profile: 'work',
+    at: '2026-07-23T21:30:00.000Z',
+  });
+  assert.equal(waitingProjection.status, 'waiting-timeout');
+  assert.equal(waitingProjection.choices[0].blocked?.code, 'timeout-pending');
+  assert.equal(waitingProjection.choices[0].dueAt, '2026-07-23T22:00:00.000Z');
+
+  const stranded = (await compile(`
+VAR approved: boolean = false
+=== blocked ===
+* [Ship] {approved} -> END
+`)).trajectory!;
+  const strandedState = await createRuntimeSnapshot(stranded, {
+    runId: 'run-stranded',
+    at: AT,
+  });
+  const strandedProjection = await buildRuntimeProjection(stranded, strandedState, {
+    profile: 'work',
+  });
+  assert.equal(strandedProjection.status, 'stranded');
+  assert.equal(strandedProjection.choices[0].gate, 'approved');
+  assert.equal(strandedProjection.choices[0].blocked?.code, 'gate-blocked');
+  assert.deepEqual(strandedProjection.variables, { approved: false });
 });

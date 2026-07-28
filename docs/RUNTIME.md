@@ -82,8 +82,10 @@ push handling can ignore those and use `events` by cursor.
 
 - `signal` — status, node identity and currently available choices. It omits
   node prose, targets, variables and history.
-- `work` — the default; adds the current node body, refs and choice targets.
-- `debug` — adds blocked choices, gates, variables, metadata and progress.
+- `work` — the executor-complete default; adds plan intent, delivery policy,
+  the complete node body and frontier, refs, targets, gates, blockers,
+  variables, progress, pacing metadata and timeout deadlines.
+- `debug` — the same complete packet plus raw node metadata for diagnosis.
 
 `budget.maxItems` bounds choices and `budget.maxBodyChars` bounds inline node
 prose. Truncated projections contain `truncated: true`, an `omitted` summary
@@ -144,11 +146,62 @@ pi \
 ```
 
 or interactively with `/marionette-start <plan.mar> [run-id]`. The model gets
-one agent-bound tool, `marionette_walk`. At an escalation it must stop; the
-user answers through `/marionette-decide`, which selects a choice, captures
-the user's name and rationale, records the human-bound write, and injects the
-resulting projection so the agent can resume. The binding is stored in the Pi
-session and restored after restart.
+one agent-bound tool, `marionette_walk`. It mirrors the runtime command
+surface:
+
+- `capabilities`, `next`, `choose`, `advance`, `observe`, `record`, `events`
+- `signal`, `work`, and `debug` projection profiles
+- projection budgets, evidence/refs, idempotency receipts and event cursors
+
+`work` is the executor-complete default: plan intent and refs, effective
+delivery policy, the complete phase body and frontier, node pacing metadata,
+variables, progress, timeout deadlines, blockers and escalation data. A
+caller can deliberately bound it; `truncated`/`omitted` then tell the caller
+to fetch `next` again with a larger budget.
+
+At an escalation the agent must stop. The user answers through
+`/marionette-decide`, which selects a choice, captures the user's name and
+rationale, records the human-bound write, and injects the resulting projection
+so the agent can resume. A trusted embedding can instead provide an
+authenticated human principal through the host API described below.
+
+The binding is stored on the active Pi session branch and restored after
+restart or `/tree` navigation. `/marionette-stop` appends an unbound tombstone
+without deleting the durable runtime run.
+
+### Pi host integration contract
+
+The extension publishes a versioned notification envelope
+(`marionette.pi` / `1.0.0`) with the same shape in four places:
+
+1. `marionette_walk` tool-result `details`;
+2. `marionette-projection` custom-message `details`;
+3. durable `marionette-event` custom session entries;
+4. Pi's shared `marionette:event:v1` extension event channel.
+
+Every envelope identifies its cause and current binding and may carry the
+projection, emitted runtime events, revision/event-sequence receipt, replay
+state, operation result, or a structured error. A host therefore never needs
+to parse rendered prose, widgets, or the runtime store.
+
+Trusted in-process extensions discover the typed `MarionettePiHostApi` through
+either:
+
+- `marionette:ready:v1`, emitted when the extension loads; or
+- `marionette:discover:v1`, with `{ respond(api) { ... } }` for load-order
+  independent discovery.
+
+The API exposes `getBinding()`, `bind()`, `unbind()`, every agent-bound runtime
+operation through `execute()`, and a separate `humanChoose()` accepting a
+host-authenticated principal. Channel names, envelope types and the host
+interface are exported from the package. The shared event bus is the
+notification plane; the host API or the runtime protocol remains the
+request/response command plane.
+
+When this tool is bound, the bundled execution skill directs the model to use
+it exclusively. The legacy `marionette brief` / `marionette state ...` flow
+uses a separate `<plan>.state.json` store and must not be mixed into the same
+run.
 
 ## Writes, identity and retries
 
