@@ -145,9 +145,14 @@ pi \
   --marionette-human lee
 ```
 
-or interactively with `/marionette-start <plan.mar> [run-id]`. The model gets
-one agent-bound tool, `marionette_walk`. It mirrors the runtime command
-surface:
+The package manifest points directly at `src/pi-extension.ts`; Pi loads that
+TypeScript source through its extension loader. The compiled `dist/` tree is
+still produced for Marionette's library and CLI consumers, but it is not a
+prerequisite for loading the Pi extension.
+
+You can instead bind interactively with
+`/marionette-start <plan.mar> [run-id]`. The model gets one agent-bound tool,
+`marionette_walk`. It mirrors the runtime command surface:
 
 - `capabilities`, `next`, `choose`, `advance`, `observe`, `record`, `events`
 - `signal`, `work`, and `debug` projection profiles
