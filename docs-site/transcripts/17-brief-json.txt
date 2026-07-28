@@ -1,9 +1,9 @@
 {
-  "spec": "0.3.0",
+  "spec": "0.4.0",
   "plan": {
     "file": "checkout.mar",
     "project": "checkout-revamp",
-    "hash": "sha256:e4e3b4dc20347c2280c2c7fc11dbba80e9a73cbaec9949f78b5f858168e48b33",
+    "hash": "sha256:bc46272ad55c291fb91ef18397f1b4ba0a10a8564196468a60a8cc330f673d78",
     "intent": {
       "summary": null,
       "prompt": "Checkout conversion has been flat for two quarters. Rebuild the flow\nbehind a flag and iterate on cohort evidence — five attempts max. I take\nthe ship call, and if it never converts we go back to research rather\nthan grinding out attempt six."
@@ -27,6 +27,7 @@
   "variables": {
     "attempts": 2
   },
+  "pendingObservations": [],
   "node": {
     "id": "build_checkout",
     "title": "Rebuild the checkout flow behind a feature flag.",
@@ -44,7 +45,7 @@
     ],
     "timebox": null,
     "priority": null,
-    "enteredAt": "2026-07-28T08:04:04.699Z"
+    "enteredAt": "2026-07-28T09:13:27.521Z"
   },
   "delivery": {
     "mode": "none",
@@ -64,7 +65,8 @@
       "gate": null,
       "available": true,
       "blocked": null,
-      "blockedCode": null
+      "blockedCode": null,
+      "timeout": null
     },
     {
       "index": 1,
@@ -78,7 +80,8 @@
       "gate": "attempts < 5",
       "available": true,
       "blocked": null,
-      "blockedCode": null
+      "blockedCode": null,
+      "timeout": null
     },
     {
       "index": 2,
@@ -92,7 +95,8 @@
       "gate": "attempts >= 5",
       "available": false,
       "blocked": "gate {attempts >= 5} is false",
-      "blockedCode": "gate-blocked"
+      "blockedCode": "gate-blocked",
+      "timeout": null
     }
   ],
   "next": null,
@@ -109,8 +113,10 @@
   "protocol": {
     "choose": "marionette state choose checkout.mar <choice> --actor <name> --rationale <text>",
     "advance": "marionette state advance checkout.mar --actor <name> --rationale <text>",
+    "observe": "marionette state observe checkout.mar <name> <json-value> --actor <name> --rationale <text>",
     "rules": [
       "do the work the current phase describes before recording an outcome",
+      "supply only observations the brief requests, with the source in the rationale",
       "record every taken branch with an honest rationale (it is the audit trail)",
       "never take an @human choice as the agent: escalate and wait for a human decision",
       "gates are computed from the variables above: if a choice is blocked, it is not an option",

@@ -15,7 +15,7 @@ const dist = join(root, 'dist');
 const transcripts = join(root, 'transcripts');
 
 export const PAGES = [
-  { slug: 'index', nav: 'overview', wide: true, title: 'Marionette — clear project plans for AI agents', desc: 'Write a plain-text project plan, try it in the browser playground, let an AI agent follow it, and keep important decisions with people.' },
+  { slug: 'index', nav: 'overview', wide: true, title: 'Marionette documentation', desc: 'Technical documentation for the Marionette trajectory compiler, validator and runtime.' },
   { slug: 'getting-started', nav: 'getting started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI, write and validate your first plan, and set it up with Claude Code, Codex, or OpenCode.',
     sections: [
       { id: 'cli', label: 'install the cli' },
@@ -39,7 +39,7 @@ export const PAGES = [
       { id: 'checkout', label: 'checkout revamp' },
       { id: 'meta', label: 'built this site' },
       { id: 'paas', label: 'an 18-phase replatform' },
-      { id: 'use-cases', label: 'use-cases' },
+      { id: 'patterns', label: 'patterns' },
     ] },
   { slug: 'execution', nav: 'agent execution', title: 'Agent execution — Marionette', desc: 'Connect an AI agent or another program to Marionette, record results, pause for human decisions, and report completed work.',
     sections: [
@@ -120,10 +120,8 @@ function renderCodeBlock(source, attrs) {
 // <mini-playground src="checkout.mar" title="…"></mini-playground>
 // An editable plan on the left, live diagnostics + walk on the right;
 // mini.js compiles and walks it with the real compiler under /lib.
-let miniSeq = 0;
 function renderMini(file, title) {
   const source = readFileSync(join(transcripts, file), 'utf8');
-  const n = ++miniSeq;
   return `<section class="mini" data-mini aria-label="${escapeHtml(title)} (editable example)">
 <div class="term-bar">${DOTS}<span class="term-title">${escapeHtml(title)}</span><span class="term-exit" data-mini-status></span></div>
 <div class="mini-panes">
@@ -136,10 +134,6 @@ function renderMini(file, title) {
 <div class="mini-run">
 <div class="pg-diagnostics" data-diagnostics role="log" aria-label="compiler diagnostics"></div>
 <div class="pg-walk-controls">
-<fieldset class="pg-actor"><legend>acting as</legend>
-<label><input type="radio" name="mini-actor-${n}" value="agent" checked> agent</label>
-<label><input type="radio" name="mini-actor-${n}" value="human"> human</label>
-</fieldset>
 <label class="pg-rationale-row">rationale <input type="text" value="trying the example"></label>
 <button type="button" class="pg-reset" data-reset>↺ reset</button>
 </div>

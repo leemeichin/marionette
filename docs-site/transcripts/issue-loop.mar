@@ -1,12 +1,18 @@
 # project: issue-to-pr
-VAR prs_opened = 0
+VAR remaining: number = ?
 
 === work_issue ===
-Move the next ready issue to "In progress", implement it, open a pull
-request, and move the issue to "In review".
-~ prs_opened += 1
-+ {prs_opened < 3} [Pick up the next issue] ~loop~ -> work_issue
-* {prs_opened >= 3} [Queue is clear] -> share_update
+Work the next issue from the captured batch: move it to "In progress",
+implement it, open a pull request, and move the issue to "In review".
+~ remaining -= 1
+while {remaining > 0} [Pick up the next captured issue] -> work_issue
+else [Batch flushed] -> refresh_queue
+
+=== refresh_queue ===
+Count the ready issues once, after the captured batch has been flushed.
+? remaining
+while {remaining > 0} [A new batch is ready] -> work_issue
+else [Queue is clear] -> share_update
 
 === share_update ===
 Post a short status update with links to the open pull requests.

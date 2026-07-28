@@ -127,6 +127,7 @@ decision that needs a person.</p>
 <pre class="code" data-lang="shell" data-title="Walk the plan"><code>$ marionette state init plan.mar        # start a run and create the progress file
 $ marionette brief plan.mar             # show the agent's next assignment
 $ marionette state show plan.mar        # show current progress and available choices
+$ marionette state observe plan.mar remaining 7 --actor agent --rationale "source"
 $ marionette state choose plan.mar 1 --actor agent --rationale "why"
 $ marionette state advance plan.mar --actor agent   # follow an automatic next step
 $ marionette state rebind plan.mar      # accept a plan edit and keep the history

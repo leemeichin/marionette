@@ -1,31 +1,27 @@
 <div class="home-intro">
-<h1>marionette</h1>
+<h1>marionette documentation</h1>
 <div class="cols">
-<p class="lede">Give an AI agent a clear route through a project—and keep
-the decisions that matter with people.</p>
-<p>A Marionette plan is a small text file describing the stages of a
-project, the routes between them, and the rules for moving forward. The
-compiler catches missing and impossible paths before work begins.</p>
+<p class="lede">A compiler and runtime for plain-text project trajectories.</p>
+<p>Write stages and transitions in a <code>.mar</code> file, validate the
+graph, then traverse it from the CLI or NDJSON runtime. Choices can be
+conditional, repeatable, or restricted to a human decision.</p>
 </div>
 </div>
 
-<div class="concept-grid" aria-label="How Marionette works">
-  <div class="concept-card"><strong>1 · Write the route</strong>
-    <p>Describe the work in readable stages, with explicit next steps.</p></div>
-  <div class="concept-card"><strong>2 · Let the agent work</strong>
-    <p>The agent receives one bounded assignment at a time and records why it moved on.</p></div>
-  <div class="concept-card"><strong>3 · Hold the gates</strong>
-    <p>Mark a decision <code>@human</code> and the agent cannot take it for you.</p></div>
-</div>
+<dl class="technical-summary">
+  <div><dt>source</dt><dd><code>plan.mar</code></dd></div>
+  <div><dt>compile</dt><dd><code>marionette validate plan.mar</code></dd></div>
+  <div><dt>execute</dt><dd><code>marionette brief plan.mar --json</code></dd></div>
+</dl>
 
 <noscript><p><strong>The playground needs JavaScript</strong> —
 it runs the compiler in your browser. The <a href="/docs">docs</a> show the
 same flow as captured terminal sessions.</p></noscript>
 
-<h2 id="try-it">Try a plan</h2>
-<p>Start with “hello world”, then load the issue-to-PR loop. The editor
-uses the real compiler and highlights the plan as you type; the panel on
-the right shows the route and lets you walk it.</p>
+<h2 id="try-it">Browser playground</h2>
+<p>The editor runs the repository's compiler and walker in the browser.
+Select an example, edit the source, inspect the graph, and record a
+transition. Human-only choices are refused, as they are by the CLI.</p>
 
 <div class="pg" data-playground>
   <section class="pg-editor" aria-label="Plan editor">
@@ -43,16 +39,11 @@ the right shows the route and lets you walk it.</p>
 
   <section class="pg-viz" aria-label="Graph and walk">
     <div class="pg-stage">
-      <div class="pg-canvas" data-canvas aria-hidden="true"></div>
+      <div class="pg-canvas" data-canvas></div>
       <div class="pg-diagnostics" data-diagnostics aria-label="compiler diagnostics" role="log" hidden></div>
     </div>
     <div class="pg-walk" data-walk>
       <div class="pg-walk-controls">
-        <fieldset class="pg-actor">
-          <legend>acting as</legend>
-          <label><input type="radio" name="pg-actor" value="agent" checked> agent</label>
-          <label><input type="radio" name="pg-actor" value="human"> human</label>
-        </fieldset>
         <label class="pg-rationale-row">rationale
           <input id="pg-rationale" type="text" value="exploring in the playground">
         </label>
@@ -65,7 +56,7 @@ the right shows the route and lets you walk it.</p>
   </section>
 </div>
 
-<h2 id="next">Where to go</h2>
+<h2 id="next">Reference sections</h2>
 
 <ul class="linkgrid">
   <li><a href="/getting-started">Getting started</a>Install the CLI, write
@@ -78,7 +69,4 @@ the right shows the route and lets you walk it.</p>
     program to Marionette.</li>
 </ul>
 
-<script type="importmap">
-{"imports":{"three":"/vendor/three.module.min.js"}}
-</script>
 <script type="module" src="/playground.js"></script>

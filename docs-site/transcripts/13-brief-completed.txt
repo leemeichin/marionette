@@ -1,4 +1,4 @@
-[1mwork packet — checkout-revamp[22m[2m (sha256:e4e3b4dc2034…)[22m
+[1mwork packet — checkout-revamp[22m[2m (sha256:bc46272ad55c…)[22m
 status: [32mcompleted ✓[39m   progress: 2/3 phases, 4 steps
 [2mprompt: Checkout conversion has been flat for two quarters. Rebuild the flow
         behind a flag and iterate on cohort evidence — five attempts max. I take

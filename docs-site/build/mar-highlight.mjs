@@ -34,13 +34,24 @@ export function highlightMarLine(line) {
     return escapeHtml(m[1]) + `<span class="mar-comment">${escapeHtml(m[2])}</span>`;
   }
   if (/^\s*#/.test(line)) return `<span class="mar-meta">${esc()}</span>`;
-  if ((m = line.match(/^(\s*)(VAR)(\s+\w+\s*=\s*.*)$/))) {
+  if ((m = line.match(/^(\s*)(VAR)(\s+\w+(?:\s*:\s*(?:number|boolean|string))?\s*=\s*.*)$/))) {
     return escapeHtml(m[1]) + `<span class="mar-kw">${escapeHtml(m[2])}</span>` + escapeHtml(m[3]);
   }
   if (/^\s*===/.test(line)) return `<span class="mar-phase">${esc()}</span>`;
   if ((m = line.match(/^(\s*)([*+])(\s*)(.*)$/))) {
     return escapeHtml(m[1]) + `<span class="mar-kw">${escapeHtml(m[2])}</span>` +
       escapeHtml(m[3]) + highlightChoiceTail(m[4]);
+  }
+  if ((m = line.match(/^(\s*)(while|until|else)(\s*)(.*)$/))) {
+    return escapeHtml(m[1]) + `<span class="mar-kw">${escapeHtml(m[2])}</span>` +
+      escapeHtml(m[3]) + highlightChoiceTail(m[4]);
+  }
+  if ((m = line.match(/^(\s*)(timeout)(\s+\S+)(.*)$/))) {
+    return escapeHtml(m[1]) + `<span class="mar-kw">${escapeHtml(m[2])}</span>` +
+      escapeHtml(m[3]) + highlightChoiceTail(m[4]);
+  }
+  if ((m = line.match(/^(\s*)(\?)(\s+\w+)\s*$/))) {
+    return escapeHtml(m[1]) + `<span class="mar-kw">?</span>` + escapeHtml(m[3]);
   }
   if ((m = line.match(/^(\s*)(->\s*\w+)\s*$/))) {
     return escapeHtml(m[1]) + `<span class="mar-target">${escapeHtml(m[2])}</span>`;

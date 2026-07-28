@@ -24,12 +24,31 @@ function esc(text: string): string {
 
 function firstLine(text: string): string {
   const line = text.split('\n')[0] ?? '';
-  return line.length > 60 ? line.slice(0, 57) + '…' : line;
+  return line.length > 52 ? line.slice(0, 49) + '…' : line;
+}
+
+function wrapLabel(text: string, width = 30): string {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    if (line && line.length + word.length + 1 > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line += (line ? ' ' : '') + word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.map(esc).join('<br/>');
 }
 
 export function renderMermaid(trajectory: Trajectory, options: RenderOptions = {}): string {
   const { state } = options;
-  const lines: string[] = [`flowchart ${options.direction ?? 'TD'}`];
+  const lines: string[] = [
+    '%%{init: {"theme":"base","flowchart":{"curve":"basis","htmlLabels":true,"nodeSpacing":70,"rankSpacing":90},"themeVariables":{"background":"#f5f5f5","primaryColor":"#ffffff","primaryTextColor":"#303030","primaryBorderColor":"#5f5f5f","lineColor":"#5f5f5f","fontFamily":"ui-monospace, SFMono-Regular, Menlo, monospace"}}}%%',
+    `flowchart ${options.direction ?? 'TD'}`,
+  ];
   const humanEdges: number[] = [];
   const takenNodes = state ? new Set(visitedPath(state).filter((id) => id !== END)) : new Set<string>();
   const frontierTargets = state && state.status === 'active'
@@ -40,7 +59,7 @@ export function renderMermaid(trajectory: Trajectory, options: RenderOptions = {
 
   for (const node of trajectory.nodes) {
     const title = firstLine(node.body);
-    const label = title ? `<b>${esc(node.id)}</b><br/>${esc(title)}` : `<b>${esc(node.id)}</b>`;
+    const label = title ? `<b>${esc(node.id)}</b><br/>${wrapLabel(title, 28)}` : `<b>${esc(node.id)}</b>`;
     lines.push(`  ${node.id}["${label}"]`);
   }
 
@@ -51,7 +70,7 @@ export function renderMermaid(trajectory: Trajectory, options: RenderOptions = {
       if (choice.loop) parts.push('↻');
       parts.push(choice.label);
       if (choice.gate) parts.push(`{${choice.gate.source}}`);
-      const text = esc(parts.join(' '));
+      const text = wrapLabel(parts.join(' '));
       if (choice.target === END) usesEnd = true;
       const arrow = choice.loop ? `-. "${text}" .->` : `-- "${text}" -->`;
       lines.push(`  ${node.id} ${arrow} ${choice.target}`);
@@ -67,16 +86,17 @@ export function renderMermaid(trajectory: Trajectory, options: RenderOptions = {
 
   if (usesEnd) lines.push(`  ${END}(((${END})))`);
 
-  lines.push('  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;');
-  lines.push('  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;');
-  lines.push('  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;');
+  lines.push('  classDef default fill:#ffffff,color:#303030,stroke:#5f5f5f,stroke-width:1.5px;');
+  lines.push('  classDef taken fill:#dcebea,color:#303030,stroke:#176b63,stroke-width:2px;');
+  lines.push('  classDef current fill:#ffffff,color:#303030,stroke:#3f6f00,stroke-width:3px;');
+  lines.push('  classDef frontier stroke:#006a72,stroke-width:2px,stroke-dasharray:5 3;');
   if (takenNodes.size > 0) lines.push(`  class ${[...takenNodes].join(',')} taken;`);
   if (state && state.status === 'active') lines.push(`  class ${state.current} current;`);
   if (state && state.status === 'completed' && usesEnd) lines.push(`  class ${END} taken;`);
   const frontierOnly = [...frontierTargets].filter((id) => id !== END && !takenNodes.has(id) && id !== state?.current);
   if (frontierOnly.length > 0) lines.push(`  class ${frontierOnly.join(',')} frontier;`);
   for (const idx of humanEdges) {
-    lines.push(`  linkStyle ${idx} stroke:#c62828,stroke-width:3px;`);
+    lines.push(`  linkStyle ${idx} stroke:#7d3e80,stroke-width:2.5px;`);
   }
   return lines.join('\n') + '\n';
 }

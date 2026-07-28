@@ -19,6 +19,7 @@ Usage:
   marionette stop      <plan.mar|.json> --run <id> [--store dir]
   marionette state init    <plan.mar|.json> [--state f] [--force]
   marionette state show    <plan.mar|.json> [--state f]
+  marionette state observe <plan.mar|.json> <name> <json-value> --actor <name> --rationale <text> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
   marionette state rebind  <plan.mar|.json> [--actor <name>] [--rationale <text>] [--state f]

@@ -1,9 +1,9 @@
 // Example mini-playgrounds: each .mini[data-mini] is an editable plan
 // (left pane) compiled and walked live by the real compiler + walker
 // (tsc output under /lib) — same engine as the home-page playground,
-// minus the 3D canvas. Without JS the plan source is still fully visible.
+// minus the graph viewer. Without JS the plan source is still fully visible.
 import { compile } from '/lib/compile.js';
-import { initState, frontier, takeChoice, advance, WalkError } from '/lib/state.js';
+import { initState, frontier, takeChoice, advance, observe, WalkError } from '/lib/state.js';
 import { enhanceMarEditor } from '/highlight.js';
 
 function boot(el) {
@@ -74,10 +74,6 @@ function boot(el) {
     diagEl.innerHTML = `<ul>${items.join('')}</ul>`;
   }
 
-  function actor() {
-    return el.querySelector('.pg-actor input:checked').value;
-  }
-
   function step(fn) {
     refusal = null;
     try {
@@ -93,7 +89,11 @@ function boot(el) {
     if (!trajectory || !state) return;
     const node = trajectory.nodes.find((n) => n.id === state.current);
     const done = state.status === 'completed';
-    setStatus(done ? 'ok' : '', done ? '✓ completed' : `at ${state.current}`);
+    const awaiting = !done && (state.pendingObservations?.length ?? 0) > 0;
+    setStatus(
+      done ? 'ok' : awaiting ? 'warn' : '',
+      done ? '✓ completed' : awaiting ? '? observation required' : `at ${state.current}`,
+    );
 
     nodeEl.innerHTML = done
       ? `<strong>END</strong> — the plan is complete after ${state.log.length} step${state.log.length === 1 ? '' : 's'}.`
@@ -108,6 +108,43 @@ function boot(el) {
       choicesEl.append(p);
     }
     if (!done) {
+      for (const name of state.pendingObservations ?? []) {
+        const decl = trajectory.variables[name];
+        const row = document.createElement('div');
+        row.className = 'pg-rationale-row';
+        const field = document.createElement('label');
+        field.textContent = `${name}:${decl?.type ?? 'unknown'} `;
+        const input = decl?.type === 'boolean'
+          ? document.createElement('select')
+          : document.createElement('input');
+        if (input instanceof HTMLSelectElement) {
+          for (const value of ['true', 'false']) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            input.append(option);
+          }
+        } else {
+          input.type = decl?.type === 'number' ? 'number' : 'text';
+          input.step = 'any';
+        }
+        const submit = document.createElement('button');
+        submit.type = 'button';
+        submit.textContent = 'record observation';
+        submit.addEventListener('click', () => {
+          const raw = input.value;
+          const value = decl?.type === 'number' ? (raw.trim() === '' ? Number.NaN : Number(raw))
+            : decl?.type === 'boolean' ? raw === 'true'
+            : raw;
+          step(() => observe(trajectory, state, name, value, {
+            actor: 'agent',
+            rationale: rationaleEl.value || 'observed in the playground',
+          }));
+        });
+        field.append(input);
+        row.append(field, submit);
+        choicesEl.append(row);
+      }
       for (const [i, { choice, blocked }] of frontier(trajectory, state).entries()) {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -119,7 +156,7 @@ function boot(el) {
           btn.textContent += `  (unavailable: ${blocked})`;
         } else {
           btn.addEventListener('click', () => step(() =>
-            takeChoice(trajectory, state, String(i), { actor: actor(), rationale: rationaleEl.value || undefined })));
+            takeChoice(trajectory, state, String(i), { actor: 'agent', rationale: rationaleEl.value || undefined })));
         }
         choicesEl.append(btn);
       }
@@ -128,7 +165,7 @@ function boot(el) {
         btn.type = 'button';
         btn.textContent = `Continue automatically → ${node.next.target}`;
         btn.addEventListener('click', () => step(() =>
-          advance(trajectory, state, { actor: actor(), rationale: rationaleEl.value || undefined })));
+          advance(trajectory, state, { actor: 'agent', rationale: rationaleEl.value || undefined })));
         choicesEl.append(btn);
       }
     }

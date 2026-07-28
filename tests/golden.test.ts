@@ -38,7 +38,7 @@ test('render: mermaid marks human (✋), loops (↻, dashed), gates and END', as
   assert.match(mmd, /-\. ".*↻.*" \.->/);
   assert.match(mmd, /\{iteration &lt; 3\}/);
   assert.match(mmd, /END\(\(\(END\)\)\)/);
-  assert.match(mmd, /linkStyle \d+ stroke:#c62828/);
+  assert.match(mmd, /linkStyle \d+ stroke:#7d3e80/);
 });
 
 test('render: taken path, current node and frontier are highlighted from state', async () => {

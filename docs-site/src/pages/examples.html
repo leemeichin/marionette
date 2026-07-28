@@ -24,15 +24,15 @@ right.</p>
 <h2 id="issue-loop">Turn issues into pull requests</h2>
 
 <p>A compact agent workflow: pick an issue, update its status, implement
-it, open a pull request, and repeat. The counter makes this example finish
-after three issues; a real plan could use a human checkpoint or another
-explicit stopping rule instead.</p>
+it, open a pull request, and repeat. The number of ready issues is supplied
+at runtime: the plan drains that captured batch, then refreshes the queue
+once instead of paying for another lookup after every issue.</p>
 
 <div class="callout">
   <p class="callout-title">Read it from top to bottom</p>
-  <p><code>VAR</code> keeps progress. <code>~ prs_opened += 1</code>
-  updates it when work starts. The <code>+</code> route may repeat, and
-  <code>~loop~</code> confirms that the return is intentional.</p>
+  <p><code>VAR remaining: number = ?</code> asks for the initial count.
+  <code>while</code> drains it, and <code>? remaining</code> requests a
+  fresh count only after the current batch has been flushed.</p>
 </div>
 
 <mini-playground src="issue-loop.mar" title="issue-loop.mar"></mini-playground>
@@ -40,9 +40,8 @@ explicit stopping rule instead.</p>
 <h2 id="checkout">Add limits and human decisions</h2>
 
 <p>The checkout plan allows up to five evidence-driven attempts. A person
-decides whether to launch, rethink, or stop. Try taking “Cohort converts”
-while acting as the agent: Marionette refuses because that route is marked
-<code>@human</code>.</p>
+decides whether to launch, rethink, or stop. Select “Cohort converts” to
+see the runner refuse a route marked <code>@human</code>.</p>
 
 <mini-playground src="checkout.mar" title="checkout.mar"></mini-playground>
 
@@ -69,17 +68,17 @@ than the examples above:</p>
 or load it in the home-page playground. It exercises every language
 feature and the external tracker references.</p>
 
-<h2 id="use-cases">Where Marionette fits</h2>
+<h2 id="patterns">Patterns exercised by these examples</h2>
 
 <ul>
-  <li><strong>Agent-run projects with important decisions.</strong>
-    <code>@human</code> keeps approval with a named person.</li>
-  <li><strong>Migrations and launches.</strong> Write down rollback and
-    fallback routes before they are needed.</li>
-  <li><strong>Work with a retry limit.</strong> Try a bounded number of
-    times, then stop or ask someone.</li>
-  <li><strong>Projects that need a decision record.</strong> Every route
-    records who took it, when, and why.</li>
+  <li><strong>Human checkpoints:</strong> <code>@human</code> prevents an
+    autonomous transition while preserving the choice in the frontier.</li>
+  <li><strong>Rollback paths:</strong> migrations model fallback routes as
+    ordinary graph edges, so validation includes them.</li>
+  <li><strong>Bounded retries:</strong> counters and gates limit loops and
+    expose an explicit exit when the budget is exhausted.</li>
+  <li><strong>Decision logging:</strong> each successful transition records
+    its actor, timestamp and rationale.</li>
 </ul>
 
 <script type="module" src="/mini.js"></script>
