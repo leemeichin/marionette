@@ -279,7 +279,7 @@ export function parsePlan(source: string): ParsedPlan {
     }
 
     // First-class conditional loops. They lower to ordinary sticky choices
-    // with complementary gates, so both validators and runtimes share the
+    // with complementary gates, so validation and traversal share the
     // existing graph semantics.
     const conditional = line.match(/^(while|until)\b(.*)$/);
     if (conditional) {

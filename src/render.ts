@@ -43,7 +43,10 @@ function wrapLabel(text: string, width = 30): string {
   return lines.map(esc).join('<br/>');
 }
 
-export function renderMermaid(trajectory: Trajectory, options: RenderOptions = {}): string {
+export async function renderMermaid(
+  trajectory: Trajectory,
+  options: RenderOptions = {},
+): Promise<string> {
   const { state } = options;
   const lines: string[] = [
     '%%{init: {"theme":"base","flowchart":{"curve":"basis","htmlLabels":true,"nodeSpacing":70,"rankSpacing":90},"themeVariables":{"background":"#f5f5f5","primaryColor":"#ffffff","primaryTextColor":"#303030","primaryBorderColor":"#5f5f5f","lineColor":"#5f5f5f","fontFamily":"ui-monospace, SFMono-Regular, Menlo, monospace"}}}%%',
@@ -52,7 +55,7 @@ export function renderMermaid(trajectory: Trajectory, options: RenderOptions = {
   const humanEdges: number[] = [];
   const takenNodes = state ? new Set(visitedPath(state).filter((id) => id !== END)) : new Set<string>();
   const frontierTargets = state && state.status === 'active'
-    ? new Set(frontier(trajectory, state).filter((a) => !a.blocked).map((a) => a.choice.target))
+    ? new Set((await frontier(trajectory, state)).filter((a) => !a.blocked).map((a) => a.choice.target))
     : new Set<string>();
   let usesEnd = false;
   let edgeIndex = 0;

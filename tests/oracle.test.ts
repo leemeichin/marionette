@@ -1,17 +1,16 @@
 /**
- * Differential oracle: the Prolog rule base (spec/rules/marionette.pl) must
- * agree with the TypeScript validator on every plan in the repo — the
+ * Cutover confidence harness: the production Prolog graph engine must agree
+ * with the quarantined TypeScript shadow on every plan in the repo — the
  * dogfood corpus, examples, live plans, fixtures — and on a deterministic
  * batch of graph mutations of each (seeded defects: dropped exits, unmarked
  * loops, false gates, retargeted edges).
  *
- * The rules run on the bundled SWI-Prolog wasm engine (src/oracle.ts), so
+ * The rules run on the bundled SWI-Prolog wasm engine (src/rule-engine.ts), so
  * the suite is self-contained — no system Prolog required, anywhere.
  *
- * Exact-match codes are compared as (code, line) sets. MAR008 is compared
- * on presence only: the rules state the semantic form (every simple cycle
- * carries a ~loop~ edge) while the TS validator approximates it with DFS
- * back edges, so per-cycle reports legitimately differ.
+ * Production vectors compare exact structured (code, line) findings,
+ * including MAR008. The legacy shadow is compared on MAR008 presence only
+ * because it approximates simple cycles with DFS back edges.
  */
 
 import { strict as assert } from 'node:assert';
@@ -19,9 +18,10 @@ import { test } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parsePlan, type ParsedPlan } from '../src/parser.js';
-import { analyzePlan } from '../src/validate.js';
+import { analyzePlan } from './reference/validate.js';
 import { emitFacts } from '../src/facts.js';
 import { oracleReport } from '../src/oracle.js';
+import { ruleGraphFindings } from '../src/rule-engine.js';
 
 const ROOT = join(import.meta.dirname, '..');
 
@@ -140,8 +140,13 @@ test('graph spec vectors: both implementations reproduce the frozen expectations
       const plan = parsePlan(readFileSync(join(dir, c.plan), 'utf8'));
       const ts = tsVerdict(plan)!;
       const pl = await prologVerdict(plan);
-      assert.deepEqual(ts.exact, [...c.findings].sort(), 'TypeScript matches the spec vector');
-      assert.deepEqual(pl.exact, [...c.findings].sort(), 'rule base matches the spec vector');
+      const production = (await ruleGraphFindings(emitFacts(plan)))
+        .map((finding) => `${finding.code}:${finding.line}`)
+        .sort();
+      const shadowExpected = c.findings.filter((finding) => !finding.startsWith('MAR008:')).sort();
+      assert.deepEqual(ts.exact, shadowExpected, 'TypeScript shadow matches exact non-MAR008 findings');
+      assert.deepEqual(production, [...c.findings].sort(), 'production structured findings match the spec vector');
+      assert.deepEqual(pl.exact, shadowExpected, 'flat oracle matches exact non-MAR008 findings');
       assert.equal(ts.hasUndeclaredCycle, c.undeclaredCycle, 'TypeScript MAR008 presence');
       assert.equal(pl.hasUndeclaredCycle, c.undeclaredCycle, 'rule base MAR008 presence');
       assert.deepEqual(pl.strandLines, c.strands, 'rule base STRAND lines');

@@ -134,13 +134,17 @@ export interface BriefOptions {
   at?: string;
 }
 
-export function buildBrief(trajectory: Trajectory, state: PlanState, options: BriefOptions = {}): Brief {
+export async function buildBrief(
+  trajectory: Trajectory,
+  state: PlanState,
+  options: BriefOptions = {},
+): Promise<Brief> {
   const file = options.file ?? trajectory.source.file;
   const completed = state.status === 'completed';
   const node = completed ? undefined : trajectory.nodes.find((n) => n.id === state.current);
   const nodeById = (id: string) => trajectory.nodes.find((n) => n.id === id);
 
-  const options_ = completed ? [] : frontier(trajectory, state, { at: options.at });
+  const options_ = completed ? [] : await frontier(trajectory, state, { at: options.at });
   const choices: BriefChoice[] = options_.map((a: AvailableChoice, index: number) => ({
     index,
     id: a.choice.id,

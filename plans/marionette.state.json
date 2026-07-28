@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "hash": "sha256:9100394e74675da0b2f15ec84ba4a21cbfd75a4cf4cfd8173d06e6b7212f5c78",
   "status": "active",
   "current": "escalation_protocol",
@@ -69,5 +70,6 @@
   ],
   "pendingObservations": [],
   "pendingEntry": false,
+  "activationStartedAt": "2026-07-23T15:37:20.386Z",
   "observations": []
 }

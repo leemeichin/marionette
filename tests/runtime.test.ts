@@ -33,7 +33,7 @@ const request = (overrides: Record<string, unknown> = {}) => ({
 });
 
 test('runtime command engine is immutable and emits graph-bound lifecycle events', async () => {
-  const initial = createRuntimeSnapshot(trajectory, { runId: 'run-1', at: AT });
+  const initial = await createRuntimeSnapshot(trajectory, { runId: 'run-1', at: AT });
   const before = structuredClone(initial);
   const result = await executeRuntimeRequest(trajectory, initial, AGENT, request(), { at: AT });
 
@@ -46,7 +46,7 @@ test('runtime command engine is immutable and emits graph-bound lifecycle events
 });
 
 test('runtime binds human authority to the principal rather than request data', async () => {
-  const initial = createRuntimeSnapshot(trajectory, { runId: 'run-2', at: AT });
+  const initial = await createRuntimeSnapshot(trajectory, { runId: 'run-2', at: AT });
   await assert.rejects(
     () => executeRuntimeRequest(trajectory, initial, AGENT, request({
       id: 2,
@@ -68,7 +68,7 @@ test('runtime binds human authority to the principal rather than request data', 
 });
 
 test('runtime rejects stale writes and replays matching idempotent writes once', async () => {
-  const initial = createRuntimeSnapshot(trajectory, { runId: 'run-3', at: AT });
+  const initial = await createRuntimeSnapshot(trajectory, { runId: 'run-3', at: AT });
   const first = await executeRuntimeRequest(trajectory, initial, AGENT, request(), { at: AT });
   const replay = await executeRuntimeRequest(trajectory, first.snapshot, AGENT, request(), { at: AT });
   assert.equal(replay.replayed, true);
@@ -84,13 +84,13 @@ test('runtime rejects stale writes and replays matching idempotent writes once',
 });
 
 test('runtime projections progressively disclose context and enforce budgets', async () => {
-  const initial = createRuntimeSnapshot(trajectory, { runId: 'run-4', at: AT });
-  const signal = buildRuntimeProjection(trajectory, initial, { profile: 'signal' });
+  const initial = await createRuntimeSnapshot(trajectory, { runId: 'run-4', at: AT });
+  const signal = await buildRuntimeProjection(trajectory, initial, { profile: 'signal' });
   assert.equal(signal.node?.body, undefined);
   assert.equal(signal.variables, undefined);
   assert.deepEqual(signal.choices.map((choice) => choice.id), ['build#0', 'build#1']);
 
-  const work = buildRuntimeProjection(trajectory, initial, {
+  const work = await buildRuntimeProjection(trajectory, initial, {
     profile: 'work',
     budget: { maxItems: 1, maxBodyChars: 5 },
   });
@@ -99,13 +99,13 @@ test('runtime projections progressively disclose context and enforce budgets', a
   assert.equal(work.truncated, true);
   assert.deepEqual(work.omitted, ['choices:1', 'node.body:4']);
 
-  const debug = buildRuntimeProjection(trajectory, initial, { profile: 'debug' });
+  const debug = await buildRuntimeProjection(trajectory, initial, { profile: 'debug' });
   assert.deepEqual(debug.variables, { n: 1 });
   assert.ok(debug.progress);
 });
 
 test('runtime can attach a graph-linked record without advancing the walker', async () => {
-  const initial = createRuntimeSnapshot(trajectory, { runId: 'run-5', at: AT });
+  const initial = await createRuntimeSnapshot(trajectory, { runId: 'run-5', at: AT });
   const result = await executeRuntimeRequest(trajectory, initial, AGENT, {
     protocol: RUNTIME_PROTOCOL_VERSION,
     id: 5,
@@ -129,10 +129,10 @@ VAR remaining: number = ?
 while {remaining > 0} -> work
 else -> END
 `)).trajectory!;
-  const initial = createRuntimeSnapshot(dynamic, { runId: 'run-observe', at: AT });
+  const initial = await createRuntimeSnapshot(dynamic, { runId: 'run-observe', at: AT });
   assert.deepEqual(initial.events.map((item) => item.kind),
     ['run.started', 'node.entered', 'observation.required']);
-  assert.equal(buildRuntimeProjection(dynamic, initial).status, 'awaiting-observation');
+  assert.equal((await buildRuntimeProjection(dynamic, initial)).status, 'awaiting-observation');
 
   const result = await executeRuntimeRequest(dynamic, initial, AGENT, {
     protocol: RUNTIME_PROTOCOL_VERSION,
@@ -157,7 +157,7 @@ test('runtime projections and writes use the same timeout evaluation time', asyn
 + [Retry] ~loop~ -> experiment
 timeout 1h [Budget spent] -> END
 `)).trajectory!;
-  const initial = createRuntimeSnapshot(timed, { runId: 'run-timeout', at: AT });
+  const initial = await createRuntimeSnapshot(timed, { runId: 'run-timeout', at: AT });
 
   const before = await executeRuntimeRequest(timed, initial, AGENT, {
     protocol: RUNTIME_PROTOCOL_VERSION,
@@ -165,7 +165,7 @@ timeout 1h [Budget spent] -> END
     op: 'next',
     profile: 'debug',
   }, { at: '2026-07-23T20:30:00.000Z' });
-  const beforeProjection = before.result.projection as ReturnType<typeof buildRuntimeProjection>;
+  const beforeProjection = before.result.projection as Awaited<ReturnType<typeof buildRuntimeProjection>>;
   assert.equal(beforeProjection.choices[0].blocked, undefined);
   assert.equal(beforeProjection.choices[1].blocked?.code, 'timeout-pending');
 
@@ -175,7 +175,7 @@ timeout 1h [Budget spent] -> END
     op: 'next',
     profile: 'debug',
   }, { at: '2026-07-23T21:30:00.000Z' });
-  const afterProjection = after.result.projection as ReturnType<typeof buildRuntimeProjection>;
+  const afterProjection = after.result.projection as Awaited<ReturnType<typeof buildRuntimeProjection>>;
   assert.equal(afterProjection.choices[0].blocked?.code, 'timed-out');
   assert.equal(afterProjection.choices[1].blocked, undefined);
 

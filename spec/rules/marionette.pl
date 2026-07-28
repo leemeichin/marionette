@@ -2,14 +2,12 @@
 /*  Marionette graph semantics — NORMATIVE (ADR-0003).
  *
  *  A compiled plan is a database of facts; this file is the specification
- *  of Marionette's graph-layer diagnostics, stated as rules over that
- *  database. Each MAR code is a clause that reads as a claim about the
- *  graph. An implementation conforms iff it reproduces finding/2 — code
- *  and line — on the vectors in spec/conformance/graph/ and stays
- *  divergence-free under the differential harness (tests/oracle.test.ts,
- *  which holds src/validate.ts to this file on every push). Wording,
- *  suggestions and exit codes are implementation presentation, out of
- *  scope here.
+ *  and production engine for Marionette's graph diagnostics and walker.
+ *  Each MAR code reads as a claim about the graph; walker relations are
+ *  pure transformations of explicit state. An implementation conforms iff
+ *  it reproduces the structured findings and state transitions frozen in
+ *  spec/conformance/. Wording, suggestions, audit persistence and exit
+ *  codes are TypeScript presentation/driver concerns, out of scope here.
  *
  *  ── How to read this file (assuming basic Prolog) ──────────────────────
  *
@@ -140,8 +138,9 @@ eval_with_initials(E, V) :-
 
 /* ═════════════════════ 2 · Gate analysis ═══════════════════════════════
  *
- * Mirrors src/gates.ts. The compiler only ever claims a verdict when it is
- * provable; everything else is `unknown` and surfaces as MAR014.
+ * The compiler only ever claims a verdict when it is provable; everything
+ * else is `unknown` and surfaces as MAR014. The former TypeScript mirror is
+ * quarantined at tests/reference/gates.ts for cutover differential tests.
  *
  * A Scope is either `all` (every mutation in the plan) or nodes(Ms)
  * (mutations inside one cycle's phases). Loop-exit verdicts use the cycle
@@ -315,8 +314,7 @@ finding('MAR023', Line) :-
 /* ── Loop exits (MAR009 / MAR010 / loop-exit MAR014) ────────────────────
  *
  * One analysis per cycle, reported at its first (source-order) ~loop~
- * choice — matching the reference implementation's iteration order via
- * the emitted ordinals. A cycle's exits are the edges leaving its member
+ * choice via the emitted ordinals. A cycle's exits are the edges leaving its member
  * set; their gates are judged with monotonicity scoped to the cycle.
  */
 
@@ -428,6 +426,19 @@ grow_cycle(Cur, Origin, Seen, [Cur|Ns], [E|Es]) :-
 
 has_undeclared_cycle :- undeclared_cycle(_), !.
 
+%% undeclared_cycle_detail(-ClosedPath, -Line): production diagnostic form.
+%% The path repeats its origin at the end and is located on the closing edge.
+undeclared_cycle_detail(ClosedPath, Line) :-
+    undeclared_cycle(Nodes),
+    Nodes = [Origin|_],
+    last(Nodes, Last),
+    setof(L, cycle_edge_line(Last, Origin, L), [Line|_]),
+    append(Nodes, [Origin], ClosedPath).
+
+cycle_edge_line(F, T, Line) :-
+    eff_choice_edge(C, F, T), choice(C, _, _, Line, _).
+cycle_edge_line(F, T, Line) :- next_step(F, T, Line).
+
 /* ── STRAND: once-only choices on a cycle ───────────────────────────────
  *
  * Issue #8 item 2: an exhausted "*" exit anywhere inside a cycle can
@@ -440,6 +451,75 @@ stranding(C, Line) :-
     choice(C, N, T, Line, _),
     \+ sticky(C), \+ false_gate(C),
     \+ end_id(T), on_same_cycle(N, T).
+
+/* ── Structured production findings ─────────────────────────────────────
+ *
+ * finding/2 remains the compact conformance/query surface. graph_finding/4
+ * carries the semantic identity needed by the TypeScript presentation layer
+ * without making it infer a verdict from source objects.
+ */
+
+graph_finding('MAR006', error, Line, dead_end(N)) :-
+    node(N, Line, _), \+ eff_edge(N, _).
+graph_finding('MAR007', error, Line, unreachable(N, S)) :-
+    plan_start(S), node(N, Line, _), N \== S, \+ can_reach(S, N).
+graph_finding('MAR008', error, Line, undeclared_cycle(Path)) :-
+    undeclared_cycle_detail(Path, Line).
+graph_finding(Code, error, Line, loop_exit(N)) :-
+    primary_trigger(C, N), choice(C, _, _, Line, _),
+    loop_verdict(N, Code),
+    memberchk(Code, ['MAR009', 'MAR010']).
+graph_finding('MAR011', warning, Line, false_gate(C, Reason)) :-
+    choice(C, _, _, Line, _), false_gate(C), false_gate_reason(C, Reason).
+graph_finding('MAR013', warning, Line, loop_not_cycle(C)) :-
+    loop_marked(C), \+ false_gate(C),
+    choice(C, N, T, Line, _), \+ closes_cycle(N, T).
+graph_finding('MAR014', warning, Line, unverified_gate(C, loop_exit)) :-
+    loop_unverified_exit(C, Line).
+graph_finding('MAR014', warning, Line, unverified_gate(C, choice)) :-
+    choice(C, N, T, Line, _), gate(C, E, _),
+    gate_status(E, all, unknown),
+    \+ bounded_loop_gate(C, N, T, E),
+    \+ loop_unverified_exit(C, _).
+graph_finding('MAR017', warning, Line, loop_once(C)) :-
+    loop_marked(C), \+ false_gate(C), \+ sticky(C),
+    choice(C, _, _, Line, _).
+graph_finding('MAR023', warning, Line, timebox_without_alternative(N)) :-
+    timebox(N, _), node(N, Line, _),
+    findall(x, choice(_, N, _, _, _), Cs), length(Cs, Choices),
+    ( next_step(N, _, _) -> NextSteps = 1 ; NextSteps = 0 ),
+    Exits is Choices + NextSteps,
+    Exits < 2.
+
+false_gate_reason(C, constant_false) :-
+    gate(C, E, _), \+ has_vars(E), const_eval(E, bool(false)), !.
+false_gate_reason(C, initials_false) :-
+    gate(C, E, _),
+    forall(expr_var(E, V), (variable(V, _, I, _), I \== late_bound, \+ mutated(V))),
+    eval_with_initials(E, bool(false)), !.
+false_gate_reason(_, unsatisfiable).
+
+graph_findings_json(Json) :-
+    findall(Dict, graph_finding_dict(Dict), Dicts0),
+    sort(Dicts0, Dicts),
+    atom_json_dict(Atom, _{findings:Dicts}, []),
+    atom_string(Atom, Json).
+
+graph_finding_dict(_{code:Code, severity:Severity, line:Line,
+                     variant:Variant, data:Data}) :-
+    graph_finding(Code, Severity, Line, Shape),
+    graph_shape_dict(Shape, Variant, Data).
+
+graph_shape_dict(dead_end(N), null, _{id:N}).
+graph_shape_dict(unreachable(N, S), null, _{id:N, start:S}).
+graph_shape_dict(undeclared_cycle(Path), null, _{path:Path}).
+graph_shape_dict(loop_exit(N), null, _{id:N}).
+graph_shape_dict(false_gate(C, Reason), null, _{choiceId:C, reasonKey:Reason}).
+graph_shape_dict(loop_not_cycle(C), null, _{choiceId:C}).
+graph_shape_dict(unverified_gate(C, loop_exit), "loop-exit", _{choiceId:C}).
+graph_shape_dict(unverified_gate(C, choice), null, _{choiceId:C}).
+graph_shape_dict(loop_once(C), null, _{choiceId:C}).
+graph_shape_dict(timebox_without_alternative(N), null, _{id:N}).
 
 /* ═════════════════════ 5 · Query library ═══════════════════════════════
  *
@@ -514,163 +594,215 @@ report :-
 
 /* ═════════════════════ 7 · Walker semantics ════════════════════════════
  *
- * Traversal, stated as rules over the plan facts plus a small mutable
- * walk state. This is the same contract src/state.ts implements and
- * spec/conformance/cases/ exercises — the conformance suite runs BOTH
- * walkers (issue #21, phase C). Timestamps, log persistence and file
- * formats are the driver's concern; the rules own what may happen and
- * what it changes.
+ * Traversal is a pure relation over explicit semantic state:
  *
- * Walk state (dynamic):
- *   w_current(Node)    the phase the traversal is at ('END' when done)
- *   w_status(S)        active | completed
- *   w_var(Name, V)     live variables (typed values: num/bool/str)
- *   w_taken(ChoiceId)  once-only choices already consumed
- *   w_pending(Name)    late-bound/refreshed values awaiting input
- *   w_elapsed(Seconds) logical time in the current node activation
+ *   state(Status, Current, Vars, Taken, Pending, PendingEntry, ActivatedAtMs)
  *
- * Driver API:
- *   init_walk                       fresh state; enters the start phase
- *   do_choose(Ref, Actor, HasRationale, Result)
- *   do_advance(Result)
- *   Result = moved(To) | refused(Code)   — a refusal changes nothing.
- *   do_observe(Name, Value, HasRationale, Result) supply one typed value
- *   walk_var(Name, Type, Plain)     read variables back, untyped
+ * Plan facts remain the immutable environment. Timestamps, audit logs and
+ * persistence stay in the TypeScript driver; the rules decide availability,
+ * refusal precedence and the complete semantic state transition.
  */
 
-:- dynamic w_current/1, w_status/1, w_var/2, w_taken/1,
-           w_pending/1, w_pending_entry/0, w_elapsed/1.
-
-init_walk :-
-    retractall(w_current(_)), retractall(w_status(_)),
-    retractall(w_var(_, _)), retractall(w_taken(_)),
-    retractall(w_pending(_)), retractall(w_pending_entry),
-    retractall(w_elapsed(_)), assertz(w_elapsed(0)),
-    assertz(w_status(active)),
-    forall(variable(Name, _, Init, _),
-           ( Init == late_bound -> assertz(w_pending(Name)) ; assertz(w_var(Name, Init)) )),
-    plan_start(S),
-    ( w_pending(_)
-    -> assertz(w_pending_entry),
-       retractall(w_current(_)), assertz(w_current(S))
-    ;  enter_node(S)
+initial_state(Now, State) :-
+    findall(Name-Init,
+            (variable(Name, _, Init, _), Init \== late_bound),
+            Vars),
+    findall(Name, variable(Name, _, late_bound, _), Pending),
+    plan_start(Start),
+    Base = state(active, Start, Vars, [], Pending, false, Now),
+    ( Pending == []
+    -> enter_state(Start, Now, Base, State)
+    ;  set_pending_entry(Base, true, State)
     ).
 
-% Entering a phase: END completes the walk; anything else becomes current
-% and applies its mutations in source order (later mutations see earlier
-% ones, so `~ n += 1` twice adds two).
-enter_node(T) :-
-    end_id(T), !,
-    retractall(w_current(_)), assertz(w_current(T)),
-    retractall(w_status(_)), assertz(w_status(completed)).
-enter_node(T) :-
-    ( w_current(T) -> Same = true ; Same = false ),
-    retractall(w_current(_)), assertz(w_current(T)),
-    ( Same == true -> true ; retractall(w_elapsed(_)), assertz(w_elapsed(0)) ),
-    apply_entry(T).
+set_pending_entry(
+    state(Status, Current, Vars, Taken, Pending, _, Activated),
+    Flag,
+    state(Status, Current, Vars, Taken, Pending, Flag, Activated)
+).
 
-apply_entry(T) :-
-    forall(action(T, Var, Op, Expr, _), apply_action(Var, Op, Expr)),
-    forall(observation(T, Var, _), arm_observation(Var)).
+%% available/3 and blocked/5 are the evaluated frontier.
+available(State, Now, C) :-
+    State = state(active, N, _, _, _, _, _),
+    choice(C, N, _, _, _),
+    \+ blocked(State, Now, C, _, _).
 
-arm_observation(Var) :-
-    retractall(w_var(Var, _)),
-    ( w_pending(Var) -> true ; assertz(w_pending(Var)) ).
-
-apply_action(Var, Op, Expr) :-
-    walk_env(Env),
-    once(eval(Expr, Env, V)),
-    (  Op == assign -> New = V
-    ;  w_var(Var, num(Cur)), V = num(D),
-       ( Op == inc -> N is Cur + D ; N is Cur - D ), New = num(N)
-    ),
-    retract(w_var(Var, _)), assertz(w_var(Var, New)).
-
-walk_env(Env) :- findall(N-V, w_var(N, V), Env).
-
-%% available(?C) / walk_blocked(+C, -Code): the live frontier at w_current.
-%% Once-only exhaustion is checked before the gate, as in the reference.
-available(C) :- w_current(N), choice(C, N, _, _, _), \+ walk_blocked(C, _).
-walk_blocked(_, 'observation-required') :- w_pending(_), !.
-walk_blocked(C, 'once-exhausted') :- \+ sticky(C), w_taken(C), !.
-walk_blocked(C, 'timeout-pending') :-
-    timeout_choice(C, Seconds, _), w_elapsed(Elapsed), Elapsed < Seconds, !.
-walk_blocked(C, 'timed-out') :-
+blocked(state(active, _, _, _, Pending, _, _), _, _,
+        'observation-required', observation_required(Pending)) :-
+    Pending \== [], !.
+blocked(state(active, _, _, Taken, _, _, _), _, C,
+        'once-exhausted', once_exhausted) :-
+    \+ sticky(C), memberchk(C, Taken), !.
+blocked(state(active, _, _, _, _, _, Activated), Now, C,
+        'timeout-pending', timeout_pending(Source, RemainingMs)) :-
+    timeout_choice(C, Seconds, Source),
+    elapsed_ms(Now, Activated, Elapsed),
+    Limit is Seconds * 1000,
+    Elapsed < Limit,
+    RemainingMs is Limit - Elapsed, !.
+blocked(state(active, N, _, _, _, _, Activated), Now, C,
+        'timed-out', timed_out(Source)) :-
     \+ timeout_choice(C, _, _),
-    w_current(N), choice(T, N, _, _, _),
-    timeout_choice(T, Seconds, _), w_elapsed(Elapsed), Elapsed >= Seconds, !.
-walk_blocked(C, 'gate-blocked') :-
-    gate(C, E, _), walk_env(Env), \+ once(eval(E, Env, bool(true))).
+    choice(C, N, _, _, _),
+    choice(T, N, _, _, _), timeout_choice(T, Seconds, Source),
+    elapsed_ms(Now, Activated, Elapsed),
+    Elapsed >= Seconds * 1000, !.
+blocked(state(active, _, Vars, _, _, _, _), _, C,
+        'gate-blocked', Detail) :-
+    gate(C, E, Source),
+    gate_runtime(E, Vars, Verdict),
+    Verdict \== open,
+    gate_detail(Source, Verdict, Detail).
 
-%% do_choose(+Ref, +Actor, +HasRationale, -Result)
-%% Refusal order matches the reference walker: completed → resolution →
-%% availability → @human actor → rationale. A refusal changes nothing.
-do_choose(_, _, _, refused(completed)) :- w_status(completed), !.
-do_choose(Ref, Actor, HasRationale, Result) :-
-    w_current(N),
-    (  resolve_choice(N, Ref, C)
-    -> (  walk_blocked(C, Code)          -> Result = refused(Code)
-       ;  human(C), agent_actor(Actor)   -> Result = refused('human-checkpoint')
-       ;  HasRationale == false          -> Result = refused('rationale-required')
-       ;  take_choice(C, Result)
-       )
-    ;  resolve_error(N, Ref, Code), Result = refused(Code)
+elapsed_ms(Now, Activated, Elapsed) :-
+    ( number(Activated), Activated >= 0 -> Elapsed is max(0, Now - Activated)
+    ; Elapsed = 0
     ).
+
+gate_runtime(E, Vars, open) :- once(eval(E, Vars, bool(true))), !.
+gate_runtime(E, Vars, closed(V)) :- once(eval(E, Vars, V)), !.
+gate_runtime(_, _, error).
+
+gate_detail(Source, closed(V), gate_false(Source, Text)) :-
+    value_text(V, Text).
+gate_detail(Source, error, gate_error(Source)).
+
+value_text(num(N), Text) :- number_string(N, Text).
+value_text(bool(B), Text) :- atom_string(B, Text).
+value_text(str(S), S).
+
+%% refusal/5 fixes refusal precedence and returns presentation-neutral detail.
+refusal(_, state(completed, _, _, _, _, _, _), _, completed, completed) :- !.
+refusal(choose(Ref, _, _), State, _, Code, Detail) :-
+    State = state(active, N, _, _, _, _, _),
+    \+ resolve_choice(N, Ref, _),
+    resolve_error(N, Ref, Code, Detail), !.
+refusal(choose(Ref, _, _), State, Now, Code, Detail) :-
+    State = state(active, N, _, _, _, _, _),
+    resolve_choice(N, Ref, C),
+    blocked(State, Now, C, Code, Blocked),
+    Detail = choice_blocked(C, Blocked), !.
+refusal(choose(Ref, Actor, _), state(active, N, _, _, _, _, _), _,
+        'human-checkpoint', human_checkpoint(C)) :-
+    resolve_choice(N, Ref, C), human(C), agent_actor(Actor), !.
+refusal(choose(Ref, _, false), state(active, N, _, _, _, _, _), _,
+        'rationale-required', rationale_required(C)) :-
+    resolve_choice(N, Ref, C), !.
+refusal(advance, state(active, _, _, _, Pending, _, _), _,
+        'observation-required', observation_required(Pending)) :-
+    Pending \== [], !.
+refusal(advance, state(active, N, _, _, _, _, Activated), Now,
+        'timed-out', timed_out(Source)) :-
+    choice(T, N, _, _, _), timeout_choice(T, Seconds, Source),
+    elapsed_ms(Now, Activated, Elapsed), Elapsed >= Seconds * 1000, !.
+refusal(advance, state(active, N, _, _, _, _, _), _,
+        'no-next-step', no_next_step(N)) :-
+    \+ next_step(N, _, _), !.
+refusal(observe(Name, _, _), state(active, _, _, _, Pending, _, _), _,
+        'unknown-observation', unknown_observation(Name)) :-
+    \+ memberchk(Name, Pending), !.
+refusal(observe(_, _, false), state(active, _, _, _, _, _, _), _,
+        'rationale-required', observation_rationale_required) :- !.
+refusal(observe(Name, Value, true), state(active, _, _, _, _, _, _), _,
+        'observation-type', observation_type(Name, Expected, Actual)) :-
+    variable(Name, Expected, _, _),
+    \+ observation_type(Name, Value),
+    value_type(Value, Actual), !.
+
+%% apply/5 is atomic: a refusal returns the input state unchanged.
+apply(Op, State, Now, State, refused(Code, Detail)) :-
+    refusal(Op, State, Now, Code, Detail), !.
+apply(choose(Ref, _, true), StateIn, Now, StateOut, moved(C, From, To)) :-
+    StateIn = state(active, From, _, _, _, _, _),
+    resolve_choice(From, Ref, C),
+    consume_choice(C, StateIn, Consumed),
+    choice(C, From, To, _, _),
+    enter_state(To, Now, Consumed, StateOut).
+apply(advance, StateIn, Now, StateOut, moved(none, From, To)) :-
+    StateIn = state(active, From, _, _, _, _, _),
+    next_step(From, To, _),
+    enter_state(To, Now, StateIn, StateOut).
+apply(observe(Name, Value, true), StateIn, _, StateOut, observed(Name)) :-
+    StateIn = state(active, Current, Vars, Taken, Pending, PendingEntry, Activated),
+    set_env(Name, Value, Vars, Vars1),
+    select(Name, Pending, Pending1),
+    Base = state(active, Current, Vars1, Taken, Pending1, PendingEntry, Activated),
+    ( PendingEntry == true, Pending1 == []
+    -> apply_entry(Current, Base, Entered),
+       set_pending_entry(Entered, false, StateOut)
+    ;  StateOut = Base
+    ).
+
+consume_choice(C,
+    state(Status, Current, Vars, Taken, Pending, PendingEntry, Activated),
+    state(Status, Current, Vars, Taken1, Pending, PendingEntry, Activated)) :-
+    ( sticky(C) -> Taken1 = Taken ; append(Taken, [C], Taken1) ).
+
+enter_state(To, _, state(_, _, Vars, Taken, Pending, PendingEntry, _),
+            state(completed, To, Vars, Taken, Pending, PendingEntry, -1)) :-
+    end_id(To), !.
+enter_state(To, Now,
+            state(_, Current, Vars, Taken, Pending, PendingEntry, Activated),
+            StateOut) :-
+    ( To == Current -> Activated1 = Activated ; Activated1 = Now ),
+    Base = state(active, To, Vars, Taken, Pending, PendingEntry, Activated1),
+    ( PendingEntry == true -> StateOut = Base ; apply_entry(To, Base, StateOut) ).
+
+apply_entry(Node,
+            state(Status, Current, Vars, Taken, Pending, PendingEntry, Activated),
+            state(Status, Current, Vars2, Taken, Pending2, PendingEntry, Activated)) :-
+    findall(action(Var, Op, Expr), action(Node, Var, Op, Expr, _), Actions),
+    apply_actions(Actions, Vars, Vars1),
+    findall(Var, observation(Node, Var, _), Observations),
+    arm_observations(Observations, Vars1, Pending, Vars2, Pending2).
+
+apply_actions([], Vars, Vars).
+apply_actions([action(Var, Op, Expr)|Rest], Vars0, Vars) :-
+    once(eval(Expr, Vars0, Value)),
+    action_value(Var, Op, Value, Vars0, New),
+    set_env(Var, New, Vars0, Vars1),
+    apply_actions(Rest, Vars1, Vars).
+
+action_value(_, assign, Value, _, Value).
+action_value(Var, inc, num(D), Vars, num(N)) :-
+    memberchk(Var-num(Current), Vars), N is Current + D.
+action_value(Var, dec, num(D), Vars, num(N)) :-
+    memberchk(Var-num(Current), Vars), N is Current - D.
+
+arm_observations([], Vars, Pending, Vars, Pending).
+arm_observations([Name|Rest], Vars0, Pending0, Vars, Pending) :-
+    remove_env(Name, Vars0, Vars1),
+    ( memberchk(Name, Pending0) -> Pending1 = Pending0
+    ; append(Pending0, [Name], Pending1)
+    ),
+    arm_observations(Rest, Vars1, Pending1, Vars, Pending).
+
+set_env(Name, Value, Vars0, [Name-Value|Rest]) :- remove_env(Name, Vars0, Rest).
+remove_env(_, [], []).
+remove_env(Name, [Name-_|Rest], Rest) :- !.
+remove_env(Name, [Pair|Rest0], [Pair|Rest]) :- remove_env(Name, Rest0, Rest).
 
 agent_actor(Actor) :- ( Actor == "" ; Actor == "agent" ), !.
-
-take_choice(C, moved(To)) :-
-    ( sticky(C) -> true ; assertz(w_taken(C)) ),
-    choice(C, _, To, _, _),
-    enter_node(To).
-
-%% do_advance(-Result): follow the automatic next step. No rationale is
-%% required (the reference defaults it), matching src/state.ts advance.
-do_advance(refused(completed)) :- w_status(completed), !.
-do_advance(Result) :-
-    w_current(N),
-    (  w_pending(_) -> Result = refused('observation-required')
-    ;  choice(T, N, _, _, _), timeout_choice(T, Seconds, _),
-       w_elapsed(Elapsed), Elapsed >= Seconds -> Result = refused('timed-out')
-    ;  next_step(N, To, _) -> enter_node(To), Result = moved(To)
-    ;  Result = refused('no-next-step')
-    ).
-
-%% Supply an observation as a typed Prolog value (num/bool/str).
-do_observe(_, _, _, refused(completed)) :- w_status(completed), !.
-do_observe(Name, _, _, refused('unknown-observation')) :- \+ w_pending(Name), !.
-do_observe(_, _, false, refused('rationale-required')) :- !.
-do_observe(Name, Value, true, Result) :-
-    ( observation_type(Name, Value)
-    -> retractall(w_var(Name, _)), assertz(w_var(Name, Value)),
-       retractall(w_pending(Name)),
-       ( w_pending_entry, \+ w_pending(_)
-       -> retractall(w_pending_entry), w_current(N), apply_entry(N)
-       ;  true
-       ),
-       Result = observed
-    ;  Result = refused('observation-type')
-    ).
 
 observation_type(Name, num(_))  :- variable(Name, number, _, _).
 observation_type(Name, bool(_)) :- variable(Name, boolean, _, _).
 observation_type(Name, str(_))  :- variable(Name, string, _, _).
 
-set_walk_elapsed(Seconds) :-
-    number(Seconds), Seconds >= 0,
-    retractall(w_elapsed(_)), assertz(w_elapsed(Seconds)).
+value_type(num(_), number).
+value_type(bool(_), boolean).
+value_type(str(_), string).
+value_type(invalid(Type), Type).
 
-/* Choice resolution — id, then numeric index, then unambiguous
- * case-insensitive label prefix; the same order as the reference. */
+/* Choice resolution — id, numeric index, then an unambiguous
+ * case-insensitive label prefix. */
 
 resolve_choice(N, Ref, C) :- choice(C, N, _, _, _), atom_string(C, Ref), !.
 resolve_choice(N, Ref, C) :-
-    number_string(I, Ref), integer(I), I >= 0, !,
+    catch(number_string(I, Ref), _, fail), integer(I), I >= 0, !,
     nth_choice(N, I, C).
 resolve_choice(N, Ref, C) :-
     findall(X, label_prefix_match(N, Ref, X), [C]).
 
-% The node's choices in source order, picked by position.
 nth_choice(N, I, C) :-
     findall(Ord-X, choice(X, N, _, _, Ord), Pairs0),
     msort(Pairs0, Pairs),
@@ -681,30 +813,161 @@ label_prefix_match(N, Ref, C) :-
     string_lower(Ref, RefLow), string_lower(L, LLow),
     string_concat(RefLow, _, LLow).
 
-%% resolve_error(+N, +Ref, -Code): why resolution failed.
-resolve_error(N, Ref, 'ambiguous-choice') :-
+resolve_error(N, Ref, 'ambiguous-choice', ambiguous_choice(Ref, N)) :-
     findall(X, label_prefix_match(N, Ref, X), Ms), length(Ms, K), K > 1, !.
-resolve_error(_, _, 'unknown-choice').
+resolve_error(N, Ref, 'unknown-choice', bad_index(N, I, Count)) :-
+    catch(number_string(I, Ref), _, fail), integer(I), I >= 0,
+    findall(C, choice(C, N, _, _, _), Cs), length(Cs, Count), !.
+resolve_error(N, Ref, 'unknown-choice', unknown_choice(Ref, N)).
 
-/* Driver plumbing: flat results (atoms, not compounds) for the wasm
- * bridge, and typed variable read-back. */
+/* JSON bridge. The JavaScript adapter supplies bound JSON strings, never
+ * source-interpolated values. */
 
-walk_var(Name, number,  X) :- w_var(Name, num(X)).
-walk_var(Name, boolean, X) :- w_var(Name, bool(X)).
-walk_var(Name, string,  X) :- w_var(Name, str(X)).
+walk_init_json(NowInput, Json) :-
+    input_number(NowInput, Now),
+    initial_state(Now, State),
+    state_dict(State, Dict),
+    result_json(_{ok:true, state:Dict, effect:_{kind:"initialized"}}, Json).
 
-%% drive_choose/drive_advance: Outcome is `ok` or the refusal code.
-drive_choose(Ref, Actor, HasRationale, Outcome) :-
-    do_choose(Ref, Actor, HasRationale, R),
-    ( R = refused(Code) -> Outcome = Code ; Outcome = ok ).
-drive_advance(Outcome) :-
-    do_advance(R),
-    ( R = refused(Code) -> Outcome = Code ; Outcome = ok ).
-drive_observe(Name, Type, Plain, HasRationale, Outcome) :-
-    plain_value(Type, Plain, Value),
-    do_observe(Name, Value, HasRationale, R),
-    ( R = refused(Code) -> Outcome = Code ; Outcome = ok ).
+walk_frontier_json(StateJson, NowInput, Json) :-
+    input_number(NowInput, Now),
+    json_state(StateJson, State),
+    findall(Ord-Item, frontier_item(State, Now, Ord, Item), Pairs),
+    keysort(Pairs, Sorted), pair_values(Sorted, Items),
+    result_json(_{frontier:Items}, Json).
 
-plain_value(number, X, num(X)).
-plain_value(boolean, X, bool(X)).
-plain_value(string, X, str(X)).
+frontier_item(State, Now, Ord, Item) :-
+    State = state(active, N, _, _, _, _, _),
+    choice(C, N, _, _, Ord),
+    ( blocked(State, Now, C, Code, Detail)
+    -> detail_dict(Detail, DetailDict),
+       Item = _{choiceId:C, blockedCode:Code, detail:DetailDict}
+    ;  Item = _{choiceId:C, blockedCode:null, detail:_{}}
+    ).
+
+walk_apply_json(StateJson, OperationJson, NowInput, Json) :-
+    input_number(NowInput, Now),
+    json_state(StateJson, StateIn),
+    json_operation(OperationJson, Operation),
+    apply(Operation, StateIn, Now, StateOut, Outcome),
+    state_dict(StateOut, StateDict),
+    outcome_dict(Outcome, OutcomeDict),
+    Result = OutcomeDict.put(state, StateDict),
+    result_json(Result, Json).
+
+json_state(Json, State) :-
+    json_input(Json, Dict),
+    get_dict(status, Dict, StatusString), atom_string(Status, StatusString),
+    get_dict(current, Dict, CurrentString), atom_string(Current, CurrentString),
+    get_dict(variables, Dict, PlainVars), variables_from_dict(PlainVars, Vars),
+    get_dict(taken, Dict, TakenStrings), atoms_strings(Taken, TakenStrings),
+    get_dict(pendingObservations, Dict, PendingStrings), atoms_strings(Pending, PendingStrings),
+    get_dict(pendingEntry, Dict, PendingEntry),
+    get_dict(activationStartedAtMs, Dict, Activated),
+    State = state(Status, Current, Vars, Taken, Pending, PendingEntry, Activated).
+
+state_dict(state(Status, Current, Vars, Taken, Pending, PendingEntry, Activated),
+           _{status:StatusString, current:CurrentString, variables:PlainVars,
+             taken:TakenStrings, pendingObservations:PendingStrings,
+             pendingEntry:PendingEntry, activationStartedAtMs:Activated}) :-
+    atom_string(Status, StatusString),
+    atom_string(Current, CurrentString),
+    variables_dict(Vars, PlainVars),
+    atoms_strings(Taken, TakenStrings),
+    atoms_strings(Pending, PendingStrings).
+
+variables_from_dict(Dict, Vars) :-
+    dict_pairs(Dict, _, Pairs),
+    findall(Name-Value,
+            (member(Name-Plain, Pairs), variable(Name, Type, _, _),
+             plain_typed(Type, Plain, Value)),
+            Vars).
+
+variables_dict(Vars, Dict) :-
+    findall(Name-Plain,
+            (member(Name-Value, Vars), typed_plain(Value, Plain)),
+            Pairs),
+    dict_pairs(Dict, _, Pairs).
+
+plain_typed(number, Plain, num(Plain)).
+plain_typed(boolean, Plain, bool(Plain)).
+plain_typed(string, Plain, str(Plain)).
+
+typed_plain(num(Value), Value).
+typed_plain(bool(Value), Value).
+typed_plain(str(Value), Value).
+
+atoms_strings([], []).
+atoms_strings([Atom|Atoms], [String|Strings]) :-
+    atom_string(Atom, String), atoms_strings(Atoms, Strings).
+
+json_operation(Json, Operation) :-
+    json_input(Json, Dict),
+    get_dict(kind, Dict, Kind),
+    operation_dict(Kind, Dict, Operation).
+
+operation_dict("choose", Dict, choose(Ref, Actor, HasRationale)) :-
+    get_dict(ref, Dict, Ref),
+    get_dict(actor, Dict, Actor),
+    get_dict(hasRationale, Dict, HasRationale).
+operation_dict("advance", _, advance).
+operation_dict("observe", Dict, observe(Name, Value, HasRationale)) :-
+    get_dict(name, Dict, NameString), atom_string(Name, NameString),
+    get_dict(valueType, Dict, TypeString), atom_string(Type, TypeString),
+    get_dict(value, Dict, Plain),
+    operation_value(Type, Plain, Value),
+    get_dict(hasRationale, Dict, HasRationale).
+
+operation_value(number, Plain, num(Plain)) :- number(Plain), !.
+operation_value(boolean, Plain, bool(Plain)) :- memberchk(Plain, [true, false]), !.
+operation_value(string, Plain, str(Plain)) :- string(Plain), !.
+operation_value(Type, _, invalid(Type)).
+
+outcome_dict(refused(Code, Detail),
+             _{ok:false, code:Code, detail:DetailDict}) :-
+    detail_dict(Detail, DetailDict).
+outcome_dict(moved(C, From, To),
+             _{ok:true, effect:_{kind:"moved", choiceId:Choice,
+                                 from:From, to:To}}) :-
+    ( C == none -> Choice = null ; Choice = C ).
+outcome_dict(observed(Name),
+             _{ok:true, effect:_{kind:"observed", name:Name}}).
+
+detail_dict(completed, _{kind:"completed"}).
+detail_dict(choice_blocked(C, Detail), Dict) :-
+    detail_dict(Detail, Base),
+    Dict = Base.put(choiceId, C).
+detail_dict(observation_required(Names), _{kind:"observation-required", names:Strings}) :-
+    atoms_strings(Names, Strings).
+detail_dict(once_exhausted, _{kind:"once-exhausted"}).
+detail_dict(timeout_pending(Source, Remaining), _{kind:"timeout-pending", source:Source, remainingMs:Remaining}).
+detail_dict(timed_out(Source), _{kind:"timed-out", source:Source}).
+detail_dict(gate_false(Source, Value), _{kind:"gate-false", source:Source, value:Value}).
+detail_dict(gate_error(Source), _{kind:"gate-error", source:Source}).
+detail_dict(human_checkpoint(C), _{kind:"human-checkpoint", choiceId:C}).
+detail_dict(rationale_required(C), _{kind:"rationale-required", choiceId:C}).
+detail_dict(no_next_step(N), _{kind:"no-next-step", nodeId:N}).
+detail_dict(unknown_observation(Name), _{kind:"unknown-observation", name:Name}).
+detail_dict(observation_rationale_required, _{kind:"observation-rationale-required"}).
+detail_dict(observation_type(Name, Expected, Actual),
+            _{kind:"observation-type", name:Name, expected:Expected, actual:Actual}).
+detail_dict(ambiguous_choice(Ref, N), _{kind:"ambiguous-choice", ref:Ref, nodeId:N}).
+detail_dict(bad_index(N, I, Count), _{kind:"bad-index", nodeId:N, index:I, count:Count}).
+detail_dict(unknown_choice(Ref, N), _{kind:"unknown-choice", ref:Ref, nodeId:N}).
+
+json_input(Json, Dict) :-
+    atom_string(Atom, Json),
+    atom_json_dict(Atom, Dict, []).
+
+% swipl-wasm's direct numeric bindings are 32-bit. Millisecond epochs travel
+% as decimal strings so dates after 1970 are not truncated at the JS boundary.
+input_number(Number, Number) :- number(Number), !.
+input_number(Atom, Number) :- atom(Atom), atom_number(Atom, Number), !.
+input_number(String, Number) :- number_string(Number, String).
+
+result_json(Dict, Json) :-
+    atom_json_dict(Atom, Dict, []),
+    atom_string(Atom, Json).
+
+pair_values([], []).
+pair_values([_-Value|Rest], [Value|Values]) :- pair_values(Rest, Values).

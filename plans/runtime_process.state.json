@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "hash": "sha256:038e9db48db1f04cf45d3f5bb1a7f6a56de9a1d1712d0b187e5e0e6acd0385e4",
   "status": "completed",
   "current": "END",
@@ -11,6 +12,10 @@
     "cli_and_docs#0",
     "verification#0"
   ],
+  "pendingObservations": [],
+  "pendingEntry": false,
+  "activationStartedAt": null,
+  "observations": [],
   "log": [
     {
       "at": "2026-07-23T18:43:08.705Z",

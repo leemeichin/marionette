@@ -75,13 +75,13 @@ const event = (
   data,
 });
 
-function statusEvent(
+async function statusEvent(
   trajectory: Trajectory,
   snapshot: RuntimeSnapshot,
   at: string,
   offset: number,
-): RuntimeEvent | null {
-  const brief = buildBrief(trajectory, snapshot.state, { at });
+): Promise<RuntimeEvent | null> {
+  const brief = await buildBrief(trajectory, snapshot.state, { at });
   const nodeId = brief.node?.id;
   if (brief.status === 'completed') {
     return event(snapshot, trajectory, 'run.completed', at, {}, { nodeId, offset });
@@ -108,12 +108,12 @@ function statusEvent(
   return null;
 }
 
-export function createRuntimeSnapshot(
+export async function createRuntimeSnapshot(
   trajectory: Trajectory,
   options: { runId: string; at?: string; principal?: RuntimePrincipal },
-): RuntimeSnapshot {
+): Promise<RuntimeSnapshot> {
   const at = options.at ?? new Date().toISOString();
-  const state = initState(trajectory, options.principal?.id ?? 'system', at);
+  const state = await initState(trajectory, options.principal?.id ?? 'system', at);
   const snapshot: RuntimeSnapshot = {
     runId: options.runId,
     revision: 0,
@@ -134,19 +134,19 @@ export function createRuntimeSnapshot(
     snapshot.events.push(event(snapshot, trajectory, 'node.entered', at, {
       from: null,
     }, { principal: options.principal, nodeId: state.current, offset: 0 }));
-    const terminal = statusEvent(trajectory, snapshot, at, 0);
+    const terminal = await statusEvent(trajectory, snapshot, at, 0);
     if (terminal) snapshot.events.push(terminal);
   }
   return snapshot;
 }
 
-export function buildRuntimeProjection(
+export async function buildRuntimeProjection(
   trajectory: Trajectory,
   snapshot: RuntimeSnapshot,
   options: { profile?: ProjectionProfile; budget?: RuntimeBudget; at?: string } = {},
-): RuntimeProjection {
+): Promise<RuntimeProjection> {
   const profile = options.profile ?? 'work';
-  const brief = buildBrief(trajectory, snapshot.state, { at: options.at });
+  const brief = await buildBrief(trajectory, snapshot.state, { at: options.at });
   const omitted: string[] = [];
   let truncated = false;
   const maxItems = options.budget?.maxItems ?? 8;
@@ -282,7 +282,7 @@ export async function executeRuntimeRequest(
       events: [],
       replayed: false,
       result: {
-        projection: buildRuntimeProjection(trajectory, input, {
+        projection: await buildRuntimeProjection(trajectory, input, {
           ...request,
           at: options.at,
         }),
@@ -316,7 +316,7 @@ export async function executeRuntimeRequest(
         replayed: true,
         revision: prior.revision,
         eventSeqs: prior.eventSeqs,
-        projection: buildRuntimeProjection(trajectory, input,
+        projection: await buildRuntimeProjection(trajectory, input,
           request.op === 'record'
             ? { at: options.at }
             : { ...request, at: options.at }),
@@ -339,7 +339,7 @@ export async function executeRuntimeRequest(
           request.id,
         );
       }
-      takeChoice(trajectory, snapshot.state, choice.id, {
+      snapshot.state = await takeChoice(trajectory, snapshot.state, choice.id, {
         actor: bindWalkActor(principal),
         rationale: request.rationale,
         at,
@@ -357,7 +357,7 @@ export async function executeRuntimeRequest(
       const from = snapshot.state.current;
       const node = trajectory.nodes.find((candidate) => candidate.id === from);
       const to = node?.next?.target;
-      advance(trajectory, snapshot.state, {
+      snapshot.state = await advance(trajectory, snapshot.state, {
         actor: bindWalkActor(principal),
         rationale: request.rationale,
         at,
@@ -372,7 +372,7 @@ export async function executeRuntimeRequest(
         commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: from }));
     } else if (request.op === 'observe') {
-      observe(trajectory, snapshot.state, request.name, request.value, {
+      snapshot.state = await observe(trajectory, snapshot.state, request.name, request.value, {
         actor: bindWalkActor(principal),
         rationale: request.rationale,
         at,
@@ -417,7 +417,7 @@ export async function executeRuntimeRequest(
         offset: emitted.length,
       }));
     }
-    const terminal = statusEvent(trajectory, snapshot, at, emitted.length);
+    const terminal = await statusEvent(trajectory, snapshot, at, emitted.length);
     if (terminal) emitted.push(terminal);
   }
 
@@ -441,7 +441,7 @@ export async function executeRuntimeRequest(
     result: {
       revision: snapshot.revision,
       eventSeqs: emitted.map((item) => item.seq),
-      projection: buildRuntimeProjection(trajectory, snapshot,
+      projection: await buildRuntimeProjection(trajectory, snapshot,
         request.op === 'record' ? { at } : { ...request, at }),
     },
   };

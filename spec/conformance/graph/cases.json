@@ -4,7 +4,7 @@
   { "case": "mar007-unreachable", "plan": "mar007-unreachable.mar",
     "findings": ["MAR007:5"], "undeclaredCycle": false, "strands": [] },
   { "case": "mar008-undeclared-cycle", "plan": "mar008-undeclared-cycle.mar",
-    "findings": [], "undeclaredCycle": true, "strands": [] },
+    "findings": ["MAR008:3"], "undeclaredCycle": true, "strands": [] },
   { "case": "mar009-loop-without-exit", "plan": "mar009-loop-without-exit.mar",
     "findings": ["MAR009:3"], "undeclaredCycle": false, "strands": [] },
   { "case": "mar010-loop-exit-unsatisfiable", "plan": "mar010-loop-exit-unsatisfiable.mar",

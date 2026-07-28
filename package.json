@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "bench:engine": "node --import tsx bench/engine.ts",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "prepare": "npm run build"

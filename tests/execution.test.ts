@@ -101,8 +101,8 @@ test('delivery: node tags override plan tags; {phase} expands; unknown values wa
 
 test('brief: active packet carries node, refs, delivery, evaluated frontier and protocol', async () => {
   const { trajectory } = await compile(PLAN, { file: 'plan.mar' });
-  const state = initState(trajectory!, 'system', AT);
-  const brief = buildBrief(trajectory!, state, { file: 'plan.mar' });
+  const state = await initState(trajectory!, 'system', AT);
+  const brief = await buildBrief(trajectory!, state, { file: 'plan.mar' });
 
   assert.equal(brief.status, 'active');
   assert.equal(brief.node!.id, 'a');
@@ -124,10 +124,10 @@ test('brief: active packet carries node, refs, delivery, evaluated frontier and 
 
 test('brief: awaiting-human when every available choice is @human, with escalation', async () => {
   const { trajectory } = await compile(PLAN, { file: 'plan.mar' });
-  const state = initState(trajectory!, 'system', AT);
-  takeChoice(trajectory!, state, 'Again', { actor: 'agent', rationale: 'iterate', at: AT });
-  takeChoice(trajectory!, state, 'Done', { actor: 'agent', rationale: 'n reached 2', at: AT });
-  const brief = buildBrief(trajectory!, state, { file: 'plan.mar' });
+  let state = await initState(trajectory!, 'system', AT);
+  state = await takeChoice(trajectory!, state, 'Again', { actor: 'agent', rationale: 'iterate', at: AT });
+  state = await takeChoice(trajectory!, state, 'Done', { actor: 'agent', rationale: 'n reached 2', at: AT });
+  const brief = await buildBrief(trajectory!, state, { file: 'plan.mar' });
 
   assert.equal(brief.status, 'awaiting-human');
   assert.ok(brief.escalation);
@@ -144,17 +144,17 @@ Alpha.
 ~ go = false
 * {go} [Proceed] -> END
 `);
-  const state = initState(trajectory!, 'system', AT);
-  const brief = buildBrief(trajectory!, state);
+  const state = await initState(trajectory!, 'system', AT);
+  const brief = await buildBrief(trajectory!, state);
   assert.equal(brief.status, 'stranded');
   assert.match(renderBrief(brief), /stuck/);
 });
 
 test('brief: completed packet has null node and empty frontier', async () => {
   const { trajectory } = await compile('=== a ===\nAlpha.\n* [Ship] -> END\n');
-  const state = initState(trajectory!, 'system', AT);
-  takeChoice(trajectory!, state, '0', { actor: 'agent', rationale: 'shipped', at: AT });
-  const brief = buildBrief(trajectory!, state);
+  let state = await initState(trajectory!, 'system', AT);
+  state = await takeChoice(trajectory!, state, '0', { actor: 'agent', rationale: 'shipped', at: AT });
+  const brief = await buildBrief(trajectory!, state);
   assert.equal(brief.status, 'completed');
   assert.equal(brief.node, null);
   assert.equal(brief.frontier.length, 0);
@@ -163,8 +163,8 @@ test('brief: completed packet has null node and empty frontier', async () => {
 
 test('rebind: migrates state across a plan edit, keeping the log', async () => {
   const v1 = (await compile('VAR n = 0\n=== a ===\nAlpha.\n~ n += 1\n* [Go] -> b\n=== b ===\nBeta.\n* [Ship] -> END\n')).trajectory!;
-  const state = initState(v1, 'system', AT);
-  takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
+  let state = await initState(v1, 'system', AT);
+  state = await takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
 
   const v2 = (await compile(
     'VAR added = true\n=== a ===\nAlpha.\n-> b\n=== b ===\nBeta, reworded.\n* [Ship] -> END\n* [Hold] @human -> END\n',
@@ -191,8 +191,8 @@ test('rebind: migrates state across a plan edit, keeping the log', async () => {
 
 test('rebind: refuses when the current phase no longer exists', async () => {
   const v1 = (await compile('=== a ===\nAlpha.\n* [Go] -> b\n=== b ===\nBeta.\n* [Ship] -> END\n')).trajectory!;
-  const state = initState(v1, 'system', AT);
-  takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
+  let state = await initState(v1, 'system', AT);
+  state = await takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
 
   const v2 = (await compile('=== a ===\nAlpha.\n* [Ship] -> END\n')).trajectory!;
   assert.throws(
@@ -204,13 +204,17 @@ test('rebind: refuses when the current phase no longer exists', async () => {
 test('brief: plan.intent carries # summary: and accumulated # prompt: lines', async () => {
   const { trajectory } = await compile(
     '# summary: Ship the importer.\n# prompt: build the importer\n# prompt: retry twice, then fall back\n=== a ===\nAlpha.\n* [Ship] -> END\n');
-  const state = initState(trajectory!);
-  const brief = buildBrief(trajectory!, state, { file: 'plan.mar' });
+  const state = await initState(trajectory!);
+  const brief = await buildBrief(trajectory!, state, { file: 'plan.mar' });
   assert.equal(brief.plan.intent.summary, 'Ship the importer.');
   assert.equal(brief.plan.intent.prompt, 'build the importer\nretry twice, then fall back');
   assert.match(renderBrief(brief), /intent: Ship the importer\./);
   const bare = await compile('=== a ===\nAlpha.\n* [Ship] -> END\n');
-  const bareBrief = buildBrief(bare.trajectory!, initState(bare.trajectory!), { file: 'plan.mar' });
+  const bareBrief = await buildBrief(
+    bare.trajectory!,
+    await initState(bare.trajectory!),
+    { file: 'plan.mar' },
+  );
   assert.equal(bareBrief.plan.intent.summary, null);
   assert.equal(bareBrief.plan.intent.prompt, null);
 });
@@ -224,8 +228,8 @@ Try CRDT sync.
 * [Adopt] -> END
 * [Abandon] -> END
 `)).trajectory!;
-  const state = initState(t, 'system', AT);
-  const brief = buildBrief(t, state, { file: 'spike.mar' });
+  const state = await initState(t, 'system', AT);
+  const brief = await buildBrief(t, state, { file: 'spike.mar' });
   assert.deepEqual(brief.node!.timebox, { source: '3d', seconds: 259200 });
   assert.equal(brief.node!.priority, 'high');
   assert.equal(brief.node!.enteredAt, AT, 'enteredAt comes from the log entry that reached the phase');

@@ -97,10 +97,10 @@ test('manifest: unlinked phases become ensure-issue ops with write-back commands
 
 test('manifest: decision log past the cursor becomes comment ops; completion closes linked issues', async () => {
   const t = await compiled(BOUND);
-  const state = initState(t);
-  takeChoice(t, state, '0', { actor: 'agent', rationale: 'fixed #12' });
-  takeChoice(t, state, '1', { actor: 'agent', rationale: 'shipped #14, queue empty' });
-  takeChoice(t, state, '0', { actor: 'agent', rationale: 'retro written' });
+  let state = await initState(t);
+  state = await takeChoice(t, state, '0', { actor: 'agent', rationale: 'fixed #12' });
+  state = await takeChoice(t, state, '1', { actor: 'agent', rationale: 'shipped #14, queue empty' });
+  state = await takeChoice(t, state, '0', { actor: 'agent', rationale: 'retro written' });
   assert.equal(state.status, 'completed');
 
   const manifest = buildSyncManifest(t, state, { file: 'plan.mar' });

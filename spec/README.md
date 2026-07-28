@@ -78,12 +78,14 @@ shape is stable:
 
 ```jsonc
 {
+  "version": 2,             // hard format version; older states are rejected
   "hash": "sha256:…",       // trajectory hash this state is bound to
   "status": "active",       // or "completed" once END is reached
   "current": "build_mvp",
   "variables": { "iteration": 2 },
   "pendingObservations": [],
   "pendingEntry": false,
+  "activationStartedAt": "2026-07-28T10:00:00.000Z", // null after END
   "taken": ["build_mvp#1"], // exhausted once-only choices
   "observations": [
     { "at": "…", "actor": "…", "name": "remaining", "value": 7, "rationale": "queue query returned 7" }
@@ -94,5 +96,8 @@ shape is stable:
 }
 ```
 
+Direct self-loops preserve `activationStartedAt`, so timeout budgets survive
+restarts and cannot be reset by retrying the same phase. Walker transitions
+are asynchronous and immutable; successful operations return the next state.
 Open question OQ5 (embed the log here vs. append-only sidecar) is still open;
-v0 embeds it.
+v2 embeds it.

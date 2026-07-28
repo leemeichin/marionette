@@ -172,9 +172,9 @@ $ marionette oracle plan.mar          # the rule-base report: MAR findings, plus
 STRAND	line 25	once-only choice on a cycle can strand a traversal
 ```
 
-The TypeScript validator and the rule base are held to each other in CI on
-every plan in this repo plus seeded-defect mutations of each — a validator
-bug now has to be made twice, in two paradigms, to slip through.
+The rule base is the production graph validator and walker. Its structured
+results are checked against frozen conformance vectors; the former TypeScript
+implementations remain test-only for a 30-day differential confidence window.
 
 Humans normally don't hand-write the DSL: the bundled **authoring skill**
 turns natural-language notes into a validated `.mar` draft, and `render` +
@@ -237,7 +237,7 @@ sessions, 36/36 first-pass clean on the compile metric).
 Phase 2 (ingestion & execution) is underway: the `brief` work packet
 (`spec/brief.schema.json`) is the executor's ingestion surface; external
 refs (`github:`/`jira`/`linear`/`ref`) and delivery config (`delivery:`/
-`report:`) ride on plan metadata; the reference walker enforces gates,
+`report:`) ride on plan metadata; the Prolog-backed walker enforces gates,
 `@human` escalation and rationale logging with machine-readable refusal
 codes; `state rebind` migrates live state across plan edits; and a
 runtime-agnostic conformance suite (`spec/conformance/`) holds any future
