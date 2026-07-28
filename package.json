@@ -9,7 +9,7 @@
   ],
   "pi": {
     "extensions": [
-      "./extensions/marionette.mjs"
+      "./src/pi-extension.ts"
     ],
     "skills": [
       "./skills"
@@ -23,7 +23,7 @@
   "files": [
     "bin",
     "dist",
-    "extensions",
+    "src",
     "spec",
     "skills"
   ],
@@ -31,7 +31,7 @@
     "build": "tsc -p tsconfig.json",
     "bench:engine": "node --import tsx bench/engine.ts",
     "check": "tsc --noEmit -p tsconfig.json",
-    "check:pi": "tsc --noEmit -p tsconfig.json && node --check extensions/marionette.mjs",
+    "check:pi": "tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "prepare": "npm run build"
   },
