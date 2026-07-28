@@ -4,10 +4,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable, Writable } from 'node:stream';
-import { compile } from '../src/compile.js';
-import { RuntimeService, serveRuntimeLines } from '../src/runtime-process.js';
-import { initializeRuntimeStore, loadRuntimeStore } from '../src/runtime-store.js';
-import { RUNTIME_PROTOCOL_VERSION, type RuntimePrincipal } from '../src/runtime-protocol.js';
+import { compile } from '../src/compile.ts';
+import { RuntimeService, serveRuntimeLines } from '../src/runtime-process.ts';
+import { initializeRuntimeStore, loadRuntimeStore } from '../src/runtime-store.ts';
+import { RUNTIME_PROTOCOL_VERSION, type RuntimePrincipal } from '../src/runtime-protocol.ts';
 
 const AT = '2026-07-23T22:00:00.000Z';
 const AGENT: RuntimePrincipal = { id: 'agent-stdio', role: 'agent' };

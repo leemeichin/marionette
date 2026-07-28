@@ -15,8 +15,8 @@
  * diagnostics can be reproduced.
  */
 
-import type { Expr, TrajectoryNode, Value, VariableDecl } from './types.js';
-import { resolvePriority, resolveTimebox } from './refs.js';
+import type { Expr, TrajectoryNode, Value, VariableDecl } from './types.ts';
+import { resolvePriority, resolveTimebox } from './refs.ts';
 
 /** Quote a string as a Prolog atom: 'it''s' style quoting is avoided in favour of backslash escapes. */
 function atom(s: string): string {

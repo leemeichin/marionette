@@ -13,8 +13,8 @@ import type {
   RuntimeEvent,
   RuntimePrincipal,
   RuntimeProjection,
-} from './runtime-protocol.js';
-import type { Ref, Value } from './types.js';
+} from './runtime-protocol.ts';
+import type { Ref, Value } from './types.ts';
 
 export const MARIONETTE_PI_INTEGRATION_VERSION = '1.0.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';

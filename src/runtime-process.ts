@@ -1,13 +1,13 @@
 import { createInterface } from 'node:readline';
-import type { Trajectory } from './types.js';
+import type { Trajectory } from './types.ts';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, parseRuntimeRequest,
   type RuntimeEvent, type RuntimeFailure, type RuntimePrincipal,
   type RuntimeResponse, type RuntimeSuccess,
-} from './runtime-protocol.js';
-import type { RuntimeSnapshot } from './runtime.js';
-import { RuntimeRunController } from './runtime-host.js';
-import { RuntimeStoreError } from './runtime-store.js';
+} from './runtime-protocol.ts';
+import type { RuntimeSnapshot } from './runtime.ts';
+import { RuntimeRunController } from './runtime-host.ts';
+import { RuntimeStoreError } from './runtime-store.ts';
 
 export const MAX_REQUEST_BYTES = 64 * 1024;
 

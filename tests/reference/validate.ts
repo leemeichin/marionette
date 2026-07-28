@@ -5,13 +5,13 @@
  * must not import this file; graph semantics execute in Prolog.
  */
 
-import type { Action, Choice, Diagnostic, Finding, TrajectoryNode, VariableDecl } from '../../src/types.js';
-import { CODES, END } from '../../src/types.js';
-import { tryConstEval, typeOf, varsIn } from '../../src/expr.js';
-import { analyzeGate, eventuallyFalse, type GateContext } from './gates.js';
-import { resolveTimebox } from '../../src/refs.js';
-import { renderFinding } from '../../src/diagnostics.js';
-import type { ParsedPlan } from '../../src/parser.js';
+import type { Action, Choice, Diagnostic, Finding, TrajectoryNode, VariableDecl } from '../../src/types.ts';
+import { CODES, END } from '../../src/types.ts';
+import { tryConstEval, typeOf, varsIn } from '../../src/expr.ts';
+import { analyzeGate, eventuallyFalse, type GateContext } from './gates.ts';
+import { resolveTimebox } from '../../src/refs.ts';
+import { renderFinding } from '../../src/diagnostics.ts';
+import type { ParsedPlan } from '../../src/parser.ts';
 
 interface Edge {
   from: string;

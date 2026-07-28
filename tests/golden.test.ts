@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { compile } from '../src/compile.js';
-import { renderMermaid } from '../src/render.js';
-import { summarize } from '../src/summarize.js';
-import { initState, takeChoice } from '../src/state.js';
+import { compile } from '../src/compile.ts';
+import { renderMermaid } from '../src/render.ts';
+import { summarize } from '../src/summarize.ts';
+import { initState, takeChoice } from '../src/state.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixture = (name: string) => readFileSync(join(here, 'fixtures', name), 'utf8');

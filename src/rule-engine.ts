@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { Value } from './types.js';
+import type { Value } from './types.ts';
 
 export interface RuleGraphFinding {
   code: string;

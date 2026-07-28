@@ -5,10 +5,10 @@
  * must not import this file; walker semantics execute in Prolog.
  */
 
-import type { Choice, LogEntry, PlanState, Trajectory, TrajectoryNode, Value } from '../../src/types.js';
-import { END, PLAN_STATE_VERSION } from '../../src/types.js';
-import { ExprError, evalExpr } from '../../src/expr.js';
-import { blockedText, refusalText } from '../../src/diagnostics.js';
+import type { Choice, LogEntry, PlanState, Trajectory, TrajectoryNode, Value } from '../../src/types.ts';
+import { END, PLAN_STATE_VERSION } from '../../src/types.ts';
+import { ExprError, evalExpr } from '../../src/expr.ts';
+import { blockedText, refusalText } from '../../src/diagnostics.ts';
 
 export class DriftError extends Error {
   constructor(public readonly stateHash: string, public readonly planHash: string) {

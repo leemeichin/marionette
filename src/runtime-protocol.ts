@@ -1,6 +1,6 @@
-import type { Ref, Value } from './types.js';
-import type { Brief, BriefStatus } from './brief.js';
-import type { WalkErrorCode } from './state.js';
+import type { Ref, Value } from './types.ts';
+import type { Brief, BriefStatus } from './brief.ts';
+import type { WalkErrorCode } from './state.ts';
 
 export const RUNTIME_PROTOCOL_VERSION = '0.3.0';
 

@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile } from '../src/compile.js';
-import { initState, takeChoice } from '../src/state.js';
+import { compile } from '../src/compile.ts';
+import { initState, takeChoice } from '../src/state.ts';
 import {
   bindTrackerInSource, buildSyncManifest, linkNodeInSource, resolveTracker,
   SyncEditError, syncFileFor,
-} from '../src/sync.js';
-import { CODES } from '../src/types.js';
+} from '../src/sync.ts';
+import { CODES } from '../src/types.ts';
 
 const BOUND = `
 # project: sprint

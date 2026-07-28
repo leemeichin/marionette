@@ -9,16 +9,16 @@
  * (spec/brief.schema.json); the text form is for humans watching along.
  */
 
-import type { Trajectory, TrajectoryNode, Ref, Value } from './types.js';
-import { END } from './types.js';
-import { enteredAt, frontier, visitedPath, type AvailableChoice } from './state.js';
-import type { PlanState } from './types.js';
+import type { Trajectory, TrajectoryNode, Ref, Value } from './types.ts';
+import { END } from './types.ts';
+import { enteredAt, frontier, visitedPath, type AvailableChoice } from './state.ts';
+import type { PlanState } from './types.ts';
 import {
   resolveDelivery, resolvePriority, resolveTimebox,
   type DeliveryConfig, type Priority, type Timebox,
-} from './refs.js';
-import type { Style } from './term.js';
-import { styleFor } from './term.js';
+} from './refs.ts';
+import type { Style } from './term.ts';
+import { styleFor } from './term.ts';
 
 export type BriefStatus =
   /** The executor can act: at least one autonomous step is available. */

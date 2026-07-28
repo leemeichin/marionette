@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile, trajectoryHash } from '../src/compile.js';
+import { compile, trajectoryHash } from '../src/compile.ts';
 import {
   DriftError, WalkError, advance, bindState, frontier, initState, observe, takeChoice,
   parseState,
-} from '../src/state.js';
+} from '../src/state.ts';
 
 const SOURCE = `
 VAR iteration = 0

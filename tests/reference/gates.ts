@@ -11,8 +11,8 @@
  * Everything else is 'unknown' → surfaced as an "unverified gate" warning.
  */
 
-import type { Action, BinOp, Expr, Gate, Value, VariableDecl } from '../../src/types.js';
-import { evalExpr, tryConstEval, varsIn } from '../../src/expr.js';
+import type { Action, BinOp, Expr, Gate, Value, VariableDecl } from '../../src/types.ts';
+import { evalExpr, tryConstEval, varsIn } from '../../src/expr.ts';
 
 export type GateStatus = 'satisfiable' | 'unsatisfiable' | 'unknown';
 

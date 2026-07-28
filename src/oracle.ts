@@ -8,7 +8,7 @@ import {
   type RuleBindings,
   type RuleOracleFinding,
   type RuleOracleReport,
-} from './rule-engine.js';
+} from './rule-engine.ts';
 
 export type OracleFinding = RuleOracleFinding;
 export type OracleReport = RuleOracleReport;

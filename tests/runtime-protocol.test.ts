@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference, parseRuntimeRequest,
-} from '../src/runtime-protocol.js';
+} from '../src/runtime-protocol.ts';
 
 test('runtime protocol parses compact projection requests', async () => {
   assert.deepEqual(parseRuntimeRequest({

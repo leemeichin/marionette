@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile } from '../src/compile.js';
-import { initState, takeChoice, frontier } from '../src/state.js';
-import { ImportError, parseImportSpec, scaffoldPlan } from '../src/scaffold.js';
-import { resolveTracker } from '../src/sync.js';
+import { compile } from '../src/compile.ts';
+import { initState, takeChoice, frontier } from '../src/state.ts';
+import { ImportError, parseImportSpec, scaffoldPlan } from '../src/scaffold.ts';
+import { resolveTracker } from '../src/sync.ts';
 
 const SPEC = {
   tracker: 'github' as const,
