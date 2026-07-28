@@ -17,7 +17,27 @@ every step you take is recorded with a rationale. Protocol reference:
 https://github.com/leemeichin/marionette/blob/main/docs/EXECUTION.md
 (in the marionette repo itself: `docs/EXECUTION.md`).
 
-## Locating the CLI
+## Choose the bound runtime before the CLI
+
+If `marionette_walk` is available and a run is bound, it is the authoritative
+walker for this session. Use it for `next`, `choose`, `advance`, `observe`,
+`record`, and runtime event reads. **Do not** run `marionette brief` or
+`marionette state ...` against that plan: those commands use a separate
+`<plan>.state.json` store and would fork the traversal.
+
+In a bound session, translate the loop below as follows:
+
+- re-brief → `marionette_walk` with `operation: "next"`
+- state choose/advance/observe → the matching `marionette_walk` operation
+- attach an audit record → `marionette_walk` with `operation: "record"`
+- inspect history → `marionette_walk` with `operation: "events"` and its cursor
+- human checkpoint → `/marionette-decide`; never proxy it through the tool
+
+The `work` projection is the full work packet. If a caller deliberately
+requests a smaller budget and receives `truncated: true`, call `next` again
+with a sufficient `budget`; do not infer omitted prose or choices.
+
+## Locating the CLI when no runtime is bound
 
 Same resolution as the authoring skill: `marionette` on PATH, else
 `node bin/marionette.js` / `npx tsx src/cli.ts` inside a checkout, else
@@ -51,11 +71,11 @@ Repeat until the brief says otherwise:
      Then **stop and wait**. Never
      take an `@human` choice on your own judgement. The human answers
      through either channel:
-     - **Out of band:** they run `state choose` themselves with their own
-       `--actor`.
-     - **In band (preferred — the conversation is the escalation
-       channel):** they state their decision in the session, and you record
-       it *as their proxy*: `marionette state choose <plan> <choice>
+     - **Out of band (unbound CLI traversal only):** they run `state choose`
+       themselves with their own `--actor`.
+     - **In band (unbound CLI traversal only):** they state their decision in
+       the conversation and you record it *as their proxy*:
+       `marionette state choose <plan> <choice>
        --actor <their-name> --rationale "<their words, quoted or faithfully
        summarised>"`. Proxy rules: only for a decision they stated
        explicitly and unambiguously in this conversation, mapped to exactly
@@ -65,10 +85,10 @@ Repeat until the brief says otherwise:
        or is silence — ask, never infer, never default. The walker refuses
        only `--actor agent` at `@human` gates: attribution, not ceremony,
        is the contract.
-     - **Trusted host UI:** when the host provides a human-only response path
-       (Pi's `/marionette-decide`, for example), direct the user there. The
-       model-facing `marionette_walk` tool stays agent-bound and cannot proxy
-       the human choice.
+     - **Trusted host UI (required when bound):** when the host provides a
+       human-only response path (Pi's `/marionette-decide`, for example),
+       direct the user there. The model-facing `marionette_walk` tool stays
+       agent-bound and cannot proxy the human choice.
      Silence never selects a default. If `fallbacks` is empty, the run parks
      indefinitely; if it lists a timeout choice, schedule a wake-up for its
      `dueAt` and re-brief then. Only the frontier may open that fallback.
@@ -148,6 +168,11 @@ rationale and do not edit the plan yourself. Propose an amendment:
 Mechanical ref edits have their own doors and need no proposal:
 `marionette sync link` / `sync bind` recompile-check, rebind automatically,
 and log as actor `sync`.
+
+When `marionette_walk` is bound, do not use either rebind path: the local
+runtime currently treats its archived graph as immutable. Stop and ask the
+trusted host to migrate or open a new run so the runtime journal remains the
+single audit trail.
 
 ## Service phases: park, don't spin
 
