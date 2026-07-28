@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile } from '../src/compile.js';
+import { compile } from '../src/compile.ts';
 import {
   buildRuntimeProjection, createRuntimeSnapshot, executeRuntimeRequest,
-} from '../src/runtime.js';
+} from '../src/runtime.ts';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, type RuntimePrincipal,
-} from '../src/runtime-protocol.js';
+} from '../src/runtime-protocol.ts';
 
 const AT = '2026-07-23T20:00:00.000Z';
 const AGENT: RuntimePrincipal = { id: 'agent-7', role: 'agent', uri: 'pibarm://session/s7' };

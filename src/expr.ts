@@ -3,7 +3,7 @@
  * and variable initialisers. A small Pratt parser over a hand-rolled tokenizer.
  */
 
-import type { BinOp, Expr, Value, VarType } from './types.js';
+import type { BinOp, Expr, Value, VarType } from './types.ts';
 
 export class ExprError extends Error {
   constructor(message: string, public readonly pos?: number) {

@@ -9,8 +9,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { PlanState, Trajectory, Value } from '../src/types.js';
-import { compile } from '../src/compile.js';
+import type { PlanState, Trajectory, Value } from '../src/types.ts';
+import { compile } from '../src/compile.ts';
 import {
   WalkError,
   advance,
@@ -18,8 +18,8 @@ import {
   initState,
   observe,
   takeChoice,
-} from '../src/state.js';
-import * as shadow from './reference/state.js';
+} from '../src/state.ts';
+import * as shadow from './reference/state.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const casesDir = join(root, 'spec', 'conformance', 'cases');

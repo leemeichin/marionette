@@ -5,7 +5,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import type { SyncSidecar } from './sync.js';
+import type { SyncSidecar } from './sync.ts';
 
 export function loadSidecar(file: string): SyncSidecar | null {
   if (!existsSync(file)) return null;

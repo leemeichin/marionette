@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { compile } from '../src/compile.js';
-import { frontier, initState } from '../src/state.js';
+import { compile } from '../src/compile.ts';
+import { frontier, initState } from '../src/state.ts';
 
 const source = readFileSync(new URL('../examples/paas_replatform.mar', import.meta.url), 'utf8');
 const samples = 25;

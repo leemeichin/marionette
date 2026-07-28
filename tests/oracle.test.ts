@@ -17,11 +17,11 @@ import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { parsePlan, type ParsedPlan } from '../src/parser.js';
-import { analyzePlan } from './reference/validate.js';
-import { emitFacts } from '../src/facts.js';
-import { oracleReport } from '../src/oracle.js';
-import { ruleGraphFindings } from '../src/rule-engine.js';
+import { parsePlan, type ParsedPlan } from '../src/parser.ts';
+import { analyzePlan } from './reference/validate.ts';
+import { emitFacts } from '../src/facts.ts';
+import { oracleReport } from '../src/oracle.ts';
+import { ruleGraphFindings } from '../src/rule-engine.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 

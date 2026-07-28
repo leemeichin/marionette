@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile } from '../src/compile.js';
-import { CODES } from '../src/types.js';
+import { compile } from '../src/compile.ts';
+import { CODES } from '../src/types.ts';
 
 async function mustCompile(source: string) {
   const result = await compile(source);

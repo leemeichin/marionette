@@ -1,13 +1,13 @@
-import { buildBrief, type Brief } from './brief.js';
-import { sha256Hex } from './hash.js';
-import { advance, initState, observe, takeChoice, WalkError } from './state.js';
-import type { PlanState, Ref, Trajectory } from './types.js';
+import { buildBrief, type Brief } from './brief.ts';
+import { sha256Hex } from './hash.ts';
+import { advance, initState, observe, takeChoice, WalkError } from './state.ts';
+import type { PlanState, Ref, Trajectory } from './types.ts';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference,
   type ProjectionProfile, type RuntimeBudget, type RuntimeEvent,
   type RuntimeEscalation, type RuntimeEventKind, type RuntimePrincipal, type RuntimeProjection,
   type RuntimeRequest,
-} from './runtime-protocol.js';
+} from './runtime-protocol.ts';
 
 export interface RuntimeIdempotencyRecord {
   fingerprint: string;

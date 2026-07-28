@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { compile } from '../src/compile.js';
-import { executeRuntimeRequest } from '../src/runtime.js';
+import { compile } from '../src/compile.ts';
+import { executeRuntimeRequest } from '../src/runtime.ts';
 import {
   MAX_EVENT_BYTES, RuntimeStoreError, commitRuntimeStore, initializeRuntimeStore,
   claimRuntimeProcess, loadRuntimeStore, readRuntimeEvents, releaseRuntimeProcess,
   resolveArchivedTrajectory, runtimePaths,
-} from '../src/runtime-store.js';
-import { RUNTIME_PROTOCOL_VERSION, type RuntimePrincipal } from '../src/runtime-protocol.js';
+} from '../src/runtime-store.ts';
+import { RUNTIME_PROTOCOL_VERSION, type RuntimePrincipal } from '../src/runtime-protocol.ts';
 
 const AT = '2026-07-23T21:00:00.000Z';
 const AGENT: RuntimePrincipal = { id: 'agent-1', role: 'agent' };

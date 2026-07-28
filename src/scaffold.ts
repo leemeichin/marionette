@@ -22,7 +22,7 @@
  *   --mode phases one linked phase per issue, chained in order
  */
 
-import { TRACKERS, LINK_KEY, type TrackerProvider } from './sync.js';
+import { TRACKERS, LINK_KEY, type TrackerProvider } from './sync.ts';
 
 export interface ImportIssue {
   id: string | number;

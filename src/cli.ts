@@ -10,35 +10,35 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import type { Diagnostic, PlanState, Trajectory } from './types.js';
-import { compile, formatDiagnostics } from './compile.js';
-import { parsePlan } from './parser.js';
-import { emitFacts } from './facts.js';
-import { oracleQuery, oracleReport } from './oracle.js';
-import { renderMermaid } from './render.js';
-import { summarize } from './summarize.js';
-import { nearest } from './suggest.js';
-import { styleFor } from './term.js';
-import { buildBrief, renderBrief } from './brief.js';
+import type { Diagnostic, PlanState, Trajectory } from './types.ts';
+import { compile, formatDiagnostics } from './compile.ts';
+import { parsePlan } from './parser.ts';
+import { emitFacts } from './facts.ts';
+import { oracleQuery, oracleReport } from './oracle.ts';
+import { renderMermaid } from './render.ts';
+import { summarize } from './summarize.ts';
+import { nearest } from './suggest.ts';
+import { styleFor } from './term.ts';
+import { buildBrief, renderBrief } from './brief.ts';
 import {
   DriftError, WalkError, advance, bindState, frontier, initState, parseState,
   observe, rebindState, serializeState, takeChoice,
-} from './state.js';
+} from './state.ts';
 import {
   ImportError, parseImportSpec, scaffoldPlan, type ImportMode,
-} from './scaffold.js';
+} from './scaffold.ts';
 import {
   SyncEditError, TRACKERS, bindTrackerInSource, buildSyncManifest,
   linkNodeInSource, renderSyncManifest, resolveTracker,
   syncFileFor, type TrackerProvider,
-} from './sync.js';
-import { loadSidecar, saveSidecar } from './sync-store.js';
-import { RuntimeService, serveRuntimeLines } from './runtime-process.js';
+} from './sync.ts';
+import { loadSidecar, saveSidecar } from './sync-store.ts';
+import { RuntimeService, serveRuntimeLines } from './runtime-process.ts';
 import {
   RuntimeStoreError, claimRuntimeProcess, initializeRuntimeStore, loadRuntimeStore,
   releaseRuntimeProcess, stopRuntimeProcess,
-} from './runtime-store.js';
-import type { RuntimePrincipal, RuntimeRole } from './runtime-protocol.js';
+} from './runtime-store.ts';
+import type { RuntimePrincipal, RuntimeRole } from './runtime-protocol.ts';
 
 const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);

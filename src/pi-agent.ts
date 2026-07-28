@@ -8,22 +8,22 @@
 
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { compile, formatDiagnostics } from './compile.js';
-import { RuntimeRunController } from './runtime-host.js';
+import { compile, formatDiagnostics } from './compile.ts';
+import { RuntimeRunController } from './runtime-host.ts';
 import {
   RUNTIME_PROTOCOL_VERSION,
   type RuntimeBudget,
   type RuntimeEvent,
   type ProjectionProfile,
   type RuntimePrincipal,
-} from './runtime-protocol.js';
-import type { RuntimeCommandResult } from './runtime.js';
+} from './runtime-protocol.ts';
+import type { RuntimeCommandResult } from './runtime.ts';
 import {
   initializeRuntimeStore,
   loadRuntimeStore,
   RuntimeStoreError,
-} from './runtime-store.js';
-import type { Ref, Trajectory, Value } from './types.js';
+} from './runtime-store.ts';
+import type { Ref, Trajectory, Value } from './types.ts';
 
 export interface PiAgentBridgeOptions {
   planFile: string;

@@ -3,13 +3,13 @@
  * running structural validation and gate checking along the way.
  */
 
-import { sha256Hex } from './hash.js';
-import type { Diagnostic, Trajectory } from './types.js';
-import { SPEC_VERSION } from './types.js';
-import { parsePlan } from './parser.js';
-import { validatePlan } from './validate.js';
-import { analyzeMeta } from './refs.js';
-import { styleFor, type Style } from './term.js';
+import { sha256Hex } from './hash.ts';
+import type { Diagnostic, Trajectory } from './types.ts';
+import { SPEC_VERSION } from './types.ts';
+import { parsePlan } from './parser.ts';
+import { validatePlan } from './validate.ts';
+import { analyzeMeta } from './refs.ts';
+import { styleFor, type Style } from './term.ts';
 
 export interface CompileResult {
   /** Present whenever the plan parsed far enough to build a graph (even with errors). */
