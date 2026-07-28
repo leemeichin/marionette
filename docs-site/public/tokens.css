@@ -1,13 +1,11 @@
-/* Design tokens — see DESIGN.md. Vivid ink on cool paper: a periwinkle-white
-   default and a deep indigo-navy dark theme; accents are saturated (indigo,
-   emerald, raspberry, amber, azure, violet) instead of pastel. Every fg/bg
-   pair verified ≥ 4.5:1 (AA) by build/check-contrast.mjs; edit there and
-   here together. */
+/* Design tokens — see DESIGN.md. The reading surface is soft and quiet;
+   terminal/code surfaces carry the stronger indigo palette. Every semantic
+   foreground is still checked against every background by the build. */
 
 :root {
-  --bg: #f7f8ff;
-  --bg-elev: #eceffd;
-  --bg-code: #f1f3fe;
+  --bg: #f8f9ff;
+  --bg-elev: #eef1ff;
+  --bg-code: #f2f4ff;
   --fg: #252c40;
   --fg-dim: #4a5474;
   --fg-faint: #555f7e;
@@ -19,8 +17,19 @@
   --accent: #5b3df5;
   --focus: #3c22d1;
 
+  --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas,
     "DejaVu Sans Mono", monospace;
+  --border: rgba(91, 61, 245, 0.16);
+  --border-strong: rgba(91, 61, 245, 0.3);
+  --accent-wash: rgba(91, 61, 245, 0.08);
+  --cyan-wash: rgba(5, 97, 184, 0.08);
+  --magenta-wash: rgba(139, 47, 201, 0.08);
+  --shadow-sm: 0 1px 2px rgba(37, 44, 64, 0.06),
+    0 8px 24px rgba(37, 44, 64, 0.05);
+  --shadow-lg: 0 18px 60px rgba(37, 44, 64, 0.11);
+
   --s1: 0.5rem;
   --s2: 1rem;
   --s3: 1.5rem;
@@ -45,6 +54,14 @@
     --magenta: #d29bff;
     --accent: #a4a0ff;
     --focus: #7ee2ff;
+    --border: rgba(164, 160, 255, 0.18);
+    --border-strong: rgba(164, 160, 255, 0.34);
+    --accent-wash: rgba(164, 160, 255, 0.1);
+    --cyan-wash: rgba(87, 196, 245, 0.09);
+    --magenta-wash: rgba(210, 155, 255, 0.09);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22),
+      0 10px 28px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 20px 64px rgba(0, 0, 0, 0.28);
     color-scheme: dark;
   }
 }
@@ -63,5 +80,13 @@
   --magenta: #d29bff;
   --accent: #a4a0ff;
   --focus: #7ee2ff;
+  --border: rgba(164, 160, 255, 0.18);
+  --border-strong: rgba(164, 160, 255, 0.34);
+  --accent-wash: rgba(164, 160, 255, 0.1);
+  --cyan-wash: rgba(87, 196, 245, 0.09);
+  --magenta-wash: rgba(210, 155, 255, 0.09);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.22),
+    0 10px 28px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 20px 64px rgba(0, 0, 0, 0.28);
   color-scheme: dark;
 }

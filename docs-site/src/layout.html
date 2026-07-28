@@ -18,13 +18,19 @@ try { var t = localStorage.getItem('marionette-theme');
 <body>
 <a class="skip-link" href="#main">skip to content</a>
 <header class="site-header">
-  <a class="site-title" href="/"><span class="site-prompt">$ </span>marionette</a>
-  <span class="spacer"></span>
-  <button type="button" class="theme-toggle" aria-pressed="false" hidden>light mode</button>
-  <a href="https://github.com/leemeichin/marionette">github</a>
+  <div class="header-inner">
+    <a class="site-title" href="/">
+      <span class="site-mark" aria-hidden="true">m</span>
+      <span>marionette<small>plans agents can follow</small></span>
+    </a>
+    <span class="spacer"></span>
+    <button type="button" class="theme-toggle" aria-pressed="false" hidden>light mode</button>
+    <a class="header-link" href="https://github.com/leemeichin/marionette">GitHub <span aria-hidden="true">↗</span></a>
+  </div>
 </header>
 <div class="shell">
 <nav class="site-nav" aria-label="Site">
+  <p class="nav-label">Documentation</p>
   <ul>
 {{nav}}
   </ul>
@@ -34,10 +40,14 @@ try { var t = localStorage.getItem('marionette-theme');
 </main>
 </div>
 <footer class="site-footer">
-  <p>marionette — clear project plans for AI agents, with important decisions kept in human hands.
-  · <a href="https://github.com/leemeichin/marionette">source</a></p>
+  <div>
+    <p><strong>marionette</strong><br>Clear project plans for AI agents, with important decisions kept in human hands.</p>
+    <p><a href="/getting-started">Get started</a> · <a href="/docs">Reference</a> ·
+      <a href="https://github.com/leemeichin/marionette">Source on GitHub</a></p>
+  </div>
 </footer>
 <script src="/theme.js"></script>
 <script src="/demo.js"></script>
+<script type="module" src="/code.js"></script>
 </body>
 </html>

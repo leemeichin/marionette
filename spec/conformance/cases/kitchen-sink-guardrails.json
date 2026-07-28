@@ -1,6 +1,6 @@
 {
   "case": "kitchen-sink-guardrails",
-  "description": "Guardrail behaviour on the kitchen-sink fixture: unknown references, gate opening as a counter climbs, loop-continue gate shutting, once-only exhaustion across a revisit, @human refusal and rationale enforcement, no-divert refusal, string gate, divert completion.",
+  "description": "Guardrail behaviour on the kitchen-sink fixture: unknown references, gate opening as a counter climbs, loop-continue gate shutting, once-only exhaustion across a revisit, @human refusal and rationale enforcement, no-next-step refusal, string gate, automatic completion.",
   "plan": "tests/fixtures/kitchen_sink.mar",
   "steps": [
     { "expect": { "current": "build_mvp", "variables": { "iteration": 1, "budget": 90, "title": "mvp" } } },
@@ -15,7 +15,7 @@
     { "choose": "0", "actor": "agent", "rationale": "agent at a human checkpoint", "expect": { "error": "human-checkpoint" } },
     { "choose": "0", "actor": "lee", "expect": { "error": "rationale-required" } },
     { "choose": "0", "actor": "lee", "rationale": "metrics green after the pivot", "expect": { "current": "beta_launch" } },
-    { "advance": true, "actor": "agent", "rationale": "no divert here", "expect": { "error": "no-divert" } },
+    { "advance": true, "actor": "agent", "rationale": "no automatic next step here", "expect": { "error": "no-next-step" } },
     { "choose": "Announce", "actor": "agent", "rationale": "title gate holds", "expect": { "current": "retro" } },
     { "advance": true, "actor": "agent", "rationale": "retro written, archiving", "expect": { "current": "END", "status": "completed" } }
   ]

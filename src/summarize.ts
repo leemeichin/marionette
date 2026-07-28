@@ -90,7 +90,7 @@ export function summarize(trajectory: Trajectory, options: SummarizeOptions = {}
       if (choice.sticky) attrs.push('repeatable');
       out.push(`- **${choice.label}** → ${choice.target}${attrs.length ? ` (${attrs.join('; ')})` : ''}`);
     }
-    if (node.divert) out.push(`- otherwise → ${node.divert.target}`);
+    if (node.next) out.push(`- otherwise → ${node.next.target}`);
     out.push('');
   }
 

@@ -18,7 +18,7 @@ Marionette borrows Ink's three-layer architecture and flips the player:
 
 | Layer | Ink | Marionette |
 |---|---|---|
-| Language | Narrative script (knots, choices, diverts, state) | Trajectory script: phases, decision points, gates, state, human checkpoints, bounded loops |
+| Language | Narrative script (knots, choices, arrow transitions, state) | Trajectory script: phases, decision points, gates, state, human checkpoints, bounded loops |
 | Compiler | inklecate → story JSON | `marionette compile` → **trajectory JSON (the contract)** + static validation |
 | Runtime/player | Human player in a game | **AI agent** walking the graph; humans author, review, and gate |
 
@@ -84,7 +84,7 @@ Ship the smallest testable slice.
 | # | Requirement | Acceptance criteria (abridged) |
 |---|---|---|
 | P0.1 | **Trajectory JSON schema** (the contract): nodes, edges, choices, gates, variables, `@human`, `~loop~` + exit metadata, content hash | Schema published in `/spec`; validator rejects nonconforming docs; round-trips script → JSON losslessly |
-| P0.2 | **DSL v0**: phases, choices (`*`/`+`), diverts (`->`), `END`, typed vars, mutation (`~`), gates (`{}`), `@human`, `~loop~` | All constructs parse; golden-file tests per construct |
+| P0.2 | **DSL v0**: phases, choices (`*`/`+`), automatic next steps (`->`), `END`, typed vars, mutation (`~`), gates (`{}`), `@human`, `~loop~` | All constructs parse; golden-file tests per construct |
 | P0.3 | **Compiler validation (structural)**: dead ends, unreachable nodes, undefined vars/targets, undeclared cycles, loops without satisfiable exit, `@human` without escalation path | Each defect class has failing fixture + line-numbered, suggestion-bearing error |
 | P0.4 | **Gate checking (trivially decidable only)**: constant comparisons, monotonic counters. Everything else → warning: "unverified gate — review manually" | No false "verified" claims; warnings enumerate unverified gates |
 | P0.5 | **Produce**: NL/notes → draft script (skill capability) | Draft compiles or errors are surfaced for one revision loop |
@@ -105,7 +105,7 @@ Ship the smallest testable slice.
 - Richer gate satisfiability analysis (or inherited from Ink engine — see OQ1)
 - Integrations: node status ↔ Jira/Linear/GitHub; variables fed by external data
 - Branch probabilities/weights → expected-value analysis
-- Multi-plan portfolios; cross-trajectory diverts
+- Multi-plan portfolios; cross-trajectory transitions
 - Multi-agent traversal (role-scoped choices beyond `@human`)
 - *Design insurance now:* namespaced metadata in the JSON schema so extensions don't break the contract.
 
@@ -126,7 +126,7 @@ Ship the smallest testable slice.
 
 ## 8. Open Questions
 
-- **[OQ1 — RESOLVED, see `docs/decisions/0001-ink-engine-reuse.md`: influence-only]** **Reuse Ink's compiler/runtime as engine vs. influence-only.** inklecate already detects loose ends and undefined diverts, and the Ink *runtime* evaluates conditions dynamically — which may give a cheap answer for gate reachability via exhaustive/heuristic traversal ("simulate all paths") rather than static analysis. Unknowns: how much narrative machinery comes along, whether its JSON format can carry our metadata, C# runtime fit for our stack. **Time-boxed spike: 3 days, decision recorded in repo.**
+- **[OQ1 — RESOLVED, see `docs/decisions/0001-ink-engine-reuse.md`: influence-only]** **Reuse Ink's compiler/runtime as engine vs. influence-only.** inklecate already detects loose ends and undefined arrow targets, and the Ink *runtime* evaluates conditions dynamically — which may give a cheap answer for gate reachability via exhaustive/heuristic traversal ("simulate all paths") rather than static analysis. Unknowns: how much narrative machinery comes along, whether its JSON format can carry our metadata, C# runtime fit for our stack. **Time-boxed spike: 3 days, decision recorded in repo.**
 - **[OQ2, Eng, blocking]** Escalation protocol shape for `@human` in Phase 2 (channel, payload, timeout/fallback semantics).
 - **[OQ3, Design, non-blocking]** Node payload size: sentence vs. document; whether nodes can reference external docs.
 - **[OQ4, Product, non-blocking]** Loop exits: counter-based vs. always-available "Enough. Decide." repeatable choice — dogfood both, pick a default.

@@ -26,7 +26,7 @@ surface; it does not change this CLI loop or the DSL.
 │      ├─ status: active         → do the phase's work, then  │
 │      │     marionette state choose plan.mar <choice>        │
 │      │        --actor agent --rationale "<evidence>"        │
-│      │     (or `state advance` for a fallthrough divert)    │
+│      │     (or `state advance` for an automatic next step)  │
 │      │                                                      │
 │      ├─ status: awaiting-human → deliver the escalation     │
 │      │     payload to the primary session and STOP          │
@@ -63,7 +63,8 @@ renders the same packet for humans. It contains:
 - **frontier** — every choice with `available`/`blocked(+code)`, gate source,
   `human`/`loop`/`sticky` flags, target and target title. Blocked choices are
   shown so the executor can explain *why* it isn't taking them.
-- **divert** — the fallthrough edge, if any.
+- **automatic next step** (`next` in the JSON contract) — the
+  unconditional route to follow when the stage is done.
 - **escalation** — present exactly when status is `awaiting-human` (below).
 - **progress** — steps taken, phases visited/total, the visited path.
 - **protocol** — the exact commands to record an outcome, plus the standing

@@ -22,7 +22,7 @@ test('MAR002 duplicate phase', async () => {
 `, CODES.DUPLICATE_PHASE);
 });
 
-test('MAR003 undefined divert target, with did-you-mean suggestion', async () => {
+test('MAR003 undefined automatic next-step target, with did-you-mean suggestion', async () => {
   const { hit } = await expectDiagnostic(`
 === a ===
 * [Go] -> beta_lunch
@@ -52,7 +52,7 @@ VAR x = 2
 `, CODES.DUPLICATE_VARIABLE);
 });
 
-test('MAR006 dead end: phase with no choices and no divert', async () => {
+test('MAR006 dead end: phase with no choices and no automatic next step', async () => {
   await expectDiagnostic(`
 === a ===
 * [Onward] -> b
@@ -271,4 +271,45 @@ Try the thing.
 `);
   assert.ok(!twoDoors.diagnostics.some((d) => d.code === CODES.TIMEBOX_WITHOUT_ALTERNATIVE),
     'a worked door plus an abandon door satisfies the timebox shape');
+});
+
+test('user-facing diagnostics explain arrow routes without Ink jargon', async () => {
+  const cases = [
+    `-> nowhere
+=== start ===
+-> END`,
+    `=== start ===
+-> nowhere`,
+    `=== start ===
+-> END
+* [Too late] -> END`,
+    `-> first
+-> second
+=== first ===
+-> END
+=== second ===
+-> END`,
+    `=== start ===
+-> END
+-> END`,
+    `=== start ===
+* [Missing destination]`,
+    `=== start ===
+* [Needs approval] @human`,
+    `=== start ===
+-> END
+=== orphan ===
+-> END`,
+    `=== repeat ===
++ [Again] ~loop~ -> repeat`,
+  ];
+
+  for (const source of cases) {
+    const result = await compile(source);
+    assert.ok(result.diagnostics.length > 0, `expected diagnostics for:\n${source}`);
+    const prose = result.diagnostics
+      .flatMap((d) => [d.message, d.suggestion ?? ''])
+      .join('\n');
+    assert.doesNotMatch(prose, /\b(?:divert|fallthrough)\b/i, prose);
+  }
 });

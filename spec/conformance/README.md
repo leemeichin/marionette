@@ -39,8 +39,8 @@ Each case is a JSON walk script:
   consumes the equivalent trajectory JSON) and initialises fresh state before
   the first step.
 - Each step performs at most one operation: `choose` takes a choice by index,
-  id, or unambiguous label prefix; `advance: true` follows the fallthrough
-  divert. A step with neither is a pure assertion on the current state.
+  id, or unambiguous label prefix; `advance: true` follows the automatic
+  next step. A step with neither is a pure assertion on the current state.
 - `actor` defaults to `"agent"`; `rationale` is omitted where the case is
   probing refusal behaviour.
 
@@ -49,7 +49,7 @@ Each case is a JSON walk script:
 - `expect.error` — the operation MUST be refused with this machine code (see
   `WalkErrorCode` in `src/state.ts`: `completed`, `unknown-node`,
   `unknown-choice`, `ambiguous-choice`, `gate-blocked`, `once-exhausted`,
-  `human-checkpoint`, `rationale-required`, `no-divert`, `migration-blocked`,
+  `human-checkpoint`, `rationale-required`, `no-next-step`, `migration-blocked`,
   `invalid-state`). A refused operation MUST leave the state unchanged — the
   runner verifies this bit-for-bit (modulo timestamps, which the runner pins).
 - `expect.current` — the current node id after the step.

@@ -1,83 +1,80 @@
-<h1>docs</h1>
-<p class="lede">Everything in one place: write a plan, let the compiler
-check it, run it with an agent, change it mid-flight, and look anything up.
-The terminal recordings are verbatim captures of the real CLI.</p>
+<h1>language &amp; commands</h1>
+<p class="lede">Write a plan, check that every route is sound, and give an
+agent one clear assignment at a time.</p>
 
-<p>Marionette has three parts, and this page follows them in order —
-the section list stays in the nav rail on the left:</p>
+<p>This page starts with the everyday language, then shows the commands and
+machine-facing reference. Terminal recordings are exact captures of the
+real CLI.</p>
 
-<div class="table-wrap">
-<table>
-  <caption class="visually-hidden">The parts of a Marionette project</caption>
-  <tr><th scope="col">Part</th><th scope="col">What it does</th></tr>
-  <tr><td>Plan file</td><td>Describes the work, the choices, and the decisions reserved for people</td></tr>
-  <tr><td>Checker</td><td>Finds missing steps, dead ends, and retry paths that may never finish</td></tr>
-  <tr><td>Runner</td><td>Shows the agent what to do next and records each decision</td></tr>
-</table>
+<div class="concept-grid" aria-label="The parts of Marionette">
+  <div class="concept-card"><strong>Plan</strong>
+    <p>The work, the possible routes, and the decisions reserved for people.</p></div>
+  <div class="concept-card"><strong>Compiler</strong>
+    <p>Finds missing steps, dead ends, and retry paths that may never finish.</p></div>
+  <div class="concept-card"><strong>Runner</strong>
+    <p>Shows the next assignment and records who chose each route and why.</p></div>
 </div>
 
 <h2 id="write">Write a plan</h2>
 
 <p>A plan is a plain-text <code>.mar</code> file. Each named section is a
-stage of the work — not an individual task — and the choices at the end of
-a stage decide what happens next. You can write one by hand or ask an AI to
-draft it from notes; either way the file stays readable, reviewable, and
-stored with your project. Every construct at a glance:</p>
+stage of the project—not an individual coding task. Routes at the end say
+what can happen next. You can write one by hand or ask an AI to draft it
+from notes; either way it stays readable, reviewable, and stored with the
+project.</p>
 
-<mar-src title="anatomy.mar — every construct at a glance">
-// Comments run to the end of the line.
-# project: my-project          // plan-level metadata tag (preamble)
-VAR iteration = 0              // typed variables: number, boolean, "string"
-VAR approved = false
+<mar-src title="issue-loop.mar — a small complete plan">
+# project: issue-to-pr
+VAR prs_opened = 0
 
--> build_mvp                   // optional explicit start (default: first phase)
+=== work_issue ===
+Move the next ready issue to "In progress", implement it, open a pull
+request, and move the issue to "In review".
+~ prs_opened += 1
++ {prs_opened < 3} [Pick up the next issue] ~loop~ -> work_issue
+* {prs_opened >= 3} [Queue is clear] -> share_update
 
-=== build_mvp ===              // a phase (node)
-Ship the smallest testable slice.       // prose body: what this phase is
-# github:issue: 12                      // node-level metadata tag
-~ iteration += 1                        // mutation, applied on entry (=, +=, -=)
-* [Metrics green] @human -> beta_launch          // once-only choice, human checkpoint
-+ {iteration < 3} [Go again] ~loop~ -> build_mvp // sticky choice, gated, declared loop
-* {iteration >= 3} [Three strikes] -> pivot
-
-=== beta_launch ===
-Launch to the beta cohort.
--> END                         // fallthrough divert; END terminates the plan
-
-=== pivot ===
-* [Pivot] @human ~loop~ -> build_mvp
-* [Kill it] @human -> END
+=== share_update ===
+Post a short status update with links to the open pull requests.
+-> END
 </mar-src>
 
-<h3 id="constructs">Constructs</h3>
+<div class="callout">
+  <p class="callout-title">Read an arrow as “continue to…”</p>
+  <p><code>-&gt; share_update</code> moves to that stage after a choice.
+  <code>-&gt; END</code> finishes automatically. An arrow on its own line is
+  the phase's <strong>automatic next step</strong>.</p>
+</div>
+
+<h3 id="constructs">Language at a glance</h3>
 
 <div class="table-wrap">
 <table>
   <tr><th scope="col">Construct</th><th scope="col">Syntax</th><th scope="col">Notes</th></tr>
-  <tr><td>Phase</td><td><code>=== name ===</code></td>
-      <td>Unique <code>[A-Za-z_]\w*</code> id; trailing <code>===</code> optional. <code>END</code> is reserved.</td></tr>
-  <tr><td>Body</td><td>prose lines</td>
-      <td>Joined verbatim; the first line becomes the node title in renders. This prose is the executing agent's task description.</td></tr>
+  <tr><td>Stage <small>(phase)</small></td><td><code>=== name ===</code></td>
+      <td>A unique id using letters, numbers and underscores. <code>END</code> is reserved.</td></tr>
+  <tr><td>Instructions</td><td>plain text below a stage</td>
+      <td>The agent's assignment. The first line becomes its title in diagrams.</td></tr>
   <tr><td>Variable</td><td><code>VAR name = literal</code></td>
-      <td>Preamble only. Type inferred from the literal (number, <code>true</code>/<code>false</code>, <code>"string"</code>).</td></tr>
-  <tr><td>Mutation</td><td><code>~ name = expr</code> · <code>~ name += expr</code> · <code>~ name -= expr</code></td>
-      <td>Applied in order when the phase is <strong>entered</strong>. <code>+=</code>/<code>-=</code> require numbers.</td></tr>
-  <tr><td>Choice (once)</td><td><code>* [Label] -&gt; target</code></td>
-      <td>May be taken at most once per traversal.</td></tr>
-  <tr><td>Choice (sticky)</td><td><code>+ [Label] -&gt; target</code></td>
-      <td>Repeatable. Use for loop edges — and for every choice a traversal can revisit.</td></tr>
-  <tr><td>Gate</td><td><code>{expr}</code> before or after the label</td>
-      <td>The choice is available only while the expression is true.</td></tr>
+      <td>Put it before the first stage. Its initial value sets its type: number, boolean, or string.</td></tr>
+  <tr><td>Update</td><td><code>~ name = expr</code> · <code>+=</code> · <code>-=</code></td>
+      <td>Changes a value when the stage begins.</td></tr>
+  <tr><td>One-time route</td><td><code>* [Label] -&gt; target</code></td>
+      <td>Can be taken only once during a run.</td></tr>
+  <tr><td>Repeatable route</td><td><code>+ [Label] -&gt; target</code></td>
+      <td>Use inside loops and anywhere the same route may be offered again.</td></tr>
+  <tr><td>Rule <small>(gate)</small></td><td><code>{expr}</code> beside a label</td>
+      <td>The route is available only while the expression is true.</td></tr>
   <tr><td>Human checkpoint</td><td><code>@human</code> on a choice</td>
-      <td>The agent must pause and escalate; only a human may record this decision. Enforced by the walker.</td></tr>
-  <tr><td>Loop</td><td><code>~loop~</code> on a choice</td>
-      <td>Declares an intentional cycle. A cycle counts as declared when <em>any one</em> of its edges carries <code>~loop~</code> (convention: the returning edge). Undeclared cycles are compile errors.</td></tr>
-  <tr><td>Divert</td><td><code>-&gt; target</code> on its own line</td>
-      <td>Fallthrough edge. At most one per phase; must come after the choices.</td></tr>
-  <tr><td>End</td><td><code>-&gt; END</code></td>
-      <td>Terminal. Reaching it completes the plan.</td></tr>
+      <td>Only a person may record this decision; an agent is refused.</td></tr>
+  <tr><td>Intentional loop</td><td><code>~loop~</code> on the returning route</td>
+      <td>Confirms that returning to an earlier stage is deliberate.</td></tr>
+  <tr><td>Automatic next step</td><td><code>-&gt; target</code> on its own line</td>
+      <td>Continue automatically when the stage is done. Put it after any choices.</td></tr>
+  <tr><td>Finish</td><td><code>-&gt; END</code></td>
+      <td>Complete the plan.</td></tr>
   <tr><td>Metadata</td><td><code># key: value</code> · <code># tag</code> · <code># key: """</code>…<code>"""</code></td>
-      <td>Plan-level in the preamble, node-level inside a phase. Namespaced keys (<code>github:issue</code>) are the extension mechanism. Repeated keys accumulate into a list.</td></tr>
+      <td>Before the first stage it describes the whole plan; inside a stage it describes that work. Repeated keys become a list.</td></tr>
 </table>
 </div>
 
@@ -300,10 +297,10 @@ finish without a human?"), <code>'human_gate(C, Phase, Label)'</code>
   <tr><th scope="col">Code</th><th scope="col">Severity</th><th scope="col">Meaning</th><th scope="col">Usual fix</th></tr>
   <tr><td><code>MAR001</code></td><td>error</td><td>parse error</td><td>fix the line the message points at</td></tr>
   <tr><td><code>MAR002</code></td><td>error</td><td>duplicate phase id</td><td>rename one of the phases</td></tr>
-  <tr><td><code>MAR003</code></td><td>error</td><td>undefined divert/choice target</td><td>typo — take the <em>did you mean</em> suggestion, or define the phase</td></tr>
+  <tr><td><code>MAR003</code></td><td>error</td><td>an arrow points to a stage that does not exist</td><td>use the <em>did you mean</em> suggestion, or define the missing stage</td></tr>
   <tr><td><code>MAR004</code></td><td>error</td><td>undefined variable in a gate or mutation</td><td>declare it with <code>VAR</code> in the preamble</td></tr>
   <tr><td><code>MAR005</code></td><td>error</td><td>duplicate variable declaration</td><td>remove the extra <code>VAR</code></td></tr>
-  <tr><td><code>MAR006</code></td><td>error</td><td>dead end: phase with no choices and no divert</td><td>add an exit choice or <code>-&gt; END</code></td></tr>
+  <tr><td><code>MAR006</code></td><td>error</td><td>a stage has no available way forward</td><td>add a choice or an automatic next step such as <code>-&gt; END</code></td></tr>
   <tr><td><code>MAR007</code></td><td>error</td><td>unreachable phase</td><td>link it from a real decision, or delete it</td></tr>
   <tr><td><code>MAR008</code></td><td>error</td><td>undeclared cycle</td><td>if the loop is intentional, add <code>~loop~</code> to the returning choice; otherwise re-point the edge</td></tr>
   <tr><td><code>MAR009</code></td><td>error</td><td>declared loop with no exit</td><td>add a counter-gated or <code>@human</code> sibling exit</td></tr>
@@ -344,7 +341,7 @@ see <code>spec/runtime-protocol.schema.json</code>.)</p>
   <tr><td><code>once-exhausted</code></td><td>a once-only (<code>*</code>) choice was already taken</td></tr>
   <tr><td><code>human-checkpoint</code></td><td>an agent tried to take an <code>@human</code> choice</td></tr>
   <tr><td><code>rationale-required</code></td><td>the step is missing its auditable rationale</td></tr>
-  <tr><td><code>no-divert</code></td><td><code>advance</code> called on a node without a fallthrough divert</td></tr>
+  <tr><td><code>no-next-step</code></td><td><code>advance</code> was used where there is no automatic next step</td></tr>
   <tr><td><code>migration-blocked</code></td><td>state cannot be rebound onto the edited plan (current phase gone) — needs a human</td></tr>
 </table>
 </div>

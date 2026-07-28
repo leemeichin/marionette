@@ -1,9 +1,9 @@
 {
-  "spec": "0.2.0",
+  "spec": "0.3.0",
   "plan": {
     "file": "checkout.mar",
     "project": "checkout-revamp",
-    "hash": "sha256:7273a73bb2f854667b8818c3dad37d66f8e75a9ddfe20e731c3b38560ccc1970",
+    "hash": "sha256:e4e3b4dc20347c2280c2c7fc11dbba80e9a73cbaec9949f78b5f858168e48b33",
     "intent": {
       "summary": null,
       "prompt": "Checkout conversion has been flat for two quarters. Rebuild the flow\nbehind a flag and iterate on cohort evidence — five attempts max. I take\nthe ship call, and if it never converts we go back to research rather\nthan grinding out attempt six."
@@ -44,7 +44,7 @@
     ],
     "timebox": null,
     "priority": null,
-    "enteredAt": "2026-07-25T13:27:19.246Z"
+    "enteredAt": "2026-07-28T08:04:04.699Z"
   },
   "delivery": {
     "mode": "none",
@@ -95,7 +95,7 @@
       "blockedCode": "gate-blocked"
     }
   ],
-  "divert": null,
+  "next": null,
   "escalation": null,
   "progress": {
     "steps": 2,

@@ -1,13 +1,13 @@
 {
   "case": "resolution-and-advance",
-  "description": "Choice resolution by unambiguous case-insensitive label prefix, unknown-choice on out-of-range index and unmatched label, no-divert refusal, divert advance without a rationale (defaulted by the walker), and refusal-after-END on advance.",
+  "description": "Choice resolution by unambiguous case-insensitive label prefix, unknown-choice on out-of-range index and unmatched label, no-next-step refusal, automatic advance without a rationale (defaulted by the walker), and refusal-after-END on advance.",
   "plan": "examples/build_mvp.mar",
   "steps": [
     { "expect": { "current": "build_mvp", "variables": { "iteration": 1 } } },
     { "choose": "Learn", "actor": "agent", "rationale": "unique label prefix resolves", "expect": { "current": "build_mvp", "variables": { "iteration": 2 } } },
     { "choose": "99", "actor": "agent", "rationale": "index out of range", "expect": { "error": "unknown-choice" } },
     { "choose": "zzz", "actor": "agent", "rationale": "no label starts with this", "expect": { "error": "unknown-choice" } },
-    { "advance": true, "actor": "agent", "rationale": "build_mvp has no divert", "expect": { "error": "no-divert" } },
+    { "advance": true, "actor": "agent", "rationale": "build_mvp has no automatic next step", "expect": { "error": "no-next-step" } },
     { "choose": "metrics green", "actor": "lee", "rationale": "prefix match is case-insensitive; human takes the gate", "expect": { "current": "beta_launch" } },
     { "advance": true, "actor": "agent", "expect": { "current": "END", "status": "completed" } },
     { "advance": true, "actor": "agent", "expect": { "error": "completed" } }

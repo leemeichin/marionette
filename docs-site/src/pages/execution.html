@@ -1,8 +1,7 @@
 <h1>execution</h1>
 <p class="lede">This guide is for people connecting an AI agent or another
-program to Marionette. It explains how to ask what should happen next,
-record the result, pause for a person's decision, and report completed
-work.</p>
+program to Marionette: ask what happens next, do that bounded piece of
+work, record the result, and pause when a person needs to decide.</p>
 
 <p>We use <em>executor</em> to mean the tool carrying out the plan. That
 could be a Claude session using the execution skill, your own agent
@@ -11,13 +10,13 @@ the same information.</p>
 
 <h2 id="loop">Ask, work, and record</h2>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>┌─────────────────────────────────────────────────────────────┐
+<pre class="code" data-lang="text" data-title="The execution loop"><code>┌─────────────────────────────────────────────────────────────┐
 │  marionette brief plan.mar --json      ← "what now?"        │
 │      │                                                      │
 │      ├─ status: active         → do the phase's work, then  │
 │      │     marionette state choose plan.mar &lt;choice&gt;        │
 │      │        --actor agent --rationale "&lt;evidence&gt;"        │
-│      │     (or `state advance` for a fallthrough divert)    │
+│      │     (or `state advance` for an automatic next step)  │
 │      │                                                      │
 │      ├─ status: awaiting-human → deliver the escalation     │
 │      │     payload to the primary session and STOP          │
@@ -85,8 +84,9 @@ trajectory contract, same rules — a different transport.</p>
 <p>A scripted session against the checkout plan (each input line is one
 request; the host would normally be an agent framework, not a file):</p>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ cat session.ndjson
-{"protocol":"0.1.0","id":1,"op":"initialize","client":{"name":"docs-site","version":"0.1"}}
+<pre class="code" data-lang="shell" data-title="Run the scripted session"><code>$ marionette start checkout.mar --run docs-demo --principal coding-agent --role agent &lt; session.ndjson</code></pre>
+
+<pre class="code" data-lang="ndjson" data-title="session.ndjson"><code>{"protocol":"0.1.0","id":1,"op":"initialize","client":{"name":"docs-site","version":"0.1"}}
 {"protocol":"0.1.0","id":2,"op":"next","profile":"work"}
 {"protocol":"0.1.0","id":3,"op":"choose","choiceId":"build_checkout#0","rationale":"metrics look good","expectedRevision":0,"idempotencyKey":"turn-1","profile":"signal"}
 {"protocol":"0.1.0","id":4,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}
@@ -187,7 +187,7 @@ the same refusal codes (<code>completed</code>, <code>unknown-node</code>,
 <code>unknown-choice</code>, <code>ambiguous-choice</code>,
 <code>gate-blocked</code>, <code>once-exhausted</code>,
 <code>human-checkpoint</code>, <code>rationale-required</code>,
-<code>no-divert</code>, <code>migration-blocked</code>), refuse without
+<code>no-next-step</code>, <code>migration-blocked</code>), refuse without
 mutating state, and append exactly one log entry per successful step. The
 baseline case traverses
 <a href="/examples#paas">examples/paas_replatform.mar</a>, which exercises

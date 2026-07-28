@@ -23,7 +23,7 @@ Ship the smallest testable slice.       // prose body: what this phase is
 
 === beta_launch ===
 Launch to the beta cohort.
--> END                         // fallthrough divert; END terminates the plan
+-> END                         // automatic next step; END completes the plan
 
 === pivot ===
 * [Pivot] @human ~loop~ -> build_mvp
@@ -43,7 +43,7 @@ Launch to the beta cohort.
 | Gate | `{expr}` before or after the label | Choice is available only while the expression is true. |
 | Human checkpoint | `@human` on a choice | The agent must pause and escalate; only a human may record this decision. |
 | Loop | `~loop~` on a choice | Declares an intentional cycle. A cycle is declared when **any one** of its edges carries `~loop~` (convention: the returning edge); overlapping cycles each need a marked edge. Undeclared cycles are compile errors. |
-| Divert | `-> target` on its own line | Fallthrough edge. At most one per phase; must come after choices. |
+| Automatic next step (`next` in JSON) | `-> target` on its own line | Unconditional route when a stage is done. At most one per phase; place it after choices. |
 | End | `-> END` | Terminal. Reaching it completes the plan. |
 | Metadata | `# key: value` · `# tag` | Plan-level in the preamble, node-level inside a phase. Namespaced keys (`github:issue`) are the extension mechanism. Repeated keys accumulate into a list. |
 

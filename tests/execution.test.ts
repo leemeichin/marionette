@@ -136,7 +136,7 @@ test('brief: awaiting-human when every available choice is @human, with escalati
   assert.match(renderBrief(brief), /escalation required/);
 });
 
-test('brief: stranded when nothing is available and there is no divert', async () => {
+test('brief: stranded when nothing is available and there is no automatic next step', async () => {
   const { trajectory } = await compile(`
 VAR go = false
 === a ===

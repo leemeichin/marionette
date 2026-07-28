@@ -1,4 +1,4 @@
 plan/state drift detected: the script changed since this state was recorded.
-  state is bound to  sha256:7273a73bb2f854667b8818c3dad37d66f8e75a9ddfe20e731c3b38560ccc1970
-  compiled plan is   sha256:7a3377954d5df8641212daac1165c4062ce832c7228c20ae7511c22fae026219
+  state is bound to  sha256:e4e3b4dc20347c2280c2c7fc11dbba80e9a73cbaec9949f78b5f858168e48b33
+  compiled plan is   sha256:402a8f880092ee1c6c3f215bbe3d587366af76a9a6b012a91c159b781c65cdd8
 Reconcile before continuing: review the plan changes, then either re-initialise the state (marionette state init --force) or restore the previous script version.

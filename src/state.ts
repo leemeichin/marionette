@@ -36,7 +36,7 @@ export type WalkErrorCode =
   | 'once-exhausted'       // a once-only (`*`) choice was already taken
   | 'human-checkpoint'     // an agent tried to take an @human choice
   | 'rationale-required'   // the step is missing its auditable rationale (G4)
-  | 'no-divert'            // advance() called on a node without a fallthrough divert
+  | 'no-next-step'         // advance() called on a node without an automatic next step
   | 'migration-blocked'    // state cannot be rebound onto the new plan
   | 'invalid-state';       // the state file is structurally invalid
 
@@ -152,20 +152,20 @@ export function takeChoice(trajectory: Trajectory, state: PlanState, ref: string
   });
 }
 
-/** Follow the fallthrough divert of the current node (when no choice applies). */
+/** Follow the automatic next step of the current node. */
 export function advance(trajectory: Trajectory, state: PlanState, opts: TakeOptions): void {
   if (state.status === 'completed') throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
   const node = nodeById(trajectory, state.current);
-  if (!node.divert) {
-    throw new WalkError(refusalText({ kind: 'no-divert', id: node.id }), 'no-divert');
+  if (!node.next) {
+    throw new WalkError(refusalText({ kind: 'no-next-step', id: node.id }), 'no-next-step');
   }
-  enterNode(trajectory, state, node.divert.target, {
+  enterNode(trajectory, state, node.next.target, {
     at: opts.at ?? new Date().toISOString(),
     actor: opts.actor,
     from: node.id,
     choice: null,
     label: null,
-    rationale: opts.rationale ?? 'followed divert',
+    rationale: opts.rationale ?? 'followed automatic next step',
   });
 }
 
@@ -177,7 +177,7 @@ function resolveChoice(node: TrajectoryNode, ref: string): Choice {
     if (idx >= 0 && idx < node.choices.length) return node.choices[idx];
     if (node.choices.length === 0) {
       throw new WalkError(
-        refusalText({ kind: 'no-choices', id: node.id, divertTarget: node.divert?.target ?? null }),
+        refusalText({ kind: 'no-choices', id: node.id, nextTarget: node.next?.target ?? null }),
         'unknown-choice');
     }
     throw new WalkError(

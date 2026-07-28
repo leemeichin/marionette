@@ -4,18 +4,18 @@
  * Grammar (v0):
  *   // comment                                anywhere (stripped)
  *   VAR name = <literal>                      preamble: typed variable declaration
- *   -> target                                 preamble: explicit start divert
+ *   -> target                                 preamble: explicit starting phase
  *   # key: value   |   # tag                  metadata tag (plan-level in preamble, node-level in a phase)
  *   === phase_name ===                        phase (node) header
  *   prose...                                  phase body
  *   ~ name (=|+=|-=) expr                     mutation, applied on node entry
  *   * {gate} [Label] @human ~loop~ -> target  once-only choice (gate/@human/~loop~ optional)
  *   + {gate} [Label] -> target                sticky (repeatable) choice
- *   -> target                                 fallthrough divert (target may be END)
+ *   -> target                                 automatic next step (target may be END)
  */
 
 import type {
-  Action, Choice, Diagnostic, Divert, TrajectoryNode, VariableDecl, Value,
+  Action, Choice, Diagnostic, NextStep, TrajectoryNode, VariableDecl, Value,
 } from './types.js';
 import { CODES, END } from './types.js';
 import { ExprError, parseExpr, tryConstEval, typeOf } from './expr.js';
@@ -128,7 +128,7 @@ export function parsePlan(source: string): ParsedPlan {
         current = null;
         continue;
       }
-      current = { id: name, body: '', actions: [], choices: [], divert: null, line: lineNo, meta: {}, refs: [] };
+      current = { id: name, body: '', actions: [], choices: [], next: null, line: lineNo, meta: {}, refs: [] };
       nodes.push(current);
       bodyLines.set(name, []);
       continue;
@@ -192,9 +192,9 @@ export function parsePlan(source: string): ParsedPlan {
         error(lineNo, CODES.PARSE, 'mutations must appear inside a phase');
         continue;
       }
-      if (current.divert) {
-        error(lineNo, CODES.PARSE, 'statement after divert is unreachable',
-          'move this line above the "->" divert');
+      if (current.next) {
+        error(lineNo, CODES.PARSE, 'statement after an automatic next step is unreachable',
+          'move this line above the "->" arrow');
         continue;
       }
       const [, name, op, rawExpr] = mut;
@@ -214,9 +214,9 @@ export function parsePlan(source: string): ParsedPlan {
         error(lineNo, CODES.PARSE, 'choices must appear inside a phase');
         continue;
       }
-      if (current.divert) {
-        error(lineNo, CODES.PARSE, 'choice after divert is unreachable',
-          'move choices above the "->" divert');
+      if (current.next) {
+        error(lineNo, CODES.PARSE, 'choice after an automatic next step is unreachable',
+          'move choices above the "->" arrow');
         continue;
       }
       const choice = parseChoice(line.slice(1).trim(), current, sticky, lineNo, error);
@@ -224,36 +224,36 @@ export function parsePlan(source: string): ParsedPlan {
       continue;
     }
 
-    // Divert: -> target
-    const divert = line.match(/^->\s*(\S+)\s*$/);
-    if (divert) {
-      const target = divert[1];
+    // Automatic next step: -> target
+    const nextStep = line.match(/^->\s*(\S+)\s*$/);
+    if (nextStep) {
+      const target = nextStep[1];
       if (!IDENT.test(target)) {
-        error(lineNo, CODES.PARSE, `invalid divert target "${target}"`);
+        error(lineNo, CODES.PARSE, `invalid automatic next-step target "${target}"`);
         continue;
       }
       if (!current) {
         if (start !== null) {
-          error(lineNo, CODES.PARSE, 'multiple start diverts in preamble',
+          error(lineNo, CODES.PARSE, 'the plan has more than one start arrow',
             'keep a single "-> phase" before the first phase header');
         } else {
           start = target;
         }
         continue;
       }
-      if (current.divert) {
-        error(lineNo, CODES.PARSE, `phase "${current.id}" already has a divert`,
-          'a phase may have at most one fallthrough divert');
+      if (current.next) {
+        error(lineNo, CODES.PARSE, `phase "${current.id}" already has an automatic next step`,
+          'a phase may have at most one automatic next step');
         continue;
       }
-      current.divert = { target, line: lineNo } satisfies Divert;
+      current.next = { target, line: lineNo } satisfies NextStep;
       continue;
     }
 
     // Prose body
     if (!current) {
       error(lineNo, CODES.PARSE, `unexpected content before the first phase: "${line}"`,
-        'the preamble may only contain VAR declarations, tags and a start divert');
+        'before the first phase, use only VAR declarations, metadata tags and an optional start arrow');
       continue;
     }
     bodyLines.get(current.id)!.push(line);
@@ -309,9 +309,9 @@ function parseChoice(
     if (human) {
       error(lineNo, CODES.HUMAN_WITHOUT_ESCALATION,
         `human checkpoint "${label.trim()}" has no escalation path`,
-        'every @human choice must divert somewhere: add "-> target" (or "-> END")');
+        'every @human choice must point somewhere: add "-> target" (or "-> END")');
     } else {
-      error(lineNo, CODES.PARSE, `choice "${label.trim()}" has no divert`,
+      error(lineNo, CODES.PARSE, `choice "${label.trim()}" has no destination`,
         'add "-> target" (or "-> END") at the end of the choice');
     }
     return null;

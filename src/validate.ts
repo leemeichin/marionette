@@ -22,7 +22,7 @@ import type { ParsedPlan } from './parser.js';
 interface Edge {
   from: string;
   to: string;
-  choice: Choice | null; // null → divert
+  choice: Choice | null; // null → automatic next step
   line: number;
 }
 
@@ -64,7 +64,7 @@ export function analyzePlan(plan: ParsedPlan, options: { priorErrors?: boolean }
   }
   for (const node of nodes) {
     for (const choice of node.choices) checkTarget(choice.target, choice.line, `choice "${choice.label}"`);
-    if (node.divert) checkTarget(node.divert.target, node.divert.line, 'divert');
+    if (node.next) checkTarget(node.next.target, node.next.line, 'automatic next step');
   }
 
   // --- Variables -------------------------------------------------------------
@@ -112,7 +112,7 @@ export function analyzePlan(plan: ParsedPlan, options: { priorErrors?: boolean }
   // cannot change any outcome, so the speculative shape is incomplete.
   for (const node of nodes) {
     if (resolveTimebox(node.meta) === null) continue;
-    if (node.choices.length + (node.divert ? 1 : 0) < 2) {
+    if (node.choices.length + (node.next ? 1 : 0) < 2) {
       warn(node.line, CODES.TIMEBOX_WITHOUT_ALTERNATIVE, { id: node.id });
     }
   }
@@ -129,7 +129,7 @@ export function analyzePlan(plan: ParsedPlan, options: { priorErrors?: boolean }
   const allBySource = new Map<string, Edge[]>();
   for (const node of nodes) {
     const out: Edge[] = node.choices.map((c) => ({ from: node.id, to: c.target, choice: c, line: c.line }));
-    if (node.divert) out.push({ from: node.id, to: node.divert.target, choice: null, line: node.divert.line });
+    if (node.next) out.push({ from: node.id, to: node.next.target, choice: null, line: node.next.line });
     allBySource.set(node.id, out);
   }
   const sccAll = tarjan(nodes.map((n) => n.id), allBySource);
@@ -165,7 +165,7 @@ export function analyzePlan(plan: ParsedPlan, options: { priorErrors?: boolean }
       if (falseGates.has(choice.id)) continue;
       out.push({ from: node.id, to: choice.target, choice, line: choice.line });
     }
-    if (node.divert) out.push({ from: node.id, to: node.divert.target, choice: null, line: node.divert.line });
+    if (node.next) out.push({ from: node.id, to: node.next.target, choice: null, line: node.next.line });
     bySource.set(node.id, out);
   }
 

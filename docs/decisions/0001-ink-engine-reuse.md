@@ -6,7 +6,7 @@
 
 OQ1 asked whether to reuse Ink's compiler/runtime as Marionette's engine, or
 treat Ink as influence-only. inklecate already detects loose ends and undefined
-diverts, and the Ink runtime evaluates conditions dynamically. The C# `dotnet`
+arrow transitions, and the Ink runtime evaluates conditions dynamically. The C# `dotnet`
 runtime is not available in our target environments, but `inkjs` 2.4.0 ships a
 full TypeScript port of the inklecate compiler, so the spike evaluated that.
 
@@ -31,7 +31,7 @@ the emitted JSON:
 3. **Metadata carriage is awkward.** The Ink JSON format has no sanctioned
    extension point; our namespaced `meta` would have to live outside the
    document, breaking the single-artifact contract.
-4. **What we'd actually reuse is small.** Loose-end/undefined-divert detection
+4. **What we'd actually reuse is small.** Loose-end/undefined-target detection
    is a few dozen lines over a graph we already have to build for rendering
    and summaries. The dynamic condition evaluator is ~200 lines (Pratt parser
    + evaluator).
@@ -39,7 +39,7 @@ the emitted JSON:
 ## Decision
 
 **Influence-only.** Marionette keeps Ink's *language design* (knots → phases,
-`*`/`+` choices, `->` diverts, `{}` conditions, `~` mutations, `VAR`, `END`)
+`*`/`+` choices, `->` transitions, `{}` conditions, `~` mutations, `VAR`, `END`)
 and its three-layer architecture, but implements its own compiler in
 TypeScript with zero runtime dependencies. The compiled trajectory JSON is a
 plain, schema-validated graph (`spec/trajectory.schema.json`).

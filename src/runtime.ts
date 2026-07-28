@@ -191,7 +191,7 @@ export function buildRuntimeProjection(
         ? { code: choice.blockedCode, reason: choice.blocked }
         : undefined,
     })),
-    divert: brief.divert ? { target: brief.divert.target } : null,
+    next: brief.next ? { target: brief.next.target } : null,
     variables: profile === 'debug' ? brief.variables : undefined,
     progress: profile === 'debug' ? brief.progress : undefined,
     truncated,
@@ -343,7 +343,7 @@ export async function executeRuntimeRequest(
     } else if (request.op === 'advance') {
       const from = snapshot.state.current;
       const node = trajectory.nodes.find((candidate) => candidate.id === from);
-      const to = node?.divert?.target;
+      const to = node?.next?.target;
       advance(trajectory, snapshot.state, {
         actor: bindWalkActor(principal),
         rationale: request.rationale,

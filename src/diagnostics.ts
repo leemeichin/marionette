@@ -32,14 +32,14 @@ export function renderFinding(f: Finding): Diagnostic {
         return { message: 'plan has no phases', suggestion: 'add at least one "=== phase ===" section' };
       case 'MAR003:start':
         return {
-          message: `start divert targets undefined phase "${s(f, 'target')}"`,
+          message: `plan starts at undefined phase "${s(f, 'target')}"`,
           suggestion: suggest(s(f, 'target'), f.data['candidates'] as string[]),
         };
       case 'MAR003':
         return {
           message: `${s(f, 'subject')} targets undefined phase "${s(f, 'target')}"`,
           suggestion: suggest(s(f, 'target'), f.data['candidates'] as string[],
-            `declare "=== ${s(f, 'target')} ===" or divert to ${END}`),
+            `declare "=== ${s(f, 'target')} ===" or point the arrow to ${END}`),
         };
       case 'MAR004:mutation':
         return {
@@ -55,13 +55,13 @@ export function renderFinding(f: Finding): Diagnostic {
         };
       case 'MAR006':
         return {
-          message: `phase "${s(f, 'id')}" is a dead end: no choices and no divert`,
-          suggestion: `add a choice or divert (e.g. "-> ${END}") so every path has an exit`,
+          message: `phase "${s(f, 'id')}" has no available way forward`,
+          suggestion: `add a choice or an automatic next step (e.g. "-> ${END}")`,
         };
       case 'MAR007':
         return {
           message: `phase "${s(f, 'id')}" is unreachable from "${s(f, 'start')}"`,
-          suggestion: 'divert or link a choice to it, or remove it',
+          suggestion: 'add a choice or automatic next step leading to it, or remove it',
         };
       case 'MAR008':
         return {
@@ -71,7 +71,7 @@ export function renderFinding(f: Finding): Diagnostic {
       case 'MAR009':
         return {
           message: `potential infinite loop: the cycle through "${s(f, 'id')}" has no exit path`,
-          suggestion: 'add a sibling choice or divert that leaves the loop (e.g. a counter-gated exit or an @human decision)',
+          suggestion: 'add a sibling choice or automatic next step that leaves the loop (e.g. a counter-gated exit or an @human decision)',
         };
       case 'MAR010':
         return {
@@ -135,8 +135,8 @@ export type RefusalShape =
   | { kind: 'human-checkpoint'; label: string }
   | { kind: 'rationale-human'; label: string }
   | { kind: 'rationale-missing' }
-  | { kind: 'no-divert'; id: string }
-  | { kind: 'no-choices'; id: string; divertTarget: string | null }
+  | { kind: 'no-next-step'; id: string }
+  | { kind: 'no-choices'; id: string; nextTarget: string | null }
   | { kind: 'bad-index'; id: string; index: number; max: number }
   | { kind: 'ambiguous'; ref: string; id: string }
   | { kind: 'no-match'; ref: string; id: string; available: string }
@@ -154,10 +154,10 @@ export function refusalText(shape: RefusalShape): string {
     case 'rationale-human':
       return `@human checkpoint "${shape.label}" requires --rationale (the decision must be auditable)`;
     case 'rationale-missing': return 'every taken branch must record a rationale: pass --rationale (G4)';
-    case 'no-divert': return `phase "${shape.id}" has no divert; take one of its choices instead`;
+    case 'no-next-step': return `phase "${shape.id}" has no automatic next step; take one of its choices instead`;
     case 'no-choices':
-      return `phase "${shape.id}" has no choices` + (shape.divertTarget
-        ? `; it diverts to "${shape.divertTarget}" — use "marionette state advance"` : '');
+      return `phase "${shape.id}" has no choices` + (shape.nextTarget
+        ? `; its automatic next step is "${shape.nextTarget}" — use "marionette state advance"` : '');
     case 'bad-index':
       return `phase "${shape.id}" has no choice at index ${shape.index} (valid: 0..${shape.max})`;
     case 'ambiguous': return `choice reference "${shape.ref}" is ambiguous at "${shape.id}"`;

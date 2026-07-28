@@ -35,7 +35,7 @@ Repeat until the brief says otherwise:
      then record the outcome:
      `marionette state choose <plan> <choice-id> --actor agent --rationale "<evidence>"`,
      or `marionette state advance <plan> --actor agent --rationale "<what happened>"`
-     when the brief shows only a fallthrough divert.
+     when the brief shows only an automatic next step.
    - `awaiting-human` — deliver the brief's `escalation` payload to the
      primary session/human verbatim: the phase body, each choice (label,
      target, gate) and the recorded `how`. Then **stop and wait**. Never

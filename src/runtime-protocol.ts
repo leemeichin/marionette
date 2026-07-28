@@ -136,7 +136,7 @@ export interface RuntimeProjection {
     meta?: Record<string, string | string[]>;
   } | null;
   choices: RuntimeChoiceProjection[];
-  divert: { target: string } | null;
+  next: { target: string } | null;
   variables?: Record<string, Value>;
   progress?: { steps: number; nodesVisited: number; nodesTotal: number; path: string[] };
   truncated: boolean;

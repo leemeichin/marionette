@@ -151,8 +151,8 @@ transcribe tickets into DSL by hand — fetch and scaffold
   executor reads "overdue" from the brief and takes the abandon door
   honestly. `# priority:` (critical|high|normal|low) marks urgency when
   phases compete for a session.
-- **Every phase needs an exit** — a choice or a divert. Terminal outcomes
-  divert to `END`. The compiler hard-errors on dead ends; don't rely on it,
+- **Every phase needs an exit** — a choice or an automatic next step. Terminal
+  outcomes point to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this
   doesn't work?" deserves a phase, not a hope).
 - **`@human` marks the autonomy boundary.** Put it on: approvals and

@@ -12,7 +12,7 @@
     "node",
     "delivery",
     "frontier",
-    "divert",
+    "next",
     "escalation",
     "progress",
     "protocol"
@@ -97,7 +97,7 @@
         "stranded",
         "completed"
       ],
-      "description": "active: at least one autonomous step is available. awaiting-human: only @human choices are available \u2014 escalate and pause. stranded: nothing available and no divert. completed: the plan reached END."
+      "description": "active: at least one autonomous step is available. awaiting-human: only @human choices are available \u2014 escalate and pause. stranded: nothing available and no automatic next step. completed: the plan reached END."
     },
     "variables": {
       "type": "object",
@@ -344,7 +344,7 @@
         }
       }
     },
-    "divert": {
+    "next": {
       "oneOf": [
         {
           "type": "null"

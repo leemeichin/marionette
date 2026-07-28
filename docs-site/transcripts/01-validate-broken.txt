@@ -1,6 +1,6 @@
-[2mcheckout.mar:21:[22m [31m[1merror[22m[39m[2m[MAR006][22m: phase "rollout" is a dead end: no choices and no divert
+[2mcheckout.mar:21:[22m [31m[1merror[22m[39m[2m[MAR006][22m: phase "rollout" has no available way forward
 [2m  21 | [22m=== rollout ===
-  [36mhelp:[39m add a choice or divert (e.g. "-> END") so every path has an exit
+  [36mhelp:[39m add a choice or an automatic next step (e.g. "-> END")
 [2mcheckout.mar:19:[22m [31m[1merror[22m[39m[2m[MAR008][22m: undeclared cycle: build_checkout -> build_checkout
 [2m  19 | [22m+ [Conversion flat — iterate] -> build_checkout
   [36mhelp:[39m cycles must be intentional: mark the returning choice with ~loop~

@@ -4,6 +4,7 @@
 // minus the 3D canvas. Without JS the plan source is still fully visible.
 import { compile } from '/lib/compile.js';
 import { initState, frontier, takeChoice, advance, WalkError } from '/lib/state.js';
+import { enhanceMarEditor } from '/highlight.js';
 
 function boot(el) {
   const srcEl = el.querySelector('textarea');
@@ -14,6 +15,7 @@ function boot(el) {
   const resetEl = el.querySelector('[data-reset]');
   const rationaleEl = el.querySelector('.pg-rationale-row input');
   const statusEl = el.querySelector('[data-mini-status]');
+  enhanceMarEditor(el.querySelector('[data-code-editor]'), srcEl);
 
   let trajectory = null;
   let state = null;
@@ -121,10 +123,10 @@ function boot(el) {
         }
         choicesEl.append(btn);
       }
-      if (node?.divert) {
+      if (node?.next) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = `(fallthrough) advance -> ${node.divert.target}`;
+        btn.textContent = `Continue automatically → ${node.next.target}`;
         btn.addEventListener('click', () => step(() =>
           advance(trajectory, state, { actor: actor(), rationale: rationaleEl.value || undefined })));
         choicesEl.append(btn);

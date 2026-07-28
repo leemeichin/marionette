@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ansiLineToHtml, stripAnsi, escapeHtml } from './ansi.mjs';
 import { highlightMar } from './mar-highlight.mjs';
+import { highlightCode } from './code-highlight.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const src = join(root, 'src');
@@ -14,8 +15,8 @@ const dist = join(root, 'dist');
 const transcripts = join(root, 'transcripts');
 
 export const PAGES = [
-  { slug: 'index', nav: 'home', wide: true, title: 'Marionette — clear project plans for AI agents', desc: 'Write a plain-text project plan, try it in the browser playground, let an AI agent follow it, and keep important decisions with people.' },
-  { slug: 'getting-started', nav: 'getting-started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI, write and validate your first plan, and set it up with Claude Code, Codex, or OpenCode.',
+  { slug: 'index', nav: 'overview', wide: true, title: 'Marionette — clear project plans for AI agents', desc: 'Write a plain-text project plan, try it in the browser playground, let an AI agent follow it, and keep important decisions with people.' },
+  { slug: 'getting-started', nav: 'getting started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI, write and validate your first plan, and set it up with Claude Code, Codex, or OpenCode.',
     sections: [
       { id: 'cli', label: 'install the cli' },
       { id: 'first-plan', label: 'first plan' },
@@ -23,7 +24,7 @@ export const PAGES = [
       { id: 'traverse', label: 'run the plan' },
       { id: 'ci', label: 'ci' },
     ] },
-  { slug: 'docs', nav: 'docs', title: 'Docs — Marionette', desc: 'One page for the whole tool: write a .mar plan, check it with the compiler, run it with an agent, change it safely, and look anything up.',
+  { slug: 'docs', nav: 'language & cli', title: 'Language and commands — Marionette', desc: 'Write a .mar plan, check it with the compiler, run it with an agent, change it safely, and look up the CLI reference.',
     sections: [
       { id: 'write', label: 'write a plan' },
       { id: 'check', label: 'check it' },
@@ -33,13 +34,14 @@ export const PAGES = [
     ] },
   { slug: 'examples', nav: 'examples', title: 'Examples — Marionette', desc: 'Complete project plans you can edit and run in the browser: retries, fallback options, human approval, and larger migrations.',
     sections: [
+      { id: 'hello', label: 'hello, world' },
+      { id: 'issue-loop', label: 'issue to pr loop' },
       { id: 'checkout', label: 'checkout revamp' },
-      { id: 'build-mvp', label: 'the mvp loop' },
       { id: 'meta', label: 'built this site' },
       { id: 'paas', label: 'an 18-phase replatform' },
       { id: 'use-cases', label: 'use-cases' },
     ] },
-  { slug: 'execution', nav: 'execution', title: 'Execution — Marionette', desc: 'Connect an AI agent or another program to Marionette, record results, pause for human decisions, and report completed work.',
+  { slug: 'execution', nav: 'agent execution', title: 'Agent execution — Marionette', desc: 'Connect an AI agent or another program to Marionette, record results, pause for human decisions, and report completed work.',
     sections: [
       { id: 'loop', label: 'the loop' },
       { id: 'brief', label: 'the brief as json' },
@@ -91,10 +93,28 @@ function renderMarFile(file, title) {
 }
 
 function renderMarBlock(source, title) {
-  const bar = title
-    ? `<div class="term-bar">${DOTS}<span class="term-title">${escapeHtml(title)}</span></div>`
-    : '';
-  return `<div class="term">${bar}<pre class="term-screen mar" tabindex="0" aria-label="plan source (scrollable)"><code>${highlightMar(source)}</code></pre></div>`;
+  const label = title ?? 'Marionette plan';
+  return `<figure class="code-sample mar-sample">
+<figcaption class="code-head">${DOTS}<span class="code-title">${escapeHtml(label)}</span><span class="code-lang">mar</span><button type="button" class="copy-button" data-copy aria-label="Copy ${escapeHtml(label)}">copy</button></figcaption>
+<pre class="code mar" tabindex="0" aria-label="${escapeHtml(label)} source (scrollable)"><code>${highlightMar(source)}</code></pre>
+</figure>`;
+}
+
+function attr(attrs, name) {
+  const match = attrs.match(new RegExp(`\\b${name}="([^"]*)"`));
+  return match?.[1] ?? null;
+}
+
+function renderCodeBlock(source, attrs) {
+  const language = attr(attrs, 'data-lang') ?? 'text';
+  const title = attr(attrs, 'data-title') ?? (
+    language === 'shell' || language === 'console' ? 'Terminal' :
+      language === 'json' || language === 'ndjson' ? 'Payload' : 'Example'
+  );
+  return `<figure class="code-sample">
+<figcaption class="code-head"><span class="code-title">${escapeHtml(title)}</span><span class="code-lang">${escapeHtml(language)}</span><button type="button" class="copy-button" data-copy aria-label="Copy ${escapeHtml(title)}">copy</button></figcaption>
+<pre class="code language-${escapeHtml(language)}" tabindex="0" aria-label="${escapeHtml(title)} code sample (scrollable)"><code>${highlightCode(source, language)}</code></pre>
+</figure>`;
 }
 
 // <mini-playground src="checkout.mar" title="…"></mini-playground>
@@ -108,7 +128,10 @@ function renderMini(file, title) {
 <div class="term-bar">${DOTS}<span class="term-title">${escapeHtml(title)}</span><span class="term-exit" data-mini-status></span></div>
 <div class="mini-panes">
 <div class="mini-plan">
+<div class="code-editor" data-code-editor>
+<pre data-highlight aria-hidden="true"><code></code></pre>
 <textarea spellcheck="false" autocomplete="off" wrap="soft" aria-label="${escapeHtml(title)} — plan source; edits compile as you type">${escapeHtml(source)}</textarea>
+</div>
 </div>
 <div class="mini-run">
 <div class="pg-diagnostics" data-diagnostics role="log" aria-label="compiler diagnostics"></div>
@@ -144,6 +167,10 @@ function expand(html) {
   html = html.replace(
     /<mini-playground src="([^"]+)" title="([^"]+)"><\/mini-playground>/g,
     (_, file, title) => renderMini(file, title),
+  );
+  html = html.replace(
+    /<pre class="code"([^>]*)><code>([\s\S]*?)<\/code><\/pre>/g,
+    (_, attrs, body) => renderCodeBlock(body, attrs),
   );
   return html;
 }
@@ -210,6 +237,8 @@ export function build() {
   for (const f of staged) cpSync(join(repoDist, f), join(dist, 'lib', f));
   // Example plans for the playground dropdown, sourced from transcripts/.
   const EXAMPLES = [
+    { file: 'hello-world.mar', label: 'hello-world — one step, then done' },
+    { file: 'issue-loop.mar', label: 'issue-loop — issues to pull requests' },
     { file: 'checkout.mar', label: 'checkout-revamp — the plan the docs follow' },
     { file: 'checkout-broken.mar', label: 'checkout-revamp — first draft (2 errors to fix)' },
     { file: 'build_mvp.mar', label: 'build-mvp — the MVP loop' },

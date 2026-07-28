@@ -94,7 +94,7 @@ $ marionette state init plan.mar        # binds plan.state.json to the compiled 
 $ marionette brief plan.mar             # work packet: phase, refs, choices, escalation
 $ marionette state show plan.mar        # current phase, variables, available choices
 $ marionette state choose plan.mar 1 --actor agent --rationale "why"
-$ marionette state advance plan.mar --actor agent   # follow a fallthrough divert
+$ marionette state advance plan.mar --actor agent   # follow an automatic next step
 $ marionette state rebind plan.mar      # after editing a live plan: migrate, keep the log
 $ marionette render plan.mar            # Mermaid, with taken path + frontier highlighted
 ```

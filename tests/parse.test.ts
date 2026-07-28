@@ -13,7 +13,7 @@ async function mustCompile(source: string) {
   return result.trajectory!;
 }
 
-test('P0.2 construct: phases, prose bodies, start divert', async () => {
+test('P0.2 construct: phases, prose bodies, explicit starting phase', async () => {
   const t = await mustCompile(`
 -> b
 === a ===
@@ -53,7 +53,7 @@ test('P0.2 construct: once-only (*) vs sticky (+) choices', async () => {
   assert.equal(t.nodes[0].choices[1].sticky, true);
 });
 
-test('P0.2 construct: gates, @human, ~loop~, diverts, END', async () => {
+test('P0.2 construct: gates, @human, ~loop~, automatic next steps, END', async () => {
   const t = await mustCompile(`
 VAR i = 0
 === a ===
@@ -69,7 +69,7 @@ VAR i = 0
   assert.equal(loop.gate?.source, 'i < 5');
   assert.equal(human.human, true);
   assert.equal(human.target, 'b');
-  assert.deepEqual(t.nodes[1].divert, { target: 'END', line: 8 });
+  assert.deepEqual(t.nodes[1].next, { target: 'END', line: 8 });
 });
 
 test('P0.2 construct: mutations =, +=, -=', async () => {
@@ -123,7 +123,7 @@ VAR ok = true
 test('parse errors carry line numbers and suggestions', async () => {
   const result = await compile(`
 === a ===
-* [No divert here]
+* [No destination here]
 `);
   const err = result.diagnostics.find((d) => d.code === CODES.PARSE);
   assert.ok(err);

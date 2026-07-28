@@ -40,7 +40,7 @@
  *    human(Id)                            @human checkpoint
  *    loop_marked(Id)                      ~loop~ declared cycle edge
  *    gate(Id, Expr, Source)               {gate} as an AST + original text
- *    divert(Node, Target, Line)           unconditional fallthrough
+ *    next_step(Node, Target, Line)        automatic next step
  *    timebox(Node, Seconds)               # timebox: (speculative phases)
  *    priority(Node, Level)                # priority:
  *
@@ -63,7 +63,7 @@
 % Facts arrive from a separate file (or load_string), so declare them
 % dynamic — and discontiguous, since the emitter groups them per phase.
 :- dynamic plan_start/1, node/3, variable/4, action/5, choice/5,
-           label/2, sticky/1, human/1, loop_marked/1, gate/3, divert/3,
+           label/2, sticky/1, human/1, loop_marked/1, gate/3, next_step/3,
            timebox/2, priority/2.
 :- discontiguous finding/2.
 
@@ -223,7 +223,8 @@ eventually_false(E, Scope) :-
 /* ═════════════════════ 3 · The graph ═══════════════════════════════════
  *
  * Two edge relations matter:
- *   effective — choices whose gate is not provably false, plus diverts.
+ *   effective — choices whose gate is not provably false, plus automatic
+ *     next steps.
  *     Dead-end / reachability / cycle analysis all run on this graph,
  *     because a provably-false gate is an edge that never exists.
  *   unfiltered — every authored edge, used only by the per-gate MAR014
@@ -234,13 +235,13 @@ false_gate(C) :- gate(C, E, _), gate_status(E, all, unsat).
 
 eff_choice_edge(C, F, T) :- choice(C, F, T, _, _), \+ false_gate(C).
 eff_edge(F, T) :- eff_choice_edge(_, F, T).
-eff_edge(F, T) :- divert(F, T, _).
+eff_edge(F, T) :- next_step(F, T, _).
 
 % One step between declared phases. END terminates every path, so it is
 % never an intermediate node.
 eff_step(F, T) :- eff_edge(F, T), \+ end_id(T), node(T, _, _).
 any_step(F, T) :- choice(_, F, T, _, _), \+ end_id(T), node(T, _, _).
-any_step(F, T) :- divert(F, T, _), \+ end_id(T), node(T, _, _).
+any_step(F, T) :- next_step(F, T, _), \+ end_id(T), node(T, _, _).
 
 %% can_reach(?A, ?B): a path of one or more effective steps. Tabled so the
 %% recursion terminates on cyclic graphs.
@@ -303,8 +304,8 @@ finding('MAR017', Line) :-
 finding('MAR023', Line) :-
     timebox(N, _), node(N, Line, _),
     findall(x, choice(_, N, _, _, _), Cs), length(Cs, Choices),
-    ( divert(N, _, _) -> Diverts = 1 ; Diverts = 0 ),
-    Exits is Choices + Diverts,
+    ( next_step(N, _, _) -> NextSteps = 1 ; NextSteps = 0 ),
+    Exits is Choices + NextSteps,
     Exits < 2.
 
 /* ── Loop exits (MAR009 / MAR010 / loop-exit MAR014) ────────────────────
@@ -333,15 +334,15 @@ cycle_scope(N, nodes(Ms)) :- setof(M, cycle_member(N, M), Ms).
 exit_edge(N, choice(C), Line) :-
     cycle_member(N, M), eff_choice_edge(C, M, T), leaves(N, T),
     choice(C, _, _, Line, _).
-exit_edge(N, divert, Line) :-
-    cycle_member(N, M), divert(M, T, Line), leaves(N, T).
+exit_edge(N, next_step, Line) :-
+    cycle_member(N, M), next_step(M, T, Line), leaves(N, T).
 
 leaves(_, T) :- end_id(T), !.
 leaves(N, T) :- \+ cycle_member(N, T).
 
-% A divert or ungated choice is a sure exit; a gated one needs a
+% An automatic next step or ungated choice is a sure exit; a gated one needs a
 % satisfiable verdict (with cycle-scoped monotonicity).
-exit_sat(_, divert).
+exit_sat(_, next_step).
 exit_sat(Scope, choice(C)) :-
     ( gate(C, E, _) -> gate_status(E, Scope, sat) ; true ).
 
@@ -400,7 +401,7 @@ bounded_loop_gate(C, N, T, E) :-
  */
 
 cycle_edge(F, T, choice(C)) :- eff_choice_edge(C, F, T), \+ end_id(T), node(T, _, _).
-cycle_edge(F, T, divert)    :- divert(F, T, _), \+ end_id(T), node(T, _, _).
+cycle_edge(F, T, next_step) :- next_step(F, T, _), \+ end_id(T), node(T, _, _).
 
 %% undeclared_cycle(-Nodes): a simple cycle none of whose edges is marked.
 %% Each cycle is reported once, from its alphabetically-first phase.
@@ -454,8 +455,8 @@ human_gate(C, N, Label) :- human(C), choice(C, N, _, _, _), label(C, Label).
 %% speculative(?N) — a timeboxed phase (try it; abandon if the budget dries up).
 speculative(N) :- timebox(N, _).
 
-% Steps an agent may take alone: diverts, and choices not marked @human.
-agent_step(F, T) :- divert(F, T, _).
+% Steps an agent may take alone: automatic next steps and non-human choices.
+agent_step(F, T) :- next_step(F, T, _).
 agent_step(F, T) :- eff_choice_edge(C, F, T), \+ human(C).
 
 :- table agent_reach/2.
@@ -486,7 +487,7 @@ reset_plan :-
     retractall(human(_)),
     retractall(loop_marked(_)),
     retractall(gate(_, _, _)),
-    retractall(divert(_, _, _)),
+    retractall(next_step(_, _, _)),
     retractall(timebox(_, _)),
     retractall(priority(_, _)),
     abolish_all_tables.
@@ -588,13 +589,13 @@ take_choice(C, moved(To)) :-
     choice(C, _, To, _, _),
     enter_node(To).
 
-%% do_advance(-Result): follow the fallthrough divert. No rationale is
+%% do_advance(-Result): follow the automatic next step. No rationale is
 %% required (the reference defaults it), matching src/state.ts advance.
 do_advance(refused(completed)) :- w_status(completed), !.
 do_advance(Result) :-
     w_current(N),
-    (  divert(N, To, _) -> enter_node(To), Result = moved(To)
-    ;  Result = refused('no-divert')
+    (  next_step(N, To, _) -> enter_node(To), Result = moved(To)
+    ;  Result = refused('no-next-step')
     ).
 
 /* Choice resolution — id, then numeric index, then unambiguous

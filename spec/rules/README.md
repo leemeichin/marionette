@@ -44,7 +44,7 @@ sticky(Id).                          % "+" repeatable (absent → "*" once-only)
 human(Id).                           % @human checkpoint
 loop_marked(Id).                     % ~loop~ declared cycle edge
 gate(Id, Expr, Source).              % {gate} as AST + original text
-divert(Node, Target, Line).          % unconditional fallthrough
+next_step(Node, Target, Line).       % automatic next step
 timebox(Node, Seconds).              % valid # timebox: (speculative phases)
 priority(Node, Level).               % valid # priority: critical|high|normal|low
 ```

@@ -3,4 +3,4 @@ current: [1mrollout[22m
 Watch error rates and conversion during the ramp; done means the old flow is
 deleted, not merely dark.[22m
 variables: attempts=2
-no choices; divert available -> END (marionette state advance)
+automatic next step -> END (run marionette state advance)

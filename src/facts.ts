@@ -72,7 +72,7 @@ const ACTION_OPS: Record<string, string> = { '=': 'assign', '+=': 'inc', '-=': '
  *   label(Id, Label).
  *   sticky(Id).  human(Id).  loop_marked(Id).
  *   gate(Id, Expr, Source).
- *   divert(Node, Target, Line).
+ *   next_step(Node, Target, Line).
  *   timebox(Node, Seconds).                   % valid # timebox: only
  *   priority(Node, critical|high|normal|low). % valid # priority: only
  */
@@ -81,7 +81,7 @@ export function emitFacts(plan: ParsedPlan): string {
     ':- encoding(utf8).',
     '% Marionette fact base - generated, do not edit.',
     ':- discontiguous plan_start/1, node/3, variable/4, action/5, choice/5,',
-    '   label/2, sticky/1, human/1, loop_marked/1, gate/3, divert/3,',
+    '   label/2, sticky/1, human/1, loop_marked/1, gate/3, next_step/3,',
     '   timebox/2, priority/2.',
   ];
   if (plan.start) lines.push(`plan_start(${atom(plan.start)}).`);
@@ -108,7 +108,7 @@ export function emitFacts(plan: ParsedPlan): string {
     if (timebox) lines.push(`timebox(${atom(node.id)}, ${timebox.seconds}).`);
     const priority = resolvePriority(node.meta);
     if (priority) lines.push(`priority(${atom(node.id)}, ${priority}).`);
-    if (node.divert) lines.push(`divert(${atom(node.id)}, ${atom(node.divert.target)}, ${node.divert.line}).`);
+    if (node.next) lines.push(`next_step(${atom(node.id)}, ${atom(node.next.target)}, ${node.next.line}).`);
   });
 
   return lines.join('\n') + '\n';

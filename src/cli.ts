@@ -203,7 +203,7 @@ function printFrontier(trajectory: Trajectory, state: PlanState): void {
   if (state.status === 'completed') return;
   const options = frontier(trajectory, state);
   if (options.length === 0) {
-    if (node?.divert) process.stdout.write(`no choices; divert available -> ${node.divert.target} (marionette state advance)\n`);
+    if (node?.next) process.stdout.write(`automatic next step -> ${node.next.target} (run marionette state advance)\n`);
     return;
   }
   process.stdout.write('choices:\n');
@@ -214,7 +214,7 @@ function printFrontier(trajectory: Trajectory, state: PlanState): void {
     const line = `  [${i}] ${choice.label}${marks ? ' ' + marks : ''} -> ${choice.target}`;
     process.stdout.write(blocked ? out.dim(`${line}  [unavailable: ${blocked}]`) + '\n' : line + '\n');
   }
-  if (node?.divert) process.stdout.write(out.dim(`  (fallthrough) -> ${node.divert.target}\n`));
+  if (node?.next) process.stdout.write(out.dim(`  (automatic next step) -> ${node.next.target}\n`));
 }
 
 export async function run(argv: string[]): Promise<number> {

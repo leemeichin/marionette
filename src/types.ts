@@ -57,7 +57,7 @@ export interface Choice {
   line: number;
 }
 
-export interface Divert {
+export interface NextStep {
   target: string;
   line: number;
 }
@@ -84,8 +84,8 @@ export interface TrajectoryNode {
   /** Mutations applied when the node is entered. */
   actions: Action[];
   choices: Choice[];
-  /** Unconditional fallthrough divert (taken when no choice is available/taken). */
-  divert: Divert | null;
+  /** Automatic route taken when the phase is complete. */
+  next: NextStep | null;
   line: number;
   /** Namespaced extension metadata from `# key: value` tag lines (e.g. `github:issue`). */
   meta: Record<string, string | string[]>;
@@ -112,7 +112,7 @@ export interface Trajectory {
   refs: Ref[];
 }
 
-export const SPEC_VERSION = '0.2.0';
+export const SPEC_VERSION = '0.3.0';
 export const END = 'END';
 
 export type Severity = 'error' | 'warning';

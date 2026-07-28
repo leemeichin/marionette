@@ -82,10 +82,10 @@ function mutants(plan: ParsedPlan): Array<{ name: string; plan: ParsedPlan }> {
   const clone = () => structuredClone(plan);
 
   plan.nodes.forEach((node, n) => {
-    if (node.divert) {
+    if (node.next) {
       const m = clone();
-      m.nodes[n].divert = null;
-      out.push({ name: `drop-divert:${node.id}`, plan: m });
+      m.nodes[n].next = null;
+      out.push({ name: `drop-next-step:${node.id}`, plan: m });
     }
     if (node.actions.length > 0) {
       const m = clone();

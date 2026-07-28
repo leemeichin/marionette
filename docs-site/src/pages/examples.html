@@ -1,69 +1,85 @@
 <h1>examples</h1>
-<p class="lede">Complete plans you can run right here. Each example is a
-mini playground: the plan on the left, the walk on the right. Edit the
-plan and it re-compiles as you type; take choices as the agent, and watch
-the <code>@human</code> gates refuse you.</p>
+<p class="lede">Start with one step. Add a loop. Then explore the larger
+patterns when you need them. Every interactive example uses the real
+compiler and runner in your browser.</p>
 
-<h2 id="checkout">The checkout revamp</h2>
+<div class="example-grid" aria-label="Example difficulty">
+  <div class="example-card"><span class="example-kicker">10 seconds</span>
+    <strong>Hello, world</strong><p>One stage and one automatic next step.</p></div>
+  <div class="example-card"><span class="example-kicker">2 minutes</span>
+    <strong>Issues to PRs</strong><p>A small work queue with progress and a loop.</p></div>
+  <div class="example-card"><span class="example-kicker">Go deeper</span>
+    <strong>Checkout revamp</strong><p>Retry limits, gates and human decisions.</p></div>
+</div>
 
-<p>Up to five evidence-driven iterations behind a feature flag, a human
-ship gate, and a forced rethink when the attempt budget runs dry. This is
-the plan the <a href="/docs">docs</a> follow end to end. Try it: as
-<em>agent</em>, take the loop a few times and watch the gate close at five
-attempts — then try the launch choice and get refused.</p>
+<h2 id="hello">Hello, world</h2>
+
+<p>This is the smallest useful plan: do one piece of work, then finish.
+The line <code>-&gt; END</code> means “when this stage is done, complete
+the plan automatically.” Edit the task or press the only route on the
+right.</p>
+
+<mini-playground src="hello-world.mar" title="hello-world.mar"></mini-playground>
+
+<h2 id="issue-loop">Turn issues into pull requests</h2>
+
+<p>A compact agent workflow: pick an issue, update its status, implement
+it, open a pull request, and repeat. The counter makes this example finish
+after three issues; a real plan could use a human checkpoint or another
+explicit stopping rule instead.</p>
+
+<div class="callout">
+  <p class="callout-title">Read it from top to bottom</p>
+  <p><code>VAR</code> keeps progress. <code>~ prs_opened += 1</code>
+  updates it when work starts. The <code>+</code> route may repeat, and
+  <code>~loop~</code> confirms that the return is intentional.</p>
+</div>
+
+<mini-playground src="issue-loop.mar" title="issue-loop.mar"></mini-playground>
+
+<h2 id="checkout">Add limits and human decisions</h2>
+
+<p>The checkout plan allows up to five evidence-driven attempts. A person
+decides whether to launch, rethink, or stop. Try taking “Cohort converts”
+while acting as the agent: Marionette refuses because that route is marked
+<code>@human</code>.</p>
 
 <mini-playground src="checkout.mar" title="checkout.mar"></mini-playground>
 
-<h2 id="build-mvp">The MVP loop</h2>
+<h2 id="meta">A real project: this documentation site</h2>
 
-<p>Ship the smallest useful version, allow three attempts to improve it,
-then force a pivot-or-kill decision instead of a fourth quiet retry. A
-person makes the launch decision and the pivot decision.</p>
+<p>An agent built the site by following a Marionette plan: capture the real
+CLI, write the content, build the interactive demos, check accessibility,
+then stop for human review. The
+<a href="https://github.com/leemeichin/marionette/blob/main/plans/docs-site.mar">full plan</a>
+is intentionally detailed; use it when you want to see how a real delivery
+project records its gates and rework loops.</p>
 
-<mini-playground src="build_mvp.mar" title="examples/build_mvp.mar"></mini-playground>
+<h2 id="paas">Stress test: an 18-stage replatform</h2>
 
-<h2 id="meta">Marionette built this site</h2>
+<p>This production replatform covers shadow traffic, parity checks, SRE and
+Finance approval, rollback budgets, and freeze-window rebooking. It exists
+to prove the compiler still gives a clear answer when a plan is much larger
+than the examples above:</p>
 
-<p>An agent built this documentation site by following a Marionette plan.
-It recorded the real command output, rewrote the README, designed and built
-the site, checked accessibility, and then stopped for a person's review
-before merging. The repository contains both the plan and the record of
-its decisions.</p>
+<demo-cast id="20-validate-paas" title="validate --strict — 18 stages, 0 errors"></demo-cast>
 
-<mini-playground src="docs-site.mar" title="plans/docs-site.mar"></mini-playground>
+<p>Read
+<a href="https://github.com/leemeichin/marionette/blob/main/examples/paas_replatform.mar">the full source on GitHub</a>
+or load it in the home-page playground. It exercises every language
+feature and the external tracker references.</p>
 
-<h2 id="paas">A production replatform, 18 phases</h2>
-
-<p>The stress case: strangler-fig extraction of auth and billing, shadow
-traffic with parity holds, SRE and Finance sign-offs, error-budget
-cutbacks with a bounded retry budget, an architecture-board escalation
-after the third cutback, and a freeze-window booking loop that can rebook
-as many times as support pulls it. Eleven declared loops, every one with a
-verified or human exit — and the compiler checks all of it on every push:</p>
-
-<demo-cast id="20-validate-paas" title="validate --strict — 18 phases, 0 errors"></demo-cast>
-
-<p>The full source is longer than a screen, so it lives in the repo:
-<a href="https://github.com/leemeichin/marionette/blob/main/examples/paas_replatform.mar">examples/paas_replatform.mar</a>
-— or load it in the <a href="/">playground</a> from the example picker.
-It doubles as the execution baseline: the conformance suite walks it end to
-end, and it exercises every DSL v0 construct plus refs
-(<code>github:</code>/<code>jira:</code>/<code>linear:</code>) and
-per-phase delivery overrides.</p>
-
-<h2 id="use-cases">Projects that suit Marionette</h2>
+<h2 id="use-cases">Where Marionette fits</h2>
 
 <ul>
-  <li><strong>Agent-run projects with important decisions.</strong> The
-    agent can only use choices in the plan, and choices marked
-    <code>@human</code> always require your approval.</li>
-  <li><strong>Migrations and launches.</strong> Write down fallback plans
-    for problems such as mismatched data or a cancelled launch window.
-    Marionette checks that every fallback leads somewhere.</li>
-  <li><strong>Work with a retry limit.</strong> Express rules such as “try
-    up to three times, then ask a person” directly in the plan.</li>
-  <li><strong>Projects that need a decision record.</strong> Every choice
-    stores who made it, when, and why.</li>
+  <li><strong>Agent-run projects with important decisions.</strong>
+    <code>@human</code> keeps approval with a named person.</li>
+  <li><strong>Migrations and launches.</strong> Write down rollback and
+    fallback routes before they are needed.</li>
+  <li><strong>Work with a retry limit.</strong> Try a bounded number of
+    times, then stop or ask someone.</li>
+  <li><strong>Projects that need a decision record.</strong> Every route
+    records who took it, when, and why.</li>
 </ul>
 
 <script type="module" src="/mini.js"></script>

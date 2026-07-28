@@ -14,7 +14,7 @@ function highlightChoiceTail(s) {
     rest = rest.slice(m[0].length);
     return true;
   };
-  // any order: gates, labels, @human, ~loop~, then divert
+  // any order: gates, labels, @human, ~loop~, then the destination arrow
   for (let guard = 0; guard < 20 && rest.length > 0; guard++) {
     if (eat(/^\s+/, null)) continue;
     if (eat(/^\{[^}]*\}/, 'mar-gate')) continue;

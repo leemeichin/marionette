@@ -17,7 +17,8 @@ export interface Style {
 const plain = (s: string) => s;
 
 export function styleFor(stream: { isTTY?: boolean }): Style {
-  const enabled = stream.isTTY === true &&
+  const force = process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '0';
+  const enabled = (stream.isTTY === true || force) &&
     process.env.NO_COLOR === undefined && process.env.TERM !== 'dumb';
   if (!enabled) {
     return { red: plain, yellow: plain, green: plain, cyan: plain, magenta: plain, dim: plain, bold: plain, enabled };

@@ -73,9 +73,9 @@ all build failures, each with a line number and a fix:
 
 ```console
 $ marionette validate checkout.mar
-checkout.mar:22: error[MAR006]: phase "rollout" is a dead end: no choices and no divert
+checkout.mar:22: error[MAR006]: phase "rollout" has no available way forward
   22 | === rollout ===
-  help: add a choice or divert (e.g. "-> END") so every path has an exit
+  help: add a choice or an automatic next step (e.g. "-> END")
 checkout.mar:20: error[MAR008]: undeclared cycle: build_checkout -> build_checkout
   20 | + [Conversion flat — iterate] -> build_checkout
   help: cycles must be intentional: mark the returning choice with ~loop~
@@ -128,7 +128,7 @@ Ramp the flag to 100% and retire the old flow.
 Watch error rates and conversion during the ramp; done means the old flow is
 deleted, not merely dark.
 variables: attempts=2
-no choices; divert available -> END (marionette state advance)
+automatic next step -> END (run marionette state advance)
 ```
 
 Edit the plan mid-project and the hash binding catches it: drift is an

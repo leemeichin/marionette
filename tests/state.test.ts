@@ -82,7 +82,7 @@ test('walker: sticky loops iterate, counters progress, gated exit opens', async 
   assert.equal(state.log.filter((entry) => entry.choice !== null).length, 3);
 });
 
-test('walker: divert advance and completion', async () => {
+test('walker: automatic advance and completion', async () => {
   const t = await compiled();
   const state = initState(t);
   takeChoice(t, state, '0', { actor: 'lee', rationale: 'green' });

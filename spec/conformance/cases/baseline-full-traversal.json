@@ -1,6 +1,6 @@
 {
   "case": "baseline-full-traversal",
-  "description": "End-to-end traversal of the Phase 2 baseline plan: every construct, three loop families iterated, counter gates opening and shutting, @human refusals and human-recorded decisions, ambiguity, divert completion, and refusal-after-END.",
+  "description": "End-to-end traversal of the Phase 2 baseline plan: every construct, three loop families iterated, counter gates opening and shutting, @human refusals and human-recorded decisions, ambiguity, automatic completion, and refusal-after-END.",
   "plan": "examples/paas_replatform.mar",
   "steps": [
     { "expect": { "current": "observability_build", "status": "active", "variables": { "auth_cutbacks": 0, "freeze_window": "unbooked", "observability_live": false } } },

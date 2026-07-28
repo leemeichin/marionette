@@ -1,0 +1,13 @@
+# project: issue-to-pr
+VAR prs_opened = 0
+
+=== work_issue ===
+Move the next ready issue to "In progress", implement it, open a pull
+request, and move the issue to "In review".
+~ prs_opened += 1
++ {prs_opened < 3} [Pick up the next issue] ~loop~ -> work_issue
+* {prs_opened >= 3} [Queue is clear] -> share_update
+
+=== share_update ===
+Post a short status update with links to the open pull requests.
+-> END

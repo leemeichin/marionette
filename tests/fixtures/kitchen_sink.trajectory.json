@@ -1,6 +1,6 @@
 {
-  "spec": "0.2.0",
-  "hash": "sha256:10aa41739d8e7186942690fa26295c7cae9af5660f85b0974751c5bd963833a0",
+  "spec": "0.3.0",
+  "hash": "sha256:7112e6b5ac0a7b61943becd2ca585ecd7c927c92c26f6d7f7d7e12a95015371e",
   "source": {
     "file": "kitchen_sink.mar"
   },
@@ -108,7 +108,7 @@
           "line": 18
         }
       ],
-      "divert": null,
+      "next": null,
       "line": 10,
       "meta": {
         "github:issue": "1"
@@ -162,7 +162,7 @@
           "line": 23
         }
       ],
-      "divert": null,
+      "next": null,
       "line": 20,
       "meta": {},
       "refs": []
@@ -193,7 +193,7 @@
           "line": 30
         }
       ],
-      "divert": null,
+      "next": null,
       "line": 25,
       "meta": {
         "timebox": "2d",
@@ -206,7 +206,7 @@
       "body": "Write the retro; archive the plan.",
       "actions": [],
       "choices": [],
-      "divert": {
+      "next": {
         "target": "END",
         "line": 34
       },

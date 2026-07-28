@@ -1,8 +1,6 @@
-<h1>getting-started</h1>
-<p class="lede">Install the command-line tool, write a small plan, and run
-it — with any coding agent. The skills that teach an agent to draft and
-execute plans are plain Markdown, so Claude Code, Codex, and OpenCode all
-work.</p>
+<h1>getting started</h1>
+<p class="lede">Install the command-line tool, write one small plan, and
+hand its next step to any coding agent.</p>
 
 <p>The examples below use a terminal. If command-line tools are new to you,
 copy each line that begins with <code>$</code> and run it in order. The
@@ -10,7 +8,7 @@ copy each line that begins with <code>$</code> and run it in order. The
 
 <h2 id="cli">1 · Install the CLI</h2>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code># a) global command from a clone
+<pre class="code" data-lang="shell" data-title="Install Marionette"><code># a) global command from a clone
 $ git clone https://github.com/leemeichin/marionette &amp;&amp; cd marionette
 $ npm install &amp;&amp; npm link          # installs deps, builds, puts `marionette` on PATH
 $ marionette version
@@ -21,34 +19,37 @@ $ npx --yes github:leemeichin/marionette validate plan.mar</code></pre>
 <p>Use <code>npm link</code> if you expect to run Marionette often. Use
 <code>npx</code> if you only want to try it or run it in automated checks.</p>
 
-<h2 id="first-plan">2 · Write and validate a first plan</h2>
+<h2 id="first-plan">2 · Write a small first plan</h2>
 
-<p>Start with a small project. Each named section is a stage of the work,
-not an individual task. The choices at the end of a stage decide what
-happens next.</p>
+<p>Start with a workflow you already understand. This example picks up
+three issues, opens a pull request for each one, updates their status, then
+posts a final update. Each <code>=== name ===</code> section is a stage of
+the project—not a tiny implementation task.</p>
 
 <mar-src title="plan.mar">
-# project: importer
-VAR api_attempts = 0
+# project: issue-to-pr
+VAR prs_opened = 0
 
-=== build_importer ===
-Build the importer against the vendor API.
-~ api_attempts += 1
-* [API integration works] -> signoff
-+ {api_attempts < 3} [Tweak and retry] ~loop~ -> build_importer
-* {api_attempts >= 3} [API not viable] -> csv_fallback
+=== work_issue ===
+Move the next ready issue to "In progress", implement it, open a pull
+request, and move the issue to "In review".
+~ prs_opened += 1
++ {prs_opened < 3} [Pick up the next issue] ~loop~ -> work_issue
+* {prs_opened >= 3} [Queue is clear] -> share_update
 
-=== csv_fallback ===
-Fall back to CSV upload: same importer surface, manual ingestion.
-* [Fallback works] -> signoff
-
-=== signoff ===
-Sam reviews the shipped surface.
-* [Sam approves, ship it] @human -> END
-+ [Changes requested] @human ~loop~ -> build_importer
+=== share_update ===
+Post a short status update with links to the open pull requests.
+-> END
 </mar-src>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ marionette validate plan.mar --strict   # check for problems
+<div class="callout">
+  <p class="callout-title">What does <code>-&gt; END</code> mean?</p>
+  <p>It is an <strong>automatic next step</strong>: when
+  <code>share_update</code> is finished, complete the plan. Read the arrow
+  literally: continue to the named stage, or to <code>END</code>.</p>
+</div>
+
+<pre class="code" data-lang="shell" data-title="Check the plan"><code>$ marionette validate plan.mar --strict   # check for problems
 $ marionette summarize plan.mar           # read a plain-language summary
 $ marionette render plan.mar              # create a flowchart</code></pre>
 
@@ -73,7 +74,7 @@ for your agent of choice:</p>
 <p>This repository is a single-plugin marketplace; the plugin installs both
 skills in every project. In any Claude Code session:</p>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>/plugin marketplace add leemeichin/marionette
+<pre class="code" data-lang="text" data-title="Claude Code"><code>/plugin marketplace add leemeichin/marionette
 /plugin install marionette@marionette</code></pre>
 
 <h3 id="codex">Codex</h3>
@@ -81,7 +82,7 @@ skills in every project. In any Claude Code session:</p>
 <p>Codex reads <code>AGENTS.md</code>. Copy the skills into your project
 and point to them:</p>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ mkdir -p .agents/marionette
+<pre class="code" data-lang="shell" data-title="Copy the skills"><code>$ mkdir -p .agents/marionette
 $ curl -fsSL https://raw.githubusercontent.com/leemeichin/marionette/main/skills/marionette-authoring/SKILL.md \
     -o .agents/marionette/authoring.md
 $ curl -fsSL https://raw.githubusercontent.com/leemeichin/marionette/main/skills/marionette-execution/SKILL.md \
@@ -90,7 +91,7 @@ $ curl -fsSL https://raw.githubusercontent.com/leemeichin/marionette/main/skills
 <p>Then add two lines to <code>AGENTS.md</code> (create it in the project
 root if it doesn't exist):</p>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>To plan a project as a Marionette trajectory (.mar), follow .agents/marionette/authoring.md.
+<pre class="code" data-lang="text" data-title="AGENTS.md"><code>To plan a project as a Marionette trajectory (.mar), follow .agents/marionette/authoring.md.
 To execute or resume a .mar plan, follow .agents/marionette/execution.md.</code></pre>
 
 <h3 id="opencode">OpenCode</h3>
@@ -111,7 +112,7 @@ hold no matter which agent drives it.</p>
 
 <h3 id="first-notes">Then give it real notes</h3>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>Use the marionette authoring skill. Plan this for me: we're migrating the
+<pre class="code" data-lang="text" data-title="A prompt for your agent"><code>Use the marionette authoring skill. Plan this for me: we're migrating the
 billing service off Stripe Classic. Spike the new API first — if metered
 billing isn't supported we stay put. Up to two spike attempts. Finance
 signs off before any customer is switched, and we roll back if error
@@ -123,11 +124,11 @@ decision that needs a person.</p>
 
 <h2 id="traverse">4 · Start and follow the plan</h2>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ marionette state init plan.mar        # start a run and create the progress file
+<pre class="code" data-lang="shell" data-title="Walk the plan"><code>$ marionette state init plan.mar        # start a run and create the progress file
 $ marionette brief plan.mar             # show the agent's next assignment
 $ marionette state show plan.mar        # show current progress and available choices
 $ marionette state choose plan.mar 1 --actor agent --rationale "why"
-$ marionette state advance plan.mar --actor agent   # move to the next stage
+$ marionette state advance plan.mar --actor agent   # follow an automatic next step
 $ marionette state rebind plan.mar      # accept a plan edit and keep the history
 $ marionette render plan.mar            # show progress on the flowchart</code></pre>
 
@@ -145,5 +146,5 @@ for the machine-readable interface.</p>
 This minimal setup checks plans for errors and notices if a running plan
 has been edited:</p>
 
-<pre class="code" tabindex="0" aria-label="code sample (scrollable)"><code>$ marionette validate plans/*.mar --strict     # plans stay sound
+<pre class="code" data-lang="shell" data-title="CI checks"><code>$ marionette validate plans/*.mar --strict     # plans stay sound
 $ marionette state show plans/project.mar      # exit 3 = plan edited without rebind</code></pre>

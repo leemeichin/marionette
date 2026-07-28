@@ -66,7 +66,7 @@ After initialization, the host uses:
 - `next` — read the current projection.
 - `choose` — take an exact choice id with rationale, expected revision and
   optional idempotency key.
-- `advance` — follow a divert with the same write controls.
+- `advance` — follow the automatic next step with the same write controls.
 - `record` — attach a graph-linked record without moving the walker.
 - `events` — replay journal events after a sequence cursor.
 

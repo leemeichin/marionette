@@ -87,7 +87,7 @@
     },
     "node": {
       "type": "object",
-      "required": ["id", "body", "actions", "choices", "divert", "meta", "refs"],
+      "required": ["id", "body", "actions", "choices", "next", "meta", "refs"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
@@ -101,8 +101,8 @@
           "type": "array",
           "items": { "$ref": "#/$defs/choice" }
         },
-        "divert": {
-          "description": "Unconditional fallthrough divert, or null.",
+        "next": {
+          "description": "Automatic next step when the phase is complete, or null.",
           "oneOf": [
             { "type": "null" },
             {

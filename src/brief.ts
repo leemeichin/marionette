@@ -25,7 +25,7 @@ export type BriefStatus =
   | 'active'
   /** Only @human choices are available: escalate and pause. */
   | 'awaiting-human'
-  /** Nothing is available and there is no divert: the traversal is stuck. */
+  /** Nothing is available and there is no automatic next step: the traversal is stuck. */
   | 'stranded'
   /** The plan reached END. */
   | 'completed';
@@ -86,7 +86,7 @@ export interface Brief {
   /** Effective delivery config at this node (node tags override plan tags). */
   delivery: DeliveryConfig;
   frontier: BriefChoice[];
-  divert: { target: string; targetTitle: string | null } | null;
+  next: { target: string; targetTitle: string | null } | null;
   /** Present exactly when status is "awaiting-human". */
   escalation: Escalation | null;
   progress: {
@@ -141,15 +141,15 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
   }));
 
   const available = choices.filter((c) => c.available);
-  const divert = node?.divert
-    ? { target: node.divert.target, targetTitle: node.divert.target === END ? null : title(nodeById(node.divert.target)) }
+  const next = node?.next
+    ? { target: node.next.target, targetTitle: node.next.target === END ? null : title(nodeById(node.next.target)) }
     : null;
 
   let status: BriefStatus = 'active';
   let escalation: Escalation | null = null;
   if (completed) {
     status = 'completed';
-  } else if (available.length === 0 && !divert) {
+  } else if (available.length === 0 && !next) {
     status = 'stranded';
   } else if (available.length > 0 && available.every((c) => c.human)) {
     status = 'awaiting-human';
@@ -193,7 +193,7 @@ export function buildBrief(trajectory: Trajectory, state: PlanState, options: Br
       : null,
     delivery: resolveDelivery(trajectory.meta, node?.meta ?? {}, node?.id ?? ''),
     frontier: choices,
-    divert,
+    next,
     escalation,
     progress: {
       steps: state.log.length,
@@ -304,8 +304,8 @@ export function renderBrief(brief: Brief, style?: Style): string {
       lines.push(c.available ? line : s.dim(`${line}  [unavailable: ${c.blocked}]`));
     }
   }
-  if (brief.divert) {
-    lines.push(s.dim(`  (fallthrough) -> ${brief.divert.target} — marionette state advance`));
+  if (brief.next) {
+    lines.push(s.dim(`  (automatic next step) -> ${brief.next.target} — marionette state advance`));
   }
 
   if (brief.escalation) {
@@ -315,7 +315,7 @@ export function renderBrief(brief: Brief, style?: Style): string {
   }
   if (brief.status === 'stranded') {
     lines.push('');
-    lines.push(s.red('this traversal is stuck: no choice is available and there is no fallthrough.'));
+    lines.push(s.red('this traversal is stuck: no choice or automatic next step is available.'));
     lines.push('  review the gates/variables above; the plan may need editing (then `marionette state rebind`).');
   }
   if (brief.status === 'completed') {

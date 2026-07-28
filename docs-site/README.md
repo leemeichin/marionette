@@ -1,8 +1,9 @@
 # Marionette docs site
 
-A dependency-free static site: full-viewport terminal aesthetic, interactive
-demos replayed from **verbatim captures of the real CLI**, held to WCAG AA
-by build-time gates. Design rationale and tokens: [`DESIGN.md`](DESIGN.md).
+A dependency-free static documentation site: a spacious reading layout,
+syntax-highlighted live editors, and interactive demos replayed from
+**verbatim captures of the real CLI**, held to WCAG AA by build-time gates.
+Design rationale and tokens: [`DESIGN.md`](DESIGN.md).
 
 ## Develop
 
@@ -58,7 +59,9 @@ from the Cloudflare dashboard afterwards if wanted.
   on the examples page as an editable two-pane widget (plan left, walk
   right), without the 3D canvas — see `public/mini.js`.
 - `<mar-file src="checkout.mar">` / `<mar-src>…</mar-src>` render
-  syntax-tinted `.mar` sources.
+  syntax-tinted `.mar` sources. Static shell/JSON samples are highlighted
+  by the zero-dependency build, and editable `.mar` fields use an
+  `aria-hidden` highlighted mirror behind the native textarea.
 - Old URLs (`/playground`, `/syntax`, `/walkthrough`, `/reference`) 301 to
   their new homes via `public/_redirects`.
 

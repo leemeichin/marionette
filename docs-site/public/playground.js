@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { compile } from '/lib/compile.js';
 import { initState, frontier, takeChoice, advance, WalkError } from '/lib/state.js';
 import { EXAMPLES } from '/examples-data.js';
+import { enhanceMarEditor } from '/highlight.js';
 
 
 function boot(el) {
@@ -20,6 +21,7 @@ function boot(el) {
   const rationaleEl = el.querySelector('#pg-rationale');
   const canvasHost = el.querySelector('[data-canvas]');
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const paintEditor = enhanceMarEditor(el.querySelector('[data-code-editor]'), srcEl);
 
   let trajectory = null;
   let state = null;
@@ -36,9 +38,11 @@ function boot(el) {
   }
   exampleSel.addEventListener('change', () => {
     srcEl.value = EXAMPLES[Number(exampleSel.value)].source;
+    paintEditor();
     recompile();
   });
   srcEl.value = EXAMPLES[0].source;
+  paintEditor();
   srcEl.addEventListener('input', debounce(recompile, 250));
   resetEl.addEventListener('click', () => {
     if (!trajectory) return;
@@ -144,10 +148,10 @@ function boot(el) {
         }
         choicesEl.append(btn);
       }
-      if (node?.divert) {
+      if (node?.next) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = `(fallthrough) advance -> ${node.divert.target}`;
+        btn.textContent = `Continue automatically → ${node.next.target}`;
         btn.addEventListener('click', () => step(() =>
           advance(trajectory, state, { actor: actor(), rationale: rationaleEl.value || undefined })));
         choicesEl.append(btn);
@@ -210,7 +214,7 @@ function makeViz(host, reduced) {
     const queue = [trajectory.start];
     const out = (id) => {
       const n = trajectory.nodes.find((x) => x.id === id);
-      return [...(n?.choices.map((c) => c.target) ?? []), ...(n?.divert ? [n.divert.target] : [])];
+      return [...(n?.choices.map((c) => c.target) ?? []), ...(n?.next ? [n.next.target] : [])];
     };
     while (queue.length) {
       const id = queue.shift();
@@ -283,7 +287,7 @@ function makeViz(host, reduced) {
       const from = pos.get(n.id);
       const links = [
         ...n.choices.map((c) => ({ id: c.id, target: c.target, human: c.human, loop: c.loop })),
-        ...(n.divert ? [{ id: `${n.id}=>divert`, target: n.divert.target, human: false, loop: false }] : []),
+        ...(n.next ? [{ id: `${n.id}=>next`, target: n.next.target, human: false, loop: false }] : []),
       ];
       for (const link of links) {
         const to = pos.get(link.target);
@@ -322,7 +326,7 @@ function makeViz(host, reduced) {
     visited = new Set(['END', ...state.log.map((e) => e.to), graph.trajectory.start]);
     if (state.status !== 'completed') visited.delete('END');
     takenChoices = new Set(state.log.filter((e) => e.choice).map((e) => e.choice));
-    for (const e of state.log) if (!e.choice && e.from) takenChoices.add(`${e.from}=>divert`);
+    for (const e of state.log) if (!e.choice && e.from) takenChoices.add(`${e.from}=>next`);
     retheme();
     if (!reduced.matches) startPulse();
   }

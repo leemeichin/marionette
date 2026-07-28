@@ -58,9 +58,9 @@ export function renderMermaid(trajectory: Trajectory, options: RenderOptions = {
       if (choice.human) humanEdges.push(edgeIndex);
       edgeIndex++;
     }
-    if (node.divert) {
-      if (node.divert.target === END) usesEnd = true;
-      lines.push(`  ${node.id} --> ${node.divert.target}`);
+    if (node.next) {
+      if (node.next.target === END) usesEnd = true;
+      lines.push(`  ${node.id} --> ${node.next.target}`);
       edgeIndex++;
     }
   }

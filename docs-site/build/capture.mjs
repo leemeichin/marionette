@@ -10,7 +10,7 @@
 // Usage:  node build/capture.mjs        (from docs-site/)
 // Needs:  util-linux `script` for the pty (colors are TTY-gated), Linux/macOS.
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -38,10 +38,32 @@ for (const f of ['checkout.mar', 'checkout-v2.mar', 'checkout-broken.mar',
 /** Run a CLI command in the scratch dir under a pty; return {out, code}. */
 function pty(cmd, { stdin } = {}) {
   const shellCmd = `node ${cli} ${cmd}` + (stdin ? ` < ${stdin}` : '');
+  const env = { ...process.env, TERM: 'xterm-256color', FORCE_COLOR: '1' };
+  delete env.NO_COLOR; // presence alone disables color
+
+  // CI and agent shells can expose stdin as a socket rather than a terminal.
+  // A PTY cannot attach there, so run the exact CLI command directly and
+  // merge its two captured streams. FORCE_COLOR preserves the TTY bytes.
+  if (!process.stdin.isTTY) {
+    const result = spawnSync('/bin/sh', ['-c', `${shellCmd} 2>&1`], {
+      cwd: scratch,
+      encoding: 'utf8',
+      env,
+    });
+    return {
+      out: (result.stdout ?? '').replaceAll('\r\n', '\n'),
+      code: result.status ?? 1,
+    };
+  }
+
   try {
-    const env = { ...process.env, TERM: 'xterm-256color' };
-    delete env.NO_COLOR; // presence alone disables color
-    const out = execFileSync('script', ['-qec', shellCmd, '/dev/null'], {
+    // util-linux and BSD/macOS expose the same tool with different argument
+    // shapes. Both variants return the child status (`-e`) and run through
+    // the shell so the one captured stdin redirect behaves identically.
+    const args = process.platform === 'darwin'
+      ? ['-q', '-e', '/dev/null', '/bin/sh', '-c', shellCmd]
+      : ['-qec', shellCmd, '/dev/null'];
+    const out = execFileSync('script', args, {
       cwd: scratch,
       encoding: 'utf8',
       env,

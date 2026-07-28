@@ -1,0 +1,5 @@
+# project: hello-world
+
+=== say_hello ===
+Create hello.txt containing "Hello, world!" and commit it.
+-> END

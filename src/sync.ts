@@ -197,7 +197,7 @@ export function buildSyncManifest(
               .filter(Boolean).join(' ');
             return `- [${c.label}]${marks ? ' ' + marks : ''} → ${c.target}`;
           }),
-          ...(node.divert ? [`- (fallthrough) → ${node.divert.target}`] : []),
+          ...(node.next ? [`- (automatic next step) → ${node.next.target}`] : []),
         ];
         ops.push({
           op: 'ensure-issue',
@@ -225,7 +225,7 @@ export function buildSyncManifest(
           op: 'comment',
           node: fromNode.id,
           ref: refs[0],
-          body: `**${entry.label ?? 'fallthrough'}** → \`${entry.to}\`\n` +
+          body: `**${entry.label ?? 'automatic next step'}** → \`${entry.to}\`\n` +
             `${entry.rationale ?? '(no rationale recorded)'} — ${entry.actor}, ${entry.at}`,
           idempotencyKey: `${key}:log:${idx}`,
         });

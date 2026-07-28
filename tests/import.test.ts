@@ -83,7 +83,7 @@ test('hostile issue titles cannot inject DSL constructs', async () => {
   assert.ok(result.ok, result.diagnostics.map((d) => d.message).join('; '));
   const t = result.trajectory!;
   assert.equal(t.nodes.length, 5); // no phantom phases
-  assert.ok(t.nodes.every((n) => n.choices.length === 2)); // no injected choices or diverts
+  assert.ok(t.nodes.every((n) => n.choices.length === 2)); // no injected choices or automatic next steps
   assert.equal(resolveTracker(t).binding?.provider, 'github'); // no injected binding
 });
 
