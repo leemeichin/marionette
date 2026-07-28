@@ -4,6 +4,17 @@
   "description": "A compiled, plain-text project trajectory language — authored by humans, validated by a compiler, traversed by AI agents.",
   "type": "module",
   "license": "MIT",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/marionette.mjs"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
   "bin": {
     "marionette": "./bin/marionette.js"
   },
@@ -12,6 +23,7 @@
   "files": [
     "bin",
     "dist",
+    "extensions",
     "spec",
     "skills"
   ],
@@ -19,6 +31,7 @@
     "build": "tsc -p tsconfig.json",
     "bench:engine": "node --import tsx bench/engine.ts",
     "check": "tsc --noEmit -p tsconfig.json",
+    "check:pi": "node --check extensions/marionette.mjs",
     "test": "node --import tsx --test tests/*.test.ts",
     "prepare": "npm run build"
   },
@@ -32,5 +45,13 @@
   },
   "dependencies": {
     "swipl-wasm": "^8.0.4"
+  },
+  "peerDependencies": {
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "typebox": {
+      "optional": true
+    }
   }
 }

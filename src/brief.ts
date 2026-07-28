@@ -61,6 +61,17 @@ export interface Escalation {
   reason: string;
   /** Choice ids a human must decide between. */
   choices: string[];
+  /**
+   * Graph-authored temporal exits that can end the wait. There is no
+   * protocol-level timeout: an empty list means the checkpoint remains
+   * parked until a human responds.
+   */
+  fallbacks: Array<{
+    choice: string;
+    label: string;
+    target: string;
+    dueAt: string | null;
+  }>;
   how: string;
 }
 
@@ -178,13 +189,32 @@ export async function buildBrief(
     status = 'stranded';
   } else if (available.length > 0 && available.every((c) => c.human)) {
     status = 'awaiting-human';
+    const fallbacks = choices
+      .filter((choice) => choice.blockedCode === 'timeout-pending' && choice.timeout)
+      .map((choice) => {
+        const activated = state.activationStartedAt === null
+          ? Number.NaN
+          : Date.parse(state.activationStartedAt);
+        return {
+          choice: choice.id,
+          label: choice.label,
+          target: choice.target,
+          dueAt: Number.isFinite(activated)
+            ? new Date(activated + choice.timeout!.seconds * 1_000).toISOString()
+            : null,
+        };
+      });
     escalation = {
       reason: available.length === choices.length
         ? 'every choice at this phase is an @human checkpoint'
         : 'every currently-available choice is an @human checkpoint',
       choices: available.map((c) => c.id),
+      fallbacks,
       how: `pause and escalate: present this phase and its choices to a human; a human records the decision with ` +
-        `\`marionette state choose ${file} <choice> --actor <name> --rationale <text>\`. Do not take these choices autonomously.`,
+        `\`marionette state choose ${file} <choice> --actor <name> --rationale <text>\`. Do not take these choices autonomously. ` +
+        (fallbacks.length === 0
+          ? 'There is no implicit timeout or fallback; silence leaves the run parked.'
+          : 'Only the graph-authored timeout fallback(s) listed in this payload may end the wait without a human decision.'),
     };
   }
 
@@ -336,6 +366,12 @@ export function renderBrief(brief: Brief, style?: Style): string {
   if (brief.escalation) {
     lines.push('');
     lines.push(s.magenta(s.bold('escalation required: ')) + brief.escalation.reason);
+    for (const fallback of brief.escalation.fallbacks) {
+      lines.push(s.yellow(
+        `  authored fallback: ${fallback.label} (${fallback.choice})` +
+        `${fallback.dueAt ? ` opens ${fallback.dueAt}` : ''}`,
+      ));
+    }
     lines.push('  ' + brief.escalation.how);
   }
   if (brief.status === 'stranded') {

@@ -37,7 +37,7 @@ export {
   RUNTIME_PROTOCOL_VERSION, ProtocolError, parseRuntimeRequest, graphReference,
   type RuntimeRole, type RuntimePrincipal, type ProjectionProfile, type RuntimeBudget,
   type RuntimeRequest, type RuntimeEventKind, type GraphReference, type RuntimeEvent,
-  type RuntimeChoiceProjection, type RuntimeProjection, type RuntimeResponse,
+  type RuntimeChoiceProjection, type RuntimeEscalation, type RuntimeProjection, type RuntimeResponse,
   type RuntimeSuccess, type RuntimeFailure, type RuntimeErrorCode,
 } from './runtime-protocol.js';
 export {
@@ -45,6 +45,11 @@ export {
   type RuntimeIdempotencyRecord, type RuntimeSnapshot, type RuntimeCommandOptions,
   type RuntimeCommandResult,
 } from './runtime.js';
+export { RuntimeRunController } from './runtime-host.js';
+export {
+  PiAgentBridge, PiAgentBridgeError,
+  type PiAgentBridgeOptions,
+} from './pi-agent.js';
 export {
   RUNTIME_STORE_VERSION, MAX_EVENT_BYTES, RuntimeStoreError, runtimePaths,
   archiveTrajectory, resolveArchivedTrajectory, initializeRuntimeStore,

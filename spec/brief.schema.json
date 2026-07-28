@@ -418,6 +418,7 @@
           "required": [
             "reason",
             "choices",
+            "fallbacks",
             "how"
           ],
           "additionalProperties": false,
@@ -431,6 +432,38 @@
                 "type": "string"
               },
               "minItems": 1
+            },
+            "fallbacks": {
+              "type": "array",
+              "description": "Graph-authored timeout exits that can end the wait. Empty means the escalation parks indefinitely.",
+              "items": {
+                "type": "object",
+                "required": [
+                  "choice",
+                  "label",
+                  "target",
+                  "dueAt"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "choice": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "dueAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  }
+                }
+              }
             },
             "how": {
               "type": "string"

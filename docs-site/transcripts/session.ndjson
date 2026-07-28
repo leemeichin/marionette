@@ -1,5 +1,5 @@
-{"protocol":"0.2.0","id":1,"op":"initialize","client":{"name":"docs-site","version":"0.1"}}
-{"protocol":"0.2.0","id":2,"op":"next","profile":"work"}
-{"protocol":"0.2.0","id":3,"op":"choose","choiceId":"build_checkout#0","rationale":"metrics look good","expectedRevision":0,"idempotencyKey":"turn-1","profile":"signal"}
-{"protocol":"0.2.0","id":4,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}
-{"protocol":"0.2.0","id":5,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}
+{"protocol":"0.3.0","id":1,"op":"initialize","client":{"name":"docs-site","version":"0.1"}}
+{"protocol":"0.3.0","id":2,"op":"next","profile":"work"}
+{"protocol":"0.3.0","id":3,"op":"choose","choiceId":"build_checkout#0","rationale":"metrics look good","expectedRevision":0,"idempotencyKey":"turn-1","profile":"signal"}
+{"protocol":"0.3.0","id":4,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}
+{"protocol":"0.3.0","id":5,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}

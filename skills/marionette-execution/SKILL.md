@@ -47,7 +47,8 @@ Repeat until the brief says otherwise:
      arrange it for the deadline, then re-brief. Do not poll in a tight loop.
    - `awaiting-human` — deliver the brief's `escalation` payload to the
      primary session/human verbatim: the phase body, each choice (label,
-     target, gate) and the recorded `how`. Then **stop and wait**. Never
+     target, gate), any graph-authored `fallbacks`, and the recorded `how`.
+     Then **stop and wait**. Never
      take an `@human` choice on your own judgement. The human answers
      through either channel:
      - **Out of band:** they run `state choose` themselves with their own
@@ -64,6 +65,13 @@ Repeat until the brief says otherwise:
        or is silence — ask, never infer, never default. The walker refuses
        only `--actor agent` at `@human` gates: attribution, not ceremony,
        is the contract.
+     - **Trusted host UI:** when the host provides a human-only response path
+       (Pi's `/marionette-decide`, for example), direct the user there. The
+       model-facing `marionette_walk` tool stays agent-bound and cannot proxy
+       the human choice.
+     Silence never selects a default. If `fallbacks` is empty, the run parks
+     indefinitely; if it lists a timeout choice, schedule a wake-up for its
+     `dueAt` and re-brief then. Only the frontier may open that fallback.
    - `stranded` — report which gates are shut and the current variables; the
      plan likely needs editing (author fixes, then `marionette state rebind`).
      Stop.

@@ -214,7 +214,7 @@ end-to-end usage guides — deployable to Cloudflare with `wrangler deploy`
 - `docs/EXECUTION.md` — Phase 2: the executor loop, work packet, refs, delivery config, escalation
 - `docs/SYNC.md` — tracker import/export: `marionette import` and the `sync` manifest (Jira/Linear/GitHub)
 - `docs/RUNTIME.md` — local start/stop lifecycle and compact NDJSON protocol
-- `docs/decisions/` — ADRs (0001: Ink influence-only; 0002: TypeScript now, contract-first portability)
+- `docs/decisions/` — ADRs, including the Prolog semantics and human-escalation boundaries
 - `skills/marionette-authoring/` — the P0.5 authoring skill: NL notes → validated `.mar`
 - `skills/marionette-execution/` — the executor skill: brief → work → recorded decision (both installable as a plugin)
 - `docs/GETTING-STARTED.md` — install the CLI + skills, and the dogfood kick-off protocol
@@ -246,7 +246,9 @@ walker to the same behaviour. The **local runtime** has landed
 single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
 checks, idempotent writes and an append-only journal — the pi agent
-integration builds on it next (issue #4, OQ2 escalation channel).
+integration now consumes it through an agent-bound tool and a separate trusted
+`/marionette-decide` path. ADR-0004 is implemented and awaits the dogfood
+plan's formal human approval (issue #4).
 Tracker integration landed connection-free: `marionette import` ingests a
 Jira/Linear/GitHub backlog into a plan, and `marionette sync` computes the
 manifest an executor applies with its own tracker tools

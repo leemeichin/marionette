@@ -58,7 +58,7 @@ bounded at 64 KiB.
 The first request initializes the connection:
 
 ```json
-{"protocol":"0.2.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
+{"protocol":"0.3.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
 ```
 
 After initialization, the host uses:
@@ -90,19 +90,72 @@ prose. Truncated projections contain `truncated: true`, an `omitted` summary
 and a `bodyRef` that can be resolved against the archived trajectory.
 
 ```json
-{"protocol":"0.2.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
+{"protocol":"0.3.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
 ```
 
 The host should keep event traffic outside model context. Wake or prompt the
 model only for actionable states such as a new node, `observation.required`,
 `human.required`, `run.stranded`, or `run.completed`.
 
+## Human escalation
+
+`human.required` is a durable wake signal for one activation of an `@human`
+checkpoint. Its data contains:
+
+```json
+{
+  "id": "marionette://run/implementation/escalation/7",
+  "expectedRevision": 3,
+  "reason": "every choice at this phase is an @human checkpoint",
+  "choices": [
+    { "id": "approval#0", "label": "Approve", "target": "rollout" }
+  ],
+  "fallbacks": [],
+  "response": { "operation": "choose" }
+}
+```
+
+The id survives journal replay and remains stable until the run leaves and
+later re-enters the checkpoint. Before presenting or resolving it, call
+`next`: that projection carries the current revision, phase context and the
+same escalation id. A graph-linked `record` can change the revision without
+changing the escalation activation.
+
+There is no protocol-level deadline or default. Silence parks the run. If the
+plan authors a `timeout` choice, `fallbacks` contains its id and `dueAt`; the
+host may schedule a wake-up, but only the Prolog frontier decides when that
+choice becomes available.
+
+Agent-facing connections remain unable to take the listed choices. A trusted
+host records the answer through a human-bound principal, using the normal
+exact `choose` request with rationale, revision and idempotency key.
+
+## Pi proving-ground integration
+
+The npm package is also a Pi package. Install it once, then bind a session at
+launch:
+
+```console
+pi install git:github.com/leemeichin/marionette
+pi \
+  --marionette-plan plans/marionette.mar \
+  --marionette-run implementation \
+  --marionette-human lee
+```
+
+or interactively with `/marionette-start <plan.mar> [run-id]`. The model gets
+one agent-bound tool, `marionette_walk`. At an escalation it must stop; the
+user answers through `/marionette-decide`, which selects a choice, captures
+the user's name and rationale, records the human-bound write, and injects the
+resulting projection so the agent can resume. The binding is stored in the Pi
+session and restored after restart.
+
 ## Writes, identity and retries
 
 A choice command is intentionally small:
 
 ```json
-{"protocol":"0.2.0","id":3,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":2,"idempotencyKey":"turn-42","profile":"signal"}
+{"protocol":"0.3.0","id":3,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":2,"idempotencyKey":"turn-42","profile":"signal"}
 ```
 
 - Choice ids must be exact; CLI label prefixes are not accepted.
@@ -115,7 +168,7 @@ A choice command is intentionally small:
 An observation command fills exactly one value requested by the projection:
 
 ```json
-{"protocol":"0.2.0","id":4,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":3,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
+{"protocol":"0.3.0","id":4,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":3,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
 ```
 
 Values are typed scalars: number, boolean, or string. An initial declaration
@@ -128,7 +181,7 @@ and is kept in a separate audit stream from branch decisions.
 `record` provides pibarm-style graph-linked decision records without advancing:
 
 ```json
-{"protocol":"0.2.0","id":5,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":4,"idempotencyKey":"adr-7"}
+{"protocol":"0.3.0","id":5,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":4,"idempotencyKey":"adr-7"}
 ```
 
 Every event carries the immutable trajectory hash, current node/choice when

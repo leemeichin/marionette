@@ -185,7 +185,7 @@ manifest the executor applies with its own tracker tools, and
 `marionette import` scaffolds a plan *from* an existing backlog. See
 [`SYNC.md`](SYNC.md).
 
-## @human escalation (OQ2 proposal)
+## @human escalation (OQ2 implementation pending human approval)
 
 When every available choice at the current node is `@human`, the brief's
 status becomes `awaiting-human` and it carries a structured escalation:
@@ -194,15 +194,20 @@ status becomes `awaiting-human` and it carries a structured escalation:
 "escalation": {
   "reason": "every choice at this phase is an @human checkpoint",
   "choices": ["dogfood_gate#0", "dogfood_gate#1"],
-  "how": "pause and escalate: present this phase and its choices to a human; a human records the decision with `marionette state choose <plan> <choice> --actor <name> --rationale <text>`. Do not take these choices autonomously."
+  "fallbacks": [],
+  "how": "pause and escalate: present this phase and its choices to a human; a human records the decision with `marionette state choose <plan> <choice> --actor <name> --rationale <text>`. Do not take these choices autonomously. There is no implicit timeout or fallback; silence leaves the run parked."
 }
 ```
 
 The *channel* is executor-specific (a chat message to the primary session, a
 PR comment, a Slack ping); the *payload* is this escalation object plus the
 node body and frontier — everything a human needs to decide without opening
-the repo. There is no timeout/fallback: an unanswered escalation simply leaves
-the plan parked at the checkpoint, visible in `brief`/`render`/`summarize`.
+the repo. There is no **implicit** timeout/fallback: an unanswered escalation
+simply leaves the plan parked at the checkpoint, visible in
+`brief`/`render`/`summarize`. A plan that needs a deadline authors a normal
+`timeout` choice. While it is pending, the escalation's `fallbacks` array
+names that choice and its `dueAt`; after expiry, the Prolog frontier—not the
+host—makes it available and blocks the superseded choices.
 (The walker separately refuses `--actor agent` on `@human` choices with the
 `human-checkpoint` error code, so escalation is enforced, not advisory.)
 
@@ -216,8 +221,16 @@ conversation for a terminal. The contract at an `@human` gate is
 Proxy recording is forbidden for inferred intent, ambiguous replies, or
 silence — the executor asks instead. (This is how the
 `marionette-execution` skill implements OQ2's escalation loop end to end.)
-The formal decision on OQ2 is itself `@human`-gated in the dogfood plan
-(`escalation_protocol` node, issue #4); this payload is the working proposal.
+
+The local runtime wraps this material in a durable `human.required` event with
+an escalation URI and expected revision. Hosts treat that event as a wake
+signal and fetch `next` before displaying or resolving it, so attached records
+or a restart cannot leave the human acting on a stale revision.
+
+The complete proposal and consequences are recorded in
+[`ADR-0004`](decisions/0004-human-escalation-protocol.md). Its implementation
+is ready for the formal `@human` decision in the dogfood plan
+(`escalation_protocol`, issue #4).
 
 ## Editing a live plan: `state rebind`
 
