@@ -5,9 +5,11 @@ database of facts, and makes the structural validators queries over that
 database. This directory states them as such, and since
 [ADR-0003](../../docs/decisions/0003-rules-as-spec.md) the statement is
 **normative**: `marionette.pl` *is* the spec of the graph-layer semantics,
-`src/validate.ts` is an implementation held to it by CI, and the acceptance
-vectors live in [`spec/conformance/graph/`](../conformance/graph/). Each MAR
-code is a clause that reads like its spec sentence:
+and since the 2026-07-28 cutover it is also the production graph and walker
+engine. `src/validate.ts` and `src/state.ts` are asynchronous adapters around
+its structured JSON predicates; acceptance vectors live in
+[`spec/conformance/graph/`](../conformance/graph/). Each MAR code is a clause
+that reads like its spec sentence:
 
 ```prolog
 %% MAR006 — a phase with no effective exit is a dead end.
@@ -17,11 +19,11 @@ finding('MAR006', Line) :-
 
 It serves two purposes:
 
-1. **An independent oracle.** `tests/oracle.test.ts` runs both validators over
-   every `.mar` in the repo (the dogfood corpus, examples, live plans,
-   fixtures) plus a batch of deterministically seeded defects per plan, and
-   fails on any disagreement. A validator bug now has to be made twice, in two
-   paradigms, to slip through.
+1. **The production semantic engine.** `graph_findings_json/1` returns
+   structured findings to the compiler. Pure explicit-state walker relations
+   return frontiers, refusals and complete state transitions. The former
+   TypeScript implementations remain under `tests/reference/` only during the
+   30-day confidence window.
 2. **A question surface.** Load a plan's facts into the toplevel and ask it
    things no CLI subcommand answers.
 
@@ -127,19 +129,20 @@ $ swipl spec/rules/marionette.pl plan.pl
 ?- false_gate(C), gate(C, E, Src), gate_status(E, all, unsat).
 ```
 
-Since issue #21 phase C the rule base also states **walker semantics**
-(§7 of `marionette.pl`): `init_walk`, `do_choose`/`do_advance`/`do_observe`,
-`available/1` and `walk_blocked/2` over live state facts — the same
-contract `src/state.ts` implements, held to the same
-`spec/conformance/cases/` walk scripts, with both walkers run in CI. So a
-traversal question is queryable too:
+The rule base also states **walker semantics** (§7 of `marionette.pl`) as
+pure relations over explicit state:
 
 ```prolog
-?- init_walk, do_choose("0", "agent", true, R).   % walk a step in the toplevel
-?- available(C).                                  % the live frontier
-?- do_observe(remaining, num(3), true, R).         % supply a pending value
-?- set_walk_elapsed(3600).                         % advance the logical timeout clock
+?- initial_state(0, S0).
+?- available(S0, 0, C).
+?- apply(choose("0", "agent", true), S0, 0, S1, Outcome).
+?- apply(observe(remaining, num(3), true), S0, 0, S1, Outcome).
 ```
+
+State is `state(Status, Current, Vars, Taken, Pending, PendingEntry,
+ActivatedAtMs)`. Refused `apply/5` operations return the input state unchanged.
+The JSON bridge used by TypeScript is `walk_init_json/2`,
+`walk_frontier_json/3` and `walk_apply_json/4`.
 
 The building blocks (`can_reach/2` reachability, `on_same_cycle/2`,
 `gate_status/3`, `direction/3` monotonicity, `eval/3`) are all queryable, so
@@ -151,26 +154,26 @@ schema, and every section opens with prose stating what its clauses claim.
 
 ## Equivalence discipline
 
-Conformance is judged on *findings* — code and line — never on message
-strings: the TS implementation's semantic core (`analyzePlan`) returns
-findings as data, and all wording lives in `src/diagnostics.ts`, so the
-differential harness compares semantics with presentation excluded by
-construction. The two layers make the same decisions by design: effective
+Conformance is judged on structured findings, frontier/refusal codes and
+state transitions — never on message strings. All wording lives in
+`src/diagnostics.ts` and the TypeScript adapter. Effective
 edges exclude provably-false gates before dead-end / reachability / cycle
 analysis; per-gate verdicts use global mutations while loop-exit verdicts
 scope monotonicity to the cycle's SCC (with global agreement); MAR009/MAR010
 report once per SCC at the first triggering `~loop~` choice in source order.
-A semantic change lands spec-first: clause → conformance vector →
-implementation; CI fails until all three agree.
+A semantic change lands clause → structured result → conformance vector →
+presentation.
 
 ## Dependency posture
 
 **The engine ships in the bundle.** Installing marionette resolves
 everything: the rule base runs on `swipl-wasm` — SWI-Prolog compiled to
 WebAssembly, an ordinary npm dependency (~13 MB installed) — loaded lazily
-in-process by `src/oracle.ts`. `marionette oracle` and `marionette query`
-therefore work on a machine with nothing but Node, which is what an agent
-install gets. No system package, no per-platform binaries.
+in-process by `src/rule-engine.ts`. The singleton bridge serializes
+facts-load/query transactions, so global plan facts cannot bleed between
+concurrent callers. `marionette validate`, walker commands, `oracle` and
+`query` therefore work on a machine with nothing but Node. No system package,
+no per-platform binaries.
 
 Why wasm over the alternatives a Prolog deployment usually reaches for:
 

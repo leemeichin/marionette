@@ -135,6 +135,7 @@ export interface Trajectory {
 }
 
 export const SPEC_VERSION = '0.4.0';
+export const PLAN_STATE_VERSION = 2;
 export const END = 'END';
 
 export type Severity = 'error' | 'warning';
@@ -214,6 +215,8 @@ export interface ObservationEntry {
 
 /** plan.state.json — traversal state bound to a compiled trajectory by content hash. */
 export interface PlanState {
+  /** Persistence contract version. Version 1 states are intentionally rejected. */
+  version: typeof PLAN_STATE_VERSION;
   /** Hash of the trajectory this state was recorded against. */
   hash: string;
   status: 'active' | 'completed';
@@ -223,6 +226,8 @@ export interface PlanState {
   pendingObservations: string[];
   /** Late-bound initializers suspend start-node entry actions until resolved. */
   pendingEntry: boolean;
+  /** Start of the current activation. Direct self-loops preserve this timestamp. */
+  activationStartedAt: string | null;
   /** Runtime observations are auditable without pretending they are graph transitions. */
   observations: ObservationEntry[];
   /** Ids of once-only (`*`) choices already taken. */

@@ -32,7 +32,7 @@ test('golden round-trip: compiled JSON is lossless for graph semantics (P0.1)', 
 
 test('render: mermaid marks human (✋), loops (↻, dashed), gates and END', async () => {
   const t = (await compile(fixture('kitchen_sink.mar'))).trajectory!;
-  const mmd = renderMermaid(t);
+  const mmd = await renderMermaid(t);
   assert.match(mmd, /flowchart TD/);
   assert.match(mmd, /✋/);
   assert.match(mmd, /-\. ".*↻.*" \.->/);
@@ -43,9 +43,9 @@ test('render: mermaid marks human (✋), loops (↻, dashed), gates and END', as
 
 test('render: taken path, current node and frontier are highlighted from state', async () => {
   const t = (await compile(fixture('kitchen_sink.mar'))).trajectory!;
-  const state = initState(t);
-  takeChoice(t, state, 'Learnings', { actor: 'agent', rationale: 'iterate' });
-  const mmd = renderMermaid(t, { state });
+  let state = await initState(t);
+  state = await takeChoice(t, state, 'Learnings', { actor: 'agent', rationale: 'iterate' });
+  const mmd = await renderMermaid(t, { state });
   assert.match(mmd, /class .*build_mvp.* taken;/);
   assert.match(mmd, /class build_mvp current;/);
 });

@@ -1,5 +1,5 @@
 /**
- * Gate checking (P0.4) — trivially decidable analysis only.
+ * Quarantined pre-cutover TypeScript gate analysis (test-only).
  *
  * We only ever claim a verdict when it is provable:
  *   - constant expressions (no variables) evaluate directly;
@@ -11,8 +11,8 @@
  * Everything else is 'unknown' → surfaced as an "unverified gate" warning.
  */
 
-import type { Action, BinOp, Expr, Gate, Value, VariableDecl } from './types.js';
-import { evalExpr, tryConstEval, varsIn } from './expr.js';
+import type { Action, BinOp, Expr, Gate, Value, VariableDecl } from '../../src/types.js';
+import { evalExpr, tryConstEval, varsIn } from '../../src/expr.js';
 
 export type GateStatus = 'satisfiable' | 'unsatisfiable' | 'unknown';
 

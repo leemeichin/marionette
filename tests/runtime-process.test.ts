@@ -86,7 +86,7 @@ test('stdio runtime processes correlated requests serially and emits lifecycle e
     assert.equal(messages[5].result.events.length, 2);
     assert.match(diagnostics.value(), /Marionette stopped · revision 1/);
 
-    const reopened = loadRuntimeStore(root, 'stdio-1', trajectory);
+    const reopened = await loadRuntimeStore(root, 'stdio-1', trajectory);
     assert.equal(reopened.state.current, 'b');
     assert.equal(reopened.revision, 1);
   }));

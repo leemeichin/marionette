@@ -27,7 +27,7 @@ export interface CompileOptions {
 export async function compile(source: string, options: CompileOptions = {}): Promise<CompileResult> {
   const parsed = parsePlan(source);
   const diagnostics = [...parsed.diagnostics];
-  validatePlan(parsed, diagnostics);
+  await validatePlan(parsed, diagnostics);
   const planRefs = analyzeMeta(parsed.meta, parsed.nodes, diagnostics);
 
   const ok = !diagnostics.some((d) => d.severity === 'error');

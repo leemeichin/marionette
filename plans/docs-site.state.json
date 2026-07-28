@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "hash": "sha256:0ad88235854560dedb31fe20735580c9a6a400aa5fe772a339c684424bb54ed1",
   "status": "completed",
   "current": "END",
@@ -13,6 +14,10 @@
     "integrate_runtime#0",
     "ship_review#0"
   ],
+  "pendingObservations": [],
+  "pendingEntry": false,
+  "activationStartedAt": null,
+  "observations": [],
   "log": [
     {
       "at": "2026-07-23T15:46:23.549Z",

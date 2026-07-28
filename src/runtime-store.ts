@@ -15,7 +15,7 @@ import {
   type RuntimeSnapshot,
 } from './runtime.js';
 
-export const RUNTIME_STORE_VERSION = 1;
+export const RUNTIME_STORE_VERSION = 2;
 export const MAX_EVENT_BYTES = 64 * 1024;
 
 interface StoredSnapshot {
@@ -201,7 +201,7 @@ export async function initializeRuntimeStore(
   }
   await archiveTrajectory(root, trajectory);
   mkdirSync(paths.run, { recursive: true });
-  const snapshot = createRuntimeSnapshot(trajectory, options);
+  const snapshot = await createRuntimeSnapshot(trajectory, options);
   appendEvents(paths.events, snapshot.events);
   writeStoredSnapshot(paths.snapshot, snapshot, trajectory.hash);
   return snapshot;
@@ -302,11 +302,11 @@ export function stopRuntimeProcess(
   return { status: 'requested', pid: record.pid };
 }
 
-function replayRuntimeEvents(
+async function replayRuntimeEvents(
   trajectory: Trajectory,
   runId: string,
   events: RuntimeEvent[],
-): RuntimeSnapshot {
+): Promise<RuntimeSnapshot> {
   const started = events.find((item) => item.kind === 'run.started');
   if (!started) throw new RuntimeStoreError('runtime journal has no run.started event', 'corrupt-journal');
   if (started.runId !== runId || events.some((item) => item.runId !== runId)) {
@@ -316,7 +316,7 @@ function replayRuntimeEvents(
     throw new RuntimeStoreError('runtime journal references a different graph hash', 'graph-mismatch');
   }
   const principal = started.principal;
-  const state = initState(trajectory, principal?.id ?? 'system', started.at);
+  let state = await initState(trajectory, principal?.id ?? 'system', started.at);
   let revision = 0;
   const idempotency: Record<string, RuntimeIdempotencyRecord> = {};
 
@@ -329,9 +329,9 @@ function replayRuntimeEvents(
       const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
       const actor = item.principal?.role === 'agent' ? 'agent' : item.principal?.id ?? 'system';
       if (item.graph.choiceId) {
-        takeChoice(trajectory, state, item.graph.choiceId, { actor, rationale, at: item.at });
+        state = await takeChoice(trajectory, state, item.graph.choiceId, { actor, rationale, at: item.at });
       } else {
-        advance(trajectory, state, { actor, rationale, at: item.at });
+        state = await advance(trajectory, state, { actor, rationale, at: item.at });
       }
     } else if (item.kind === 'observation.recorded') {
       const name = item.data['name'];
@@ -346,7 +346,7 @@ function replayRuntimeEvents(
           'corrupt-journal',
         );
       }
-      observe(trajectory, state, name, value, { actor, rationale, at: item.at });
+      state = await observe(trajectory, state, name, value, { actor, rationale, at: item.at });
     }
     const key = item.data['idempotencyKey'];
     const fingerprint = item.data['commandFingerprint'];
@@ -363,17 +363,17 @@ function replayRuntimeEvents(
   return { runId, revision, state, events, idempotency };
 }
 
-export function loadRuntimeStore(
+export async function loadRuntimeStore(
   root: string,
   runId: string,
   trajectory: Trajectory,
-): RuntimeSnapshot {
+): Promise<RuntimeSnapshot> {
   const paths = runtimePaths(root, runId, trajectory.hash);
   if (!existsSync(paths.run) || !existsSync(paths.events)) {
     throw new RuntimeStoreError(`runtime run "${runId}" does not exist`, 'run-not-found');
   }
   const events = readRuntimeEvents(paths.events);
-  const snapshot = replayRuntimeEvents(trajectory, runId, events);
+  const snapshot = await replayRuntimeEvents(trajectory, runId, events);
   // The journal is authoritative. Refreshing the snapshot also repairs a
   // missing or partially-written cache after an interrupted prior commit.
   writeStoredSnapshot(paths.snapshot, snapshot, trajectory.hash);

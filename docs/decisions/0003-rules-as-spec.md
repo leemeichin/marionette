@@ -26,41 +26,45 @@ directions. The question this ADR answers: which artifact is the spec?
    (MAR001–MAR005, MAR012, MAR015–MAR016, MAR018–MAR022): facts are emitted
    post-parse, so the rule base cannot express, e.g., a duplicate phase
    header. This scoping is deliberate, not an omission.
-3. **Semantics and presentation are separated in the reference
-   implementation.** `analyzePlan` (src/validate.ts) returns findings as
-   data; every user-facing sentence lives in `src/diagnostics.ts` (same
-   split for walker refusals). Conformance is judged on findings, never on
-   message strings — wording, did-you-mean suggestions and exit codes are
-   implementation UX, free to differ.
-4. **Two executable implementations are kept while the language moves.**
-   The TS core is the product implementation; the rules are the spec that
-   also executes. CI enforces agreement on every push. Neither is deleted
-   while the DSL is changing — the differential property is what catches
-   spec bugs, and it dies with a single implementation.
+3. **Semantics and presentation are separated.** The rule engine returns
+   structured findings and refusal details; every user-facing sentence lives
+   in `src/diagnostics.ts` or the TypeScript adapter. Conformance is judged on
+   findings and state transitions, never message strings.
+4. **The normative rules are also the production engine.** Compilation calls
+   `graph_findings_json/1`; walking calls the pure explicit-state relations
+   `initial_state/2`, `available/3`, `blocked/5`, `refusal/5` and `apply/5`.
+   `src/rule-engine.ts` lazy-loads one bundled wasm instance, serializes every
+   facts-load/query transaction, and binds JSON inputs rather than
+   interpolating source.
+5. **The former TypeScript graph and walker implementations are quarantined
+   under `tests/reference/`.** CI differentially checks them during a 30-day
+   confidence window. If the window remains clean, remove the shadow on or
+   after 2026-08-27; production must not import it.
 
-## Cutover (option D)
+## Cutover amendment — 2026-07-28
 
-The walker follows the same path (planned): traversal semantics —
-availability, frontier, refusal codes, transitions — stated as rules,
-conformance walk scripts run against both walkers, then a deliberate
-cutover decision. Trigger criteria for making the rules the *only* engine
-of record for any layer:
+The graph and walker cutover is complete. Public traversal methods are now
+asynchronous and immutable: successful operations return a new state, while a
+refusal returns no state and leaves the input byte-for-byte unchanged. Walker
+state is explicit data rather than mutable Prolog facts, so concurrent callers
+cannot leak traversal state through the singleton engine.
 
-- the layer's rules unchanged across several releases (the language has
-  stopped moving there);
-- engine cost measured and acceptable on the CLI path (wasm init is ~1s;
-  lazy-load or precompiled state if it matters);
-- the presentation layer fully decoupled (no semantic decision left in TS
-  that the rules don't state).
+Persisted state is a hard v2 format with `version: 2` and
+`activationStartedAt`. Version 1 is intentionally rejected; callers
+re-initialise rather than relying on an implicit migration. Direct self-loops
+preserve the activation timestamp, which makes timeout behaviour durable
+across process restarts.
 
-Until those hold, "the oracle is the engine" means: the rules decide what
-correct is; TypeScript executes it fast and phrases it well.
+Engine performance is recorded by `npm run bench:engine`. It is measurement
+only: this decision establishes no latency threshold.
 
 ## Consequences
 
-- New diagnostics land spec-first: clause → conformance vector →
-  implementation (the order is enforced socially, the agreement by CI).
+- New graph diagnostics land spec-first: clause → structured finding →
+  conformance vector → presentation adapter.
 - The fact schema (`marionette facts`, spec/rules/README.md) is a public
   contract; changes to it are spec changes.
 - A future non-TS implementation (or the pi agent's native ingestion)
   targets the rules + vectors, not the TS source.
+- The API cutover is intentionally breaking: `compile`, validation, briefs,
+  rendering, runtime replay and all walker operations await the shared engine.

@@ -30,15 +30,15 @@ test('queue mode compiles clean (strict) and stays O(1) in phase count', async (
 
 test('queue mode traverses exactly one iteration per issue', async () => {
   const t = (await compile(scaffoldPlan(SPEC, 'queue'))).trajectory!;
-  const state = initState(t);
+  let state = await initState(t);
   for (let i = 0; i < SPEC.issues.length - 1; i++) {
-    const loop = frontier(t, state).find((a) => a.choice.loop)!;
+    const loop = (await frontier(t, state)).find((a) => a.choice.loop)!;
     assert.equal(loop.blocked, null, `loop open on iteration ${i + 1}`);
-    takeChoice(t, state, loop.choice.id, { actor: 'agent', rationale: 'done, next' });
+    state = await takeChoice(t, state, loop.choice.id, { actor: 'agent', rationale: 'done, next' });
   }
-  const loop = frontier(t, state).find((a) => a.choice.loop)!;
+  const loop = (await frontier(t, state)).find((a) => a.choice.loop)!;
   assert.match(loop.blocked!, /gate/); // counter exhausted: the loop shut itself
-  takeChoice(t, state, frontier(t, state).find((a) => !a.choice.loop)!.choice.id,
+  state = await takeChoice(t, state, (await frontier(t, state)).find((a) => !a.choice.loop)!.choice.id,
     { actor: 'agent', rationale: 'backlog clear' });
   assert.equal(state.status, 'completed');
 });

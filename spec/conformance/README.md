@@ -2,20 +2,20 @@
 
 Runtime-agnostic conformance cases for the Phase 2 walker (PRD P1, issue #3).
 Any walker implementation must pass every case in `cases/` to claim
-conformance — and **two independent implementations already do, on every CI
-run**: the TypeScript reference runtime (`src/state.ts`) and the rule-base
-walker (`spec/rules/marionette.pl` §7, running on the engine bundled with
-the package). `tests/conformance.test.ts` runs each case against both, so a
-walk-semantics bug has to be made twice, in two paradigms, to survive. A
-future implementation (a Go binary, the pi agent's native ingestion)
-targets the same cases.
+conformance. The production walker is the rule base
+(`spec/rules/marionette.pl` §7) behind the asynchronous TypeScript facade in
+`src/state.ts`. During the cutover confidence window,
+`tests/conformance.test.ts` runs every step against production and the
+quarantined former TypeScript walker in `tests/reference/state.ts`, comparing
+the full semantic/audit state and evaluated frontier after every operation.
+A future implementation (a Go binary, the pi agent's native ingestion) targets
+the same cases.
 
 Scope note: the refusal codes `unknown-node`, `migration-blocked` and
 `invalid-state` concern state *files* (drift, rebinding, corruption) rather
-than walk operations, so they are exercised by the reference
-implementation's own tests, not by walk scripts; the rule-base walker
-leaves timestamps, log persistence and file formats to its driver by
-design — the rules own what may happen and what it changes.
+than walk operations, so they are exercised by facade tests rather than walk
+scripts. Prolog owns what may happen and the complete semantic transition;
+the TypeScript driver owns timestamps, audit persistence and hash binding.
 
 ## Case format
 
@@ -49,13 +49,16 @@ Each case is a JSON walk script:
 - `expect.error` — the operation MUST be refused with this machine code (see
   `WalkErrorCode` in `src/state.ts`: `completed`, `unknown-node`,
   `unknown-choice`, `ambiguous-choice`, `gate-blocked`, `once-exhausted`,
-  `human-checkpoint`, `rationale-required`, `no-next-step`, `migration-blocked`,
-  `invalid-state`). A refused operation MUST leave the state unchanged — the
+  `human-checkpoint`, `rationale-required`, `observation-required`,
+  `unknown-observation`, `observation-type`, `timeout-pending`, `timed-out`,
+  `no-next-step`, `migration-blocked`, `invalid-state`). A refused operation
+  MUST leave the state unchanged — the
   runner verifies this bit-for-bit (modulo timestamps, which the runner pins).
 - `expect.current` — the current node id after the step.
 - `expect.status` — `active` or `completed` (the state file's status).
 - `expect.variables` — a subset match against the state's variables.
 
 Every successful `choose`/`advance` MUST append a decision-log entry carrying
-actor, timestamp, target and rationale (G4); the runner checks the log length
-grows by exactly one per successful operation and never on a refusal.
+actor, timestamp, target and rationale (G4); every successful observation
+appends an observation audit entry. The production API returns a new state
+rather than mutating the input.

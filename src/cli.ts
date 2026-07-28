@@ -192,7 +192,7 @@ function loadState(trajectory: Trajectory, file: string): PlanState {
   return state;
 }
 
-function printFrontier(trajectory: Trajectory, state: PlanState): void {
+async function printFrontier(trajectory: Trajectory, state: PlanState): Promise<void> {
   const node = trajectory.nodes.find((n) => n.id === state.current);
   const done = state.status === 'completed' ? out.green(' (completed)') : '';
   process.stdout.write(`current: ${out.bold(state.current)}${done}\n`);
@@ -206,7 +206,7 @@ function printFrontier(trajectory: Trajectory, state: PlanState): void {
       `${name}:${trajectory.variables[name]?.type ?? 'unknown'}`).join(', ') + '\n');
   }
   if (state.status === 'completed') return;
-  const options = frontier(trajectory, state);
+  const options = await frontier(trajectory, state);
   if (options.length === 0) {
     if (node?.next) process.stdout.write(`automatic next step -> ${node.next.target} (run marionette state advance)\n`);
     return;
@@ -362,7 +362,7 @@ export async function run(argv: string[]): Promise<number> {
           const sf = stateFileFor(file, flags);
           if (existsSync(sf)) state = loadState(trajectory, sf);
         }
-        output(flags, null, renderMermaid(trajectory, { state, direction: flags['lr'] ? 'LR' : 'TD' }));
+        output(flags, null, await renderMermaid(trajectory, { state, direction: flags['lr'] ? 'LR' : 'TD' }));
         return 0;
       }
 
@@ -392,7 +392,7 @@ export async function run(argv: string[]): Promise<number> {
         }
         const sf = stateFileFor(file, flags);
         const state = loadState(trajectory, sf);
-        const brief = buildBrief(trajectory, state, { file });
+        const brief = await buildBrief(trajectory, state, { file });
         if (flags['json']) {
           output(flags, null, JSON.stringify(brief, null, 2) + '\n');
         } else {
@@ -558,7 +558,7 @@ export async function run(argv: string[]): Promise<number> {
             created = true;
           } else {
             try {
-              snapshot = loadRuntimeStore(store, runId, trajectory);
+              snapshot = await loadRuntimeStore(store, runId, trajectory);
             } catch (error) {
               if (!(error instanceof RuntimeStoreError) || error.code !== 'run-not-found') throw error;
               snapshot = await initializeRuntimeStore(store, trajectory, { runId, principal });
@@ -645,10 +645,10 @@ export async function run(argv: string[]): Promise<number> {
           if (existsSync(sf) && !flags['force']) {
             throw new UsageError(`${sf} already exists; pass --force to reinitialise`);
           }
-          const state = initState(trajectory);
+          const state = await initState(trajectory);
           writeFileSync(sf, serializeState(state));
           process.stderr.write(`initialised ${sf} bound to ${trajectory.hash.slice(0, 19)}…\n`);
-          printFrontier(trajectory, state);
+          await printFrontier(trajectory, state);
           return 0;
         }
 
@@ -677,13 +677,13 @@ export async function run(argv: string[]): Promise<number> {
           note('added observations', report.addedObservations);
           note('reset variables (type changed)', report.resetVariables);
           note('visited phases no longer in the plan', report.missingVisited);
-          printFrontier(trajectory, state);
+          await printFrontier(trajectory, state);
           return 0;
         }
 
-        const state = loadState(trajectory, sf);
+        let state = loadState(trajectory, sf);
         if (sub === 'show') {
-          printFrontier(trajectory, state);
+          await printFrontier(trajectory, state);
           return 0;
         }
         if (sub === 'observe') {
@@ -704,9 +704,9 @@ export async function run(argv: string[]): Promise<number> {
           }
           const actor = typeof flags['actor'] === 'string' ? flags['actor'] : 'agent';
           const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
-          observe(trajectory, state, name, value, { actor, rationale });
+          state = await observe(trajectory, state, name, value, { actor, rationale });
           writeFileSync(sf, serializeState(state));
-          printFrontier(trajectory, state);
+          await printFrontier(trajectory, state);
           return 0;
         }
         if (sub === 'choose') {
@@ -714,17 +714,17 @@ export async function run(argv: string[]): Promise<number> {
           if (!ref) throw new UsageError('state choose: missing <choice> (index, id, or label prefix)');
           const actor = typeof flags['actor'] === 'string' ? flags['actor'] : 'agent';
           const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
-          takeChoice(trajectory, state, ref, { actor, rationale });
+          state = await takeChoice(trajectory, state, ref, { actor, rationale });
           writeFileSync(sf, serializeState(state));
-          printFrontier(trajectory, state);
+          await printFrontier(trajectory, state);
           return 0;
         }
         if (sub === 'advance') {
           const actor = typeof flags['actor'] === 'string' ? flags['actor'] : 'agent';
           const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
-          advance(trajectory, state, { actor, rationale });
+          state = await advance(trajectory, state, { actor, rationale });
           writeFileSync(sf, serializeState(state));
-          printFrontier(trajectory, state);
+          await printFrontier(trajectory, state);
           return 0;
         }
         {

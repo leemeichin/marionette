@@ -1,13 +1,29 @@
 /**
- * Traversal state (P0.7): plan.state.json bound to the compiled trajectory by
- * content hash, with drift detection and a minimal reference walker (a preview
- * of the Phase 2 runtime, enough to dogfood Phase 1).
+ * Immutable, asynchronous traversal facade over the normative Prolog walker.
+ *
+ * Prolog owns availability, refusal precedence and semantic transitions.
+ * TypeScript owns trajectory binding, timestamps, audit records and persisted
+ * state shape.
  */
 
-import type { Choice, LogEntry, PlanState, Trajectory, TrajectoryNode, Value } from './types.js';
-import { END } from './types.js';
-import { ExprError, evalExpr } from './expr.js';
+import type {
+  Choice,
+  PlanState,
+  Trajectory,
+  TrajectoryNode,
+  Value,
+} from './types.js';
+import { END, PLAN_STATE_VERSION } from './types.js';
+import { emitFacts } from './facts.js';
 import { blockedText, refusalText } from './diagnostics.js';
+import {
+  ruleWalkApply,
+  ruleWalkFrontier,
+  ruleWalkInit,
+  type RuleFrontierItem,
+  type RuleSemanticState,
+  type RuleWalkResult,
+} from './rule-engine.js';
 
 export class DriftError extends Error {
   constructor(public readonly stateHash: string, public readonly planHash: string) {
@@ -22,28 +38,23 @@ export class DriftError extends Error {
   }
 }
 
-/**
- * Machine-readable walk refusal codes — the conformance contract for any
- * runtime implementation (spec/conformance): a conforming walker must refuse
- * for the same reason, whatever its human-facing message says.
- */
 export type WalkErrorCode =
-  | 'completed'            // the plan has already reached END
-  | 'unknown-node'         // state points at a node absent from the compiled plan
-  | 'unknown-choice'       // no choice matches the given reference
-  | 'ambiguous-choice'     // a label prefix matched more than one choice
-  | 'gate-blocked'         // the choice's gate is currently false (or failed to evaluate)
-  | 'observation-required' // a late-bound/refreshed value must be supplied
-  | 'unknown-observation'  // the supplied variable is not currently requested
-  | 'observation-type'     // supplied value does not match its declared type
-  | 'timeout-pending'      // a timeout edge was selected before it elapsed
-  | 'timed-out'            // a normal edge was selected after a hard timeout
-  | 'once-exhausted'       // a once-only (`*`) choice was already taken
-  | 'human-checkpoint'     // an agent tried to take an @human choice
-  | 'rationale-required'   // the step is missing its auditable rationale (G4)
-  | 'no-next-step'         // advance() called on a node without an automatic next step
-  | 'migration-blocked'    // state cannot be rebound onto the new plan
-  | 'invalid-state';       // the state file is structurally invalid
+  | 'completed'
+  | 'unknown-node'
+  | 'unknown-choice'
+  | 'ambiguous-choice'
+  | 'gate-blocked'
+  | 'observation-required'
+  | 'unknown-observation'
+  | 'observation-type'
+  | 'timeout-pending'
+  | 'timed-out'
+  | 'once-exhausted'
+  | 'human-checkpoint'
+  | 'rationale-required'
+  | 'no-next-step'
+  | 'migration-blocked'
+  | 'invalid-state';
 
 export class WalkError extends Error {
   constructor(message: string, public readonly code: WalkErrorCode) {
@@ -52,44 +63,9 @@ export class WalkError extends Error {
   }
 }
 
-export function initState(trajectory: Trajectory, actor = 'system', at = new Date().toISOString()): PlanState {
-  const initial = Object.entries(trajectory.variables)
-    .filter(([, decl]) => decl.initial !== null);
-  const pending = Object.entries(trajectory.variables)
-    .filter(([, decl]) => decl.initial === null)
-    .map(([name]) => name);
-  const state: PlanState = {
-    hash: trajectory.hash,
-    status: 'active',
-    current: trajectory.start,
-    variables: Object.fromEntries(initial.map(([name, decl]) => [name, decl.initial!])),
-    pendingObservations: pending,
-    pendingEntry: pending.length > 0,
-    observations: [],
-    taken: [],
-    log: [],
-  };
-  enterNode(trajectory, state, trajectory.start, {
-    at, actor, from: null, choice: null, label: null, rationale: 'plan started',
-  });
-  return state;
-}
-
-export function bindState(trajectory: Trajectory, state: PlanState): void {
-  if (state.hash !== trajectory.hash) throw new DriftError(state.hash, trajectory.hash);
-}
-
-function nodeById(trajectory: Trajectory, id: string): TrajectoryNode {
-  const node = trajectory.nodes.find((n) => n.id === id);
-  if (!node) throw new WalkError(refusalText({ kind: 'unknown-node', id }), 'unknown-node');
-  return node;
-}
-
 export interface AvailableChoice {
   choice: Choice;
-  /** Why the choice is currently unavailable, or null if it can be taken. */
   blocked: string | null;
-  /** Machine-readable reason, paired with `blocked`. */
   blockedCode:
     | 'once-exhausted'
     | 'gate-blocked'
@@ -99,220 +75,10 @@ export interface AvailableChoice {
     | null;
 }
 
-/** Evaluate the frontier at the current node: each choice with availability. */
-export function frontier(
-  trajectory: Trajectory,
-  state: PlanState,
-  options: { at?: string } = {},
-): AvailableChoice[] {
-  if (state.status === 'completed') return [];
-  const node = nodeById(trajectory, state.current);
-  const at = options.at ?? new Date().toISOString();
-  const elapsed = elapsedInNode(state, node.id, at);
-  const expiredTimeout = node.choices.find((choice) =>
-    choice.timeout && elapsed >= choice.timeout.seconds * 1000);
-  return node.choices.map((choice) => {
-    if (state.pendingObservations.length > 0) {
-      return {
-        choice,
-        blocked: blockedText({
-          kind: 'observation-required',
-          names: state.pendingObservations,
-        }),
-        blockedCode: 'observation-required' as const,
-      };
-    }
-    if (!choice.sticky && state.taken.includes(choice.id)) {
-      return { choice, blocked: blockedText({ kind: 'once-exhausted' }), blockedCode: 'once-exhausted' as const };
-    }
-    if (choice.timeout) {
-      const remaining = Math.max(0, choice.timeout.seconds * 1000 - elapsed);
-      if (remaining > 0) {
-        return {
-          choice,
-          blocked: blockedText({
-            kind: 'timeout-pending',
-            source: choice.timeout.source,
-            remaining: spanText(remaining),
-          }),
-          blockedCode: 'timeout-pending' as const,
-        };
-      }
-    } else if (expiredTimeout?.timeout) {
-      return {
-        choice,
-        blocked: blockedText({ kind: 'timed-out', source: expiredTimeout.timeout.source }),
-        blockedCode: 'timed-out' as const,
-      };
-    }
-    if (choice.gate) {
-      try {
-        const value = evalExpr(choice.gate.ast, state.variables);
-        if (value !== true) {
-          return {
-            choice,
-            blocked: blockedText({ kind: 'gate-false', source: choice.gate.source, value: JSON.stringify(value) }),
-            blockedCode: 'gate-blocked' as const,
-          };
-        }
-      } catch (e) {
-        return {
-          choice,
-          blocked: blockedText({ kind: 'gate-error', source: choice.gate.source, error: (e as ExprError).message }),
-          blockedCode: 'gate-blocked' as const,
-        };
-      }
-    }
-    return { choice, blocked: null, blockedCode: null };
-  });
-}
-
 export interface TakeOptions {
   actor: string;
   rationale?: string;
   at?: string;
-}
-
-/** Take a choice by id, index, or unambiguous label prefix. */
-export function takeChoice(trajectory: Trajectory, state: PlanState, ref: string, opts: TakeOptions): void {
-  if (state.status === 'completed') throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
-  const node = nodeById(trajectory, state.current);
-  const choice = resolveChoice(node, ref);
-  const availability = frontier(trajectory, state, { at: opts.at }).find((a) => a.choice.id === choice.id)!;
-  if (availability.blocked) {
-    throw new WalkError(
-      refusalText({ kind: 'not-available', label: choice.label, blocked: availability.blocked }),
-      availability.blockedCode ?? 'gate-blocked',
-    );
-  }
-  if (choice.human) {
-    if (!opts.actor || opts.actor === 'agent') {
-      throw new WalkError(refusalText({ kind: 'human-checkpoint', label: choice.label }), 'human-checkpoint');
-    }
-    if (!opts.rationale) {
-      throw new WalkError(refusalText({ kind: 'rationale-human', label: choice.label }), 'rationale-required');
-    }
-  }
-  if (!opts.rationale) {
-    throw new WalkError(refusalText({ kind: 'rationale-missing' }), 'rationale-required');
-  }
-  if (!choice.sticky) state.taken.push(choice.id);
-  enterNode(trajectory, state, choice.target, {
-    at: opts.at ?? new Date().toISOString(),
-    actor: opts.actor,
-    from: node.id,
-    choice: choice.id,
-    label: choice.label,
-    rationale: opts.rationale ?? null,
-  });
-}
-
-/** Follow the automatic next step of the current node. */
-export function advance(trajectory: Trajectory, state: PlanState, opts: TakeOptions): void {
-  if (state.status === 'completed') throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
-  const node = nodeById(trajectory, state.current);
-  if (state.pendingObservations.length > 0) {
-    throw new WalkError(
-      `runtime observation required before leaving "${node.id}": ${state.pendingObservations.join(', ')}`,
-      'observation-required',
-    );
-  }
-  const expired = node.choices.find((choice) =>
-    choice.timeout &&
-    elapsedInNode(state, node.id, opts.at ?? new Date().toISOString()) >= choice.timeout.seconds * 1000);
-  if (expired?.timeout) {
-    throw new WalkError(
-      `automatic next step is unavailable: phase timeout ${expired.timeout.source} has elapsed`,
-      'timed-out',
-    );
-  }
-  if (!node.next) {
-    throw new WalkError(refusalText({ kind: 'no-next-step', id: node.id }), 'no-next-step');
-  }
-  enterNode(trajectory, state, node.next.target, {
-    at: opts.at ?? new Date().toISOString(),
-    actor: opts.actor,
-    from: node.id,
-    choice: null,
-    label: null,
-    rationale: opts.rationale ?? 'followed automatic next step',
-  });
-}
-
-function resolveChoice(node: TrajectoryNode, ref: string): Choice {
-  const byId = node.choices.find((c) => c.id === ref);
-  if (byId) return byId;
-  if (/^\d+$/.test(ref)) {
-    const idx = Number(ref);
-    if (idx >= 0 && idx < node.choices.length) return node.choices[idx];
-    if (node.choices.length === 0) {
-      throw new WalkError(
-        refusalText({ kind: 'no-choices', id: node.id, nextTarget: node.next?.target ?? null }),
-        'unknown-choice');
-    }
-    throw new WalkError(
-      refusalText({ kind: 'bad-index', id: node.id, index: idx, max: node.choices.length - 1 }),
-      'unknown-choice');
-  }
-  const byLabel = node.choices.filter((c) => c.label.toLowerCase().startsWith(ref.toLowerCase()));
-  if (byLabel.length === 1) return byLabel[0];
-  if (byLabel.length > 1) {
-    throw new WalkError(refusalText({ kind: 'ambiguous', ref, id: node.id }), 'ambiguous-choice');
-  }
-  throw new WalkError(
-    refusalText({
-      kind: 'no-match', ref, id: node.id,
-      available: node.choices.map((c, i) => `[${i}] ${c.label}`).join(', '),
-    }),
-    'unknown-choice',
-  );
-}
-
-function enterNode(
-  trajectory: Trajectory,
-  state: PlanState,
-  target: string,
-  entry: Omit<LogEntry, 'to'>,
-): void {
-  state.log.push({ ...entry, to: target });
-  if (target === END) {
-    state.current = END;
-    state.status = 'completed';
-    return;
-  }
-  const node = nodeById(trajectory, target);
-  state.current = node.id;
-  if (state.pendingEntry) return;
-  applyEntry(trajectory, state, node);
-}
-
-function applyEntry(trajectory: Trajectory, state: PlanState, node: TrajectoryNode): void {
-  for (const action of node.actions) {
-    const value = evalExpr(action.value, state.variables);
-    const current = state.variables[action.var];
-    switch (action.op) {
-      case '=':
-        state.variables[action.var] = value;
-        break;
-      case '+=':
-        state.variables[action.var] = (current as number) + (value as number);
-        break;
-      case '-=':
-        state.variables[action.var] = (current as number) - (value as number);
-        break;
-    }
-  }
-  armObservations(trajectory, state, node);
-}
-
-function armObservations(trajectory: Trajectory, state: PlanState, node: TrajectoryNode): void {
-  for (const observation of node.observations ?? []) {
-    if (!(observation.var in trajectory.variables)) continue;
-    delete state.variables[observation.var];
-    if (!state.pendingObservations.includes(observation.var)) {
-      state.pendingObservations.push(observation.var);
-    }
-  }
 }
 
 export interface ObserveOptions {
@@ -321,71 +87,381 @@ export interface ObserveOptions {
   at?: string;
 }
 
-/** Supply one explicitly requested runtime value. */
-export function observe(
+export async function initState(
+  trajectory: Trajectory,
+  actor = 'system',
+  at = new Date().toISOString(),
+): Promise<PlanState> {
+  const result = await ruleWalkInit(emitFacts(trajectory), epoch(at));
+  if (!result.ok) throw walkError(trajectory, result);
+  const state = fromSemantic(trajectory.hash, result.state, {
+    observations: [],
+    log: [],
+  });
+  state.log.push({
+    at,
+    actor,
+    from: null,
+    choice: null,
+    label: null,
+    to: state.current,
+    rationale: 'plan started',
+  });
+  return state;
+}
+
+export function bindState(trajectory: Trajectory, state: PlanState): void {
+  if (state.version !== PLAN_STATE_VERSION) {
+    throw unsupportedStateVersion(state.version);
+  }
+  if (state.hash !== trajectory.hash) throw new DriftError(state.hash, trajectory.hash);
+}
+
+export async function frontier(
+  trajectory: Trajectory,
+  state: PlanState,
+  options: { at?: string } = {},
+): Promise<AvailableChoice[]> {
+  bindState(trajectory, state);
+  if (state.status === 'completed') return [];
+  const node = nodeById(trajectory, state.current);
+  const items = await ruleWalkFrontier(
+    emitFacts(trajectory),
+    toSemantic(state),
+    epoch(options.at ?? new Date().toISOString()),
+  );
+  const byId = new Map(items.map((item) => [item.choiceId, item]));
+  return node.choices.map((choice) => {
+    const item = byId.get(choice.id);
+    if (!item) {
+      throw new WalkError(`rule engine omitted choice "${choice.id}" from the frontier`, 'invalid-state');
+    }
+    return {
+      choice,
+      blocked: item.blockedCode === null ? null : frontierBlockedText(item),
+      blockedCode: item.blockedCode as AvailableChoice['blockedCode'],
+    };
+  });
+}
+
+export async function takeChoice(
+  trajectory: Trajectory,
+  state: PlanState,
+  ref: string,
+  options: TakeOptions,
+): Promise<PlanState> {
+  bindState(trajectory, state);
+  const at = options.at ?? new Date().toISOString();
+  const result = await ruleWalkApply(
+    emitFacts(trajectory),
+    toSemantic(state),
+    {
+      kind: 'choose',
+      ref,
+      actor: options.actor,
+      hasRationale: Boolean(options.rationale),
+    },
+    epoch(at),
+  );
+  if (!result.ok) throw walkError(trajectory, result);
+
+  const choiceId = result.effect.choiceId;
+  const choice = typeof choiceId === 'string' ? choiceById(trajectory, choiceId) : null;
+  const next = fromSemantic(trajectory.hash, result.state, state);
+  next.log.push({
+    at,
+    actor: options.actor,
+    from: result.effect.from ?? state.current,
+    choice: choice?.id ?? null,
+    label: choice?.label ?? null,
+    to: result.effect.to ?? next.current,
+    rationale: options.rationale ?? null,
+  });
+  return next;
+}
+
+export async function advance(
+  trajectory: Trajectory,
+  state: PlanState,
+  options: TakeOptions,
+): Promise<PlanState> {
+  bindState(trajectory, state);
+  const at = options.at ?? new Date().toISOString();
+  const result = await ruleWalkApply(
+    emitFacts(trajectory),
+    toSemantic(state),
+    { kind: 'advance' },
+    epoch(at),
+  );
+  if (!result.ok) throw walkError(trajectory, result);
+
+  const next = fromSemantic(trajectory.hash, result.state, state);
+  next.log.push({
+    at,
+    actor: options.actor,
+    from: result.effect.from ?? state.current,
+    choice: null,
+    label: null,
+    to: result.effect.to ?? next.current,
+    rationale: options.rationale ?? 'followed automatic next step',
+  });
+  return next;
+}
+
+export async function observe(
   trajectory: Trajectory,
   state: PlanState,
   name: string,
   value: Value,
   options: ObserveOptions,
-): void {
-  if (state.status === 'completed') {
-    throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
-  }
-  if (!state.pendingObservations.includes(name)) {
-    throw new WalkError(`"${name}" is not awaiting a runtime observation`, 'unknown-observation');
-  }
-  if (!options.rationale) {
-    throw new WalkError(
-      'every runtime observation must record a rationale: pass --rationale (G4)',
-      'rationale-required',
-    );
-  }
-  const decl = trajectory.variables[name];
-  if (!decl || typeof value !== decl.type ||
-      (typeof value === 'number' && !Number.isFinite(value))) {
-    throw new WalkError(
-      `observation "${name}" expects ${decl?.type ?? 'a declared type'}, got ` +
-        `${typeof value === 'number' && !Number.isFinite(value) ? 'a non-finite number' : typeof value}`,
-      'observation-type',
-    );
-  }
+): Promise<PlanState> {
+  bindState(trajectory, state);
   const at = options.at ?? new Date().toISOString();
-  state.variables[name] = value;
-  state.pendingObservations = state.pendingObservations.filter((item) => item !== name);
-  state.observations.push({
+  const valueType =
+    typeof value === 'number' && !Number.isFinite(value)
+      ? 'non-finite-number'
+      : typeof value;
+  const operationValue =
+    typeof value === 'number' && !Number.isFinite(value) ? null : value;
+  const result = await ruleWalkApply(
+    emitFacts(trajectory),
+    toSemantic(state),
+    {
+      kind: 'observe',
+      name,
+      value: operationValue,
+      valueType,
+      hasRationale: Boolean(options.rationale),
+    },
+    epoch(at),
+  );
+  if (!result.ok) throw walkError(trajectory, result);
+
+  const next = fromSemantic(trajectory.hash, result.state, state);
+  next.observations.push({
     at,
     actor: options.actor,
     node: state.pendingEntry ? null : state.current,
     variable: name,
     value,
-    rationale: options.rationale,
+    rationale: options.rationale ?? null,
   });
-  if (state.pendingEntry && state.pendingObservations.length === 0) {
-    state.pendingEntry = false;
-    applyEntry(trajectory, state, nodeById(trajectory, state.current));
+  return next;
+}
+
+function toSemantic(state: PlanState): RuleSemanticState {
+  return {
+    status: state.status,
+    current: state.current,
+    variables: { ...state.variables },
+    taken: [...state.taken],
+    pendingObservations: [...state.pendingObservations],
+    pendingEntry: state.pendingEntry,
+    activationStartedAtMs:
+      state.activationStartedAt === null ? -1 : epoch(state.activationStartedAt),
+  };
+}
+
+function fromSemantic(
+  hash: string,
+  semantic: RuleSemanticState,
+  audit: Pick<PlanState, 'observations' | 'log'>,
+): PlanState {
+  return {
+    version: PLAN_STATE_VERSION,
+    hash,
+    status: semantic.status,
+    current: semantic.current,
+    variables: { ...semantic.variables },
+    pendingObservations: [...semantic.pendingObservations],
+    pendingEntry: semantic.pendingEntry,
+    activationStartedAt:
+      semantic.activationStartedAtMs < 0
+        ? null
+        : new Date(semantic.activationStartedAtMs).toISOString(),
+    observations: audit.observations.map((entry) => ({ ...entry })),
+    taken: [...semantic.taken],
+    log: audit.log.map((entry) => ({ ...entry })),
+  };
+}
+
+function nodeById(trajectory: Trajectory, id: string): TrajectoryNode {
+  const node = trajectory.nodes.find((candidate) => candidate.id === id);
+  if (!node) throw new WalkError(refusalText({ kind: 'unknown-node', id }), 'unknown-node');
+  return node;
+}
+
+function choiceById(trajectory: Trajectory, id: string): Choice {
+  for (const node of trajectory.nodes) {
+    const choice = node.choices.find((candidate) => candidate.id === id);
+    if (choice) return choice;
+  }
+  throw new WalkError(`choice "${id}" does not exist in the compiled plan`, 'unknown-choice');
+}
+
+function frontierBlockedText(item: RuleFrontierItem): string {
+  const detail = item.detail;
+  switch (String(detail['kind'])) {
+    case 'observation-required':
+      return blockedText({
+        kind: 'observation-required',
+        names: stringArray(detail['names']),
+      });
+    case 'once-exhausted':
+      return blockedText({ kind: 'once-exhausted' });
+    case 'timeout-pending':
+      return blockedText({
+        kind: 'timeout-pending',
+        source: String(detail['source']),
+        remaining: spanText(Number(detail['remainingMs'])),
+      });
+    case 'timed-out':
+      return blockedText({ kind: 'timed-out', source: String(detail['source']) });
+    case 'gate-false':
+      return blockedText({
+        kind: 'gate-false',
+        source: String(detail['source']),
+        value: String(detail['value']),
+      });
+    case 'gate-error':
+      return blockedText({
+        kind: 'gate-error',
+        source: String(detail['source']),
+        error: 'expression is invalid for the current variables',
+      });
+    default:
+      return `unavailable (${String(item.blockedCode)})`;
   }
 }
 
-/** Start of the current activation; direct self-loops do not reset a timeout. */
-export function enteredAt(state: PlanState, nodeId: string): string | null {
-  let found: string | null = null;
-  for (let i = state.log.length - 1; i >= 0; i--) {
-    const entry = state.log[i];
-    if (entry.to !== nodeId) {
-      if (found) break;
-      continue;
+function walkError(
+  trajectory: Trajectory,
+  result: Extract<RuleWalkResult, { ok: false }>,
+): WalkError {
+  const detail = result.detail;
+  const code = result.code as WalkErrorCode;
+  const kind = String(detail['kind']);
+  let message: string;
+  switch (kind) {
+    case 'completed':
+      message = refusalText({ kind: 'completed' });
+      break;
+    case 'observation-required':
+      message = `runtime observation required before continuing: ${stringArray(detail['names']).join(', ')}`;
+      break;
+    case 'once-exhausted':
+    case 'timeout-pending':
+    case 'timed-out':
+    case 'gate-false':
+    case 'gate-error': {
+      const choice = blockedChoice(trajectory, result.state, detail);
+      message = refusalText({
+        kind: 'not-available',
+        label: choice?.label ?? 'selected choice',
+        blocked: frontierBlockedText({
+          choiceId: choice?.id ?? '',
+          blockedCode: code,
+          detail,
+        }),
+      });
+      break;
     }
-    found = entry.at;
-    if (entry.from !== nodeId) break;
+    case 'human-checkpoint': {
+      const choice = choiceById(trajectory, String(detail['choiceId']));
+      message = refusalText({ kind: 'human-checkpoint', label: choice.label });
+      break;
+    }
+    case 'rationale-required': {
+      const choice = choiceById(trajectory, String(detail['choiceId']));
+      message = choice.human
+        ? refusalText({ kind: 'rationale-human', label: choice.label })
+        : refusalText({ kind: 'rationale-missing' });
+      break;
+    }
+    case 'observation-rationale-required':
+      message = 'every runtime observation must record a rationale: pass --rationale (G4)';
+      break;
+    case 'no-next-step':
+      message = refusalText({ kind: 'no-next-step', id: String(detail['nodeId']) });
+      break;
+    case 'unknown-observation':
+      message = `"${String(detail['name'])}" is not awaiting a runtime observation`;
+      break;
+    case 'observation-type':
+      message =
+        `observation "${String(detail['name'])}" expects ${String(detail['expected'])}, got ` +
+        String(detail['actual']);
+      break;
+    case 'ambiguous-choice':
+      message = refusalText({
+        kind: 'ambiguous',
+        ref: String(detail['ref']),
+        id: String(detail['nodeId']),
+      });
+      break;
+    case 'bad-index': {
+      const count = Number(detail['count']);
+      const id = String(detail['nodeId']);
+      message = count === 0
+        ? refusalText({
+            kind: 'no-choices',
+            id,
+            nextTarget: trajectory.nodes.find((node) => node.id === id)?.next?.target ?? null,
+          })
+        : refusalText({
+            kind: 'bad-index',
+            id,
+            index: Number(detail['index']),
+            max: count - 1,
+          });
+      break;
+    }
+    case 'unknown-choice': {
+      const id = String(detail['nodeId']);
+      const node = trajectory.nodes.find((candidate) => candidate.id === id);
+      message = refusalText({
+        kind: 'no-match',
+        ref: String(detail['ref']),
+        id,
+        available: node?.choices.map((choice, index) => `[${index}] ${choice.label}`).join(', ') ?? '',
+      });
+      break;
+    }
+    default:
+      message = `walk refused (${result.code}): ${JSON.stringify(detail)}`;
   }
-  return found;
+  return new WalkError(message, code);
 }
 
-function elapsedInNode(state: PlanState, nodeId: string, at: string): number {
-  const entered = enteredAt(state, nodeId);
-  if (!entered) return 0;
-  return Math.max(0, Date.parse(at) - Date.parse(entered));
+function blockedChoice(
+  trajectory: Trajectory,
+  state: RuleSemanticState,
+  detail: Record<string, unknown>,
+): Choice | undefined {
+  if (typeof detail['choiceId'] === 'string') {
+    return trajectory.nodes
+      .flatMap((node) => node.choices)
+      .find((choice) => choice.id === detail['choiceId']);
+  }
+  const node = trajectory.nodes.find((candidate) => candidate.id === state.current);
+  if (!node) return undefined;
+  if (detail['source'] !== undefined) {
+    return node.choices.find((choice) =>
+      choice.timeout?.source === detail['source'] || choice.gate?.source === detail['source']);
+  }
+  return node.choices.find((choice) => state.taken.includes(choice.id) && !choice.sticky);
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String) : [];
+}
+
+function epoch(at: string): number {
+  const parsed = Date.parse(at);
+  if (!Number.isFinite(parsed)) {
+    throw new WalkError(`invalid timestamp "${at}"`, 'invalid-state');
+  }
+  return parsed;
 }
 
 function spanText(ms: number): string {
@@ -398,53 +474,101 @@ function spanText(ms: number): string {
   return `${Math.ceil(hours / 24)}d`;
 }
 
-/** Node ids visited so far, in order (for taken-path rendering). */
+/** Start of the current activation; direct self-loops do not reset it. */
+export function enteredAt(state: PlanState, nodeId: string): string | null {
+  return state.status === 'active' && state.current === nodeId
+    ? state.activationStartedAt
+    : historicalEnteredAt(state, nodeId);
+}
+
+function historicalEnteredAt(state: PlanState, nodeId: string): string | null {
+  let found: string | null = null;
+  for (let index = state.log.length - 1; index >= 0; index--) {
+    const entry = state.log[index];
+    if (entry.to !== nodeId) {
+      if (found) break;
+      continue;
+    }
+    found = entry.at;
+    if (entry.from !== nodeId) break;
+  }
+  return found;
+}
+
 export function visitedPath(state: PlanState): string[] {
   return state.log.map((entry) => entry.to);
 }
 
 export function parseState(json: string): PlanState {
-  const state = JSON.parse(json) as PlanState;
-  for (const key of ['hash', 'status', 'current', 'variables', 'taken', 'log'] as const) {
-    if (!(key in state)) throw new WalkError(refusalText({ kind: 'invalid-state', key }), 'invalid-state');
+  const value = JSON.parse(json) as unknown;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new WalkError('invalid state file: expected a JSON object', 'invalid-state');
   }
-  state.pendingObservations ??= [];
-  state.pendingEntry ??= false;
-  state.observations ??= [];
-  return state;
+  const parsed = value as Partial<PlanState>;
+  for (const key of [
+    'version',
+    'hash',
+    'status',
+    'current',
+    'variables',
+    'pendingObservations',
+    'pendingEntry',
+    'activationStartedAt',
+    'observations',
+    'taken',
+    'log',
+  ] as const) {
+    if (!(key in parsed)) {
+      throw new WalkError(refusalText({ kind: 'invalid-state', key }), 'invalid-state');
+    }
+  }
+  if (parsed.version !== PLAN_STATE_VERSION) {
+    throw unsupportedStateVersion(parsed.version);
+  }
+  if (parsed.status === 'active' && typeof parsed.activationStartedAt !== 'string') {
+    throw new WalkError(
+      'invalid state file: active state requires "activationStartedAt"',
+      'invalid-state',
+    );
+  }
+  if (parsed.status === 'completed' && parsed.activationStartedAt !== null) {
+    throw new WalkError(
+      'invalid state file: completed state requires "activationStartedAt": null',
+      'invalid-state',
+    );
+  }
+  return parsed as PlanState;
 }
 
-/** What `rebind` changed to migrate a state file onto a re-compiled plan. */
+function unsupportedStateVersion(version: unknown): WalkError {
+  return new WalkError(
+    `unsupported state version ${String(version)}; expected ${PLAN_STATE_VERSION}. ` +
+    'Re-initialise the state with "marionette state init --force".',
+    'invalid-state',
+  );
+}
+
 export interface MigrationReport {
   fromHash: string;
   toHash: string;
-  /** Once-only choice ids no longer present in the new graph (dropped from `taken`). */
   droppedTaken: string[];
-  /** Variables no longer declared (dropped, last value noted). */
   droppedVariables: Record<string, Value>;
-  /** Newly declared variables (added at their initial values). */
   addedVariables: Record<string, Value>;
-  /** Newly declared late-bound variables awaiting an observation. */
   addedObservations: string[];
-  /** Variables whose recorded value no longer matches the declared type (reset to initial). */
   resetVariables: string[];
-  /** Visited node ids that no longer exist (history kept; informational). */
   missingVisited: string[];
 }
 
-/**
- * Migrate a state file onto a re-compiled plan (live-plan migration): the
- * sanctioned alternative to `state init --force` that keeps the decision log.
- * Refuses when the current node no longer exists — that needs a human call.
- */
 export interface RebindOptions {
-  /** Who authorised the plan amendment this rebind applies (G4 attribution). */
   actor?: string;
-  /** Why the plan changed — recorded in the decision log alongside the hashes. */
   rationale?: string | null;
   at?: string;
 }
 
+/**
+ * Rebind remains a persistence-layer operation. It mutates the supplied state
+ * deliberately; semantic walker transitions above are immutable.
+ */
 export function rebindState(
   trajectory: Trajectory,
   state: PlanState,
@@ -462,51 +586,46 @@ export function rebindState(
   };
   if (state.hash === trajectory.hash) return report;
 
-  const nodeIds = new Set(trajectory.nodes.map((n) => n.id));
+  const nodeIds = new Set(trajectory.nodes.map((node) => node.id));
   if (state.current !== END && !nodeIds.has(state.current)) {
     throw new WalkError(refusalText({ kind: 'migration-blocked', current: state.current }), 'migration-blocked');
   }
 
-  const choiceIds = new Set(trajectory.nodes.flatMap((n) => n.choices.map((c) => c.id)));
+  const choiceIds = new Set(trajectory.nodes.flatMap((node) => node.choices.map((choice) => choice.id)));
   report.droppedTaken = state.taken.filter((id) => !choiceIds.has(id));
   state.taken = state.taken.filter((id) => choiceIds.has(id));
 
   for (const [name, value] of Object.entries(state.variables)) {
-    const decl = trajectory.variables[name];
-    if (!decl) {
+    const declaration = trajectory.variables[name];
+    if (!declaration) {
       report.droppedVariables[name] = value;
       delete state.variables[name];
-    } else if (typeof value !== decl.type) {
+    } else if (typeof value !== declaration.type) {
       report.resetVariables.push(name);
-      if (decl.initial === null) {
+      if (declaration.initial === null) {
         delete state.variables[name];
         if (!state.pendingObservations.includes(name)) state.pendingObservations.push(name);
       } else {
-        state.variables[name] = decl.initial;
+        state.variables[name] = declaration.initial;
       }
     }
   }
-  for (const [name, decl] of Object.entries(trajectory.variables)) {
-    if (!(name in state.variables)) {
-      if (decl.initial === null) {
-        report.addedObservations.push(name);
-        if (!state.pendingObservations.includes(name)) state.pendingObservations.push(name);
-      } else {
-        report.addedVariables[name] = decl.initial;
-        state.variables[name] = decl.initial;
-      }
+  for (const [name, declaration] of Object.entries(trajectory.variables)) {
+    if (name in state.variables) continue;
+    if (declaration.initial === null) {
+      report.addedObservations.push(name);
+      if (!state.pendingObservations.includes(name)) state.pendingObservations.push(name);
+    } else {
+      report.addedVariables[name] = declaration.initial;
+      state.variables[name] = declaration.initial;
     }
   }
   state.pendingObservations = state.pendingObservations.filter((name) => name in trajectory.variables);
-
   report.missingVisited = [...new Set(
     visitedPath(state).filter((id) => id !== END && !nodeIds.has(id)),
   )];
 
   state.hash = trajectory.hash;
-
-  // A plan amendment is a decision like any branch (G4): log who applied it,
-  // against which graph, and why — not just an ephemeral migration report.
   state.log.push({
     at: options.at ?? new Date().toISOString(),
     actor: options.actor ?? 'system',

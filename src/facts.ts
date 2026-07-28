@@ -2,9 +2,9 @@
  * Prolog fact emission: a parsed plan rendered as a logic fact base.
  *
  * The fact base is the input to `spec/rules/marionette.pl`, which restates the
- * structural validators as declarative rules (an independent oracle, diffed
- * against src/validate.ts in tests/oracle.test.ts) and doubles as a query
- * surface for interrogating a plan interactively:
+ * structural validators and walker as declarative rules (the production
+ * semantic engine) and doubles as a query surface for interrogating a plan
+ * interactively:
  *
  *   marionette facts plan.mar > plan.pl
  *   swipl spec/rules/marionette.pl plan.pl
@@ -15,8 +15,7 @@
  * diagnostics can be reproduced.
  */
 
-import type { Expr, Value } from './types.js';
-import type { ParsedPlan } from './parser.js';
+import type { Expr, TrajectoryNode, Value, VariableDecl } from './types.js';
 import { resolvePriority, resolveTimebox } from './refs.js';
 
 /** Quote a string as a Prolog atom: 'it''s' style quoting is avoided in favour of backslash escapes. */
@@ -78,7 +77,13 @@ const ACTION_OPS: Record<string, string> = { '=': 'assign', '+=': 'inc', '-=': '
  *   timeout_choice(Choice, Seconds, Source).  % syntactic timeout edge
  *   priority(Node, critical|high|normal|low). % valid # priority: only
  */
-export function emitFacts(plan: ParsedPlan): string {
+export interface FactPlan {
+  start: string | null;
+  variables: Record<string, VariableDecl>;
+  nodes: TrajectoryNode[];
+}
+
+export function emitFacts(plan: FactPlan): string {
   const lines: string[] = [
     ':- encoding(utf8).',
     '% Marionette fact base - generated, do not edit.',

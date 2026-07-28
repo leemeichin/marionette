@@ -54,7 +54,7 @@ test('runtime store commits and replays decisions from the authoritative journal
   }, { at: AT });
   commitRuntimeStore(root, trajectory, before, result.snapshot, result.events);
 
-  const reopened = loadRuntimeStore(root, 'run-2', trajectory);
+  const reopened = await loadRuntimeStore(root, 'run-2', trajectory);
   assert.equal(reopened.revision, 1);
   assert.equal(reopened.state.current, 'b');
   assert.equal(reopened.events.length, 4);
@@ -66,7 +66,7 @@ test('runtime store repairs a corrupt snapshot by replaying the journal', () => 
   await initializeRuntimeStore(root, trajectory, { runId: 'run-3', at: AT });
   const paths = runtimePaths(root, 'run-3', trajectory.hash);
   writeFileSync(paths.snapshot, '{partial', 'utf8');
-  const reopened = loadRuntimeStore(root, 'run-3', trajectory);
+  const reopened = await loadRuntimeStore(root, 'run-3', trajectory);
   assert.equal(reopened.state.current, 'a');
   assert.equal(JSON.parse(readFileSync(paths.snapshot, 'utf8')).revision, 0);
 }));
@@ -126,7 +126,7 @@ else -> END
   }, { at: AT });
   commitRuntimeStore(root, dynamic, before, observed.snapshot, observed.events);
 
-  const reopened = loadRuntimeStore(root, 'run-observe', dynamic);
+  const reopened = await loadRuntimeStore(root, 'run-observe', dynamic);
   assert.equal(reopened.revision, 1);
   assert.equal(reopened.state.variables['remaining'], 1);
   assert.equal(reopened.state.observations[0].variable, 'remaining');
