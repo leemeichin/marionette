@@ -157,6 +157,17 @@ beyond constant expressions and monotonic counters; the compiler never claims
 loop edges (MAR017), malformed external refs (MAR018), unknown delivery/report
 values (MAR019), unknown tracker values (MAR020).
 
+MAR003/MAR004 reference errors do not suppress independent graph diagnostics.
+The compiler checks a conservative closed projection, reports definite defects
+such as unrelated dead ends and cycles, and withholds findings whose truth
+depends on the broken edge or gate. Validate again after fixing the references
+to check the complete graph.
+
+`marionette oracle plan.mar` adds `STRAND` findings for once-only (`*`)
+choices anywhere on a cycle, not only the choice carrying `~loop~`. Treat each
+as a review point: make it sticky unless exhausting that route is intentional
+and cannot strand a later visit.
+
 ## Well-known metadata namespaces (Phase 2)
 
 All metadata rides on one syntax — `# key: value` tags, plan-level in the

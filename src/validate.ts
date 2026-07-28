@@ -5,7 +5,7 @@
  * engine exclusively owns graph findings (ADR-0003 / issue #21).
  */
 
-import type { Action, Diagnostic, Finding, VariableDecl } from './types.js';
+import type { Action, Choice, Diagnostic, Finding, VariableDecl } from './types.js';
 import { CODES, END } from './types.js';
 import { tryConstEval, typeOf, varsIn } from './expr.js';
 import { renderFinding } from './diagnostics.js';
@@ -26,21 +26,104 @@ export async function validatePlan(
 
 /**
  * Return all non-parser findings. Graph-layer findings come only from Prolog;
- * upstream errors stop graph analysis because its predicates assume a closed
- * graph.
+ * parser errors stop graph analysis because the graph may be incomplete.
+ * Reference errors use a closed, conservative projection so independent graph
+ * defects can still be reported in the same compile pass.
  */
 export async function analyzePlan(
   plan: ParsedPlan,
   options: { priorErrors?: boolean } = {},
 ): Promise<Finding[]> {
   const findings = analyzeShape(plan);
-  if (options.priorErrors || findings.some((finding) => finding.severity === 'error')) {
+  if (options.priorErrors) {
     return findings;
   }
 
-  const graph = await ruleGraphFindings(emitFacts(plan));
+  const errors = findings.filter((finding) => finding.severity === 'error');
+  if (errors.some((finding) =>
+    finding.code !== CODES.UNDEFINED_TARGET && finding.code !== CODES.UNDEFINED_VARIABLE)) {
+    return findings;
+  }
+
+  const projection = errors.length === 0 ? null : closedGraphProjection(plan);
+  const graph = (await ruleGraphFindings(emitFacts(projection?.plan ?? plan)))
+    .filter((finding) => projection === null || keepPartialFinding(finding, projection));
   findings.push(...graph.map((finding) => enrichGraphFinding(plan, finding)));
   return findings;
+}
+
+interface ClosedGraphProjection {
+  plan: ParsedPlan;
+  /** Nodes whose authored exits could not safely enter the partial graph. */
+  uncertainNodes: Set<string>;
+  /** Any removed edge can change reachability, loop boundaries and gate roles. */
+  edgeUncertainty: boolean;
+}
+
+/**
+ * Build an under-approximation containing only edges whose targets and gate
+ * variables resolve. A cycle in this projection is therefore a real cycle in
+ * the authored graph, while omitted edges remain explicitly uncertain.
+ */
+function closedGraphProjection(plan: ParsedPlan): ClosedGraphProjection {
+  const nodeIds = new Set(plan.nodes.map((node) => node.id));
+  const variableNames = new Set(Object.keys(plan.variables));
+  const uncertainNodes = new Set<string>();
+
+  const validTarget = (target: string) => target === END || nodeIds.has(target);
+  const validGate = (choice: Choice) =>
+    choice.gate === null ||
+    [...varsIn(choice.gate.ast)].every((name) => variableNames.has(name));
+
+  const nodes = plan.nodes.map((node) => {
+    const choices = node.choices.filter((choice) => {
+      const keep = validTarget(choice.target) && validGate(choice);
+      if (!keep) uncertainNodes.add(node.id);
+      return keep;
+    });
+    let next = node.next;
+    if (next !== null && !validTarget(next.target)) {
+      uncertainNodes.add(node.id);
+      next = null;
+    }
+    return { ...node, choices, next };
+  });
+
+  const start = plan.start !== null && nodeIds.has(plan.start) ? plan.start : null;
+  return {
+    plan: { ...plan, start, nodes },
+    uncertainNodes,
+    edgeUncertainty: uncertainNodes.size > 0 || start !== plan.start,
+  };
+}
+
+/**
+ * Partial findings must remain true for every possible repair of the omitted
+ * references. Definite cycles and local facts survive; findings whose meaning
+ * depends on the missing edges are withheld until the graph is closed.
+ */
+function keepPartialFinding(
+  finding: RuleGraphFinding,
+  projection: ClosedGraphProjection,
+): boolean {
+  const nodeId = typeof finding.data['id'] === 'string' ? finding.data['id'] : null;
+  switch (finding.code) {
+    case CODES.DEAD_END:
+    case CODES.TIMEBOX_WITHOUT_ALTERNATIVE:
+      return nodeId === null || !projection.uncertainNodes.has(nodeId);
+    case CODES.UNREACHABLE:
+    case CODES.LOOP_WITHOUT_EXIT:
+    case CODES.LOOP_EXIT_UNSATISFIABLE:
+    case CODES.LOOP_NOT_A_CYCLE:
+    case CODES.UNVERIFIED_GATE:
+      return !projection.edgeUncertainty;
+    case CODES.UNDECLARED_CYCLE:
+    case CODES.CONSTANT_FALSE_GATE:
+    case CODES.LOOP_ONCE_ONLY:
+      return true;
+    default:
+      return false;
+  }
 }
 
 function analyzeShape(plan: ParsedPlan): Finding[] {
