@@ -36,8 +36,9 @@ Schema (all terms ground; `Expr` mirrors the `Expr` AST in `src/types.ts`):
 ```prolog
 plan_start(Node).                    % start node id
 node(Node, Line, Ord).               % Ord: source order
-variable(Name, Type, Initial, Line). % Type: number|boolean|string; Initial: num(N)|bool(B)|str(S)
+variable(Name, Type, Initial, Line). % Initial: num(N)|bool(B)|str(S)|late_bound
 action(Node, Var, Op, Expr, Line).   % Op: assign|inc|dec — applied on node entry
+observation(Node, Var, Line).        % explicit `? Var` refresh checkpoint
 choice(Id, Node, Target, Line, Ord). % Ord: global source order across the plan
 label(Id, Label).                    % the human-legible claim on the choice
 sticky(Id).                          % "+" repeatable (absent → "*" once-only)
@@ -46,6 +47,7 @@ loop_marked(Id).                     % ~loop~ declared cycle edge
 gate(Id, Expr, Source).              % {gate} as AST + original text
 next_step(Node, Target, Line).       % automatic next step
 timebox(Node, Seconds).              % valid # timebox: (speculative phases)
+timeout_choice(Id, Seconds, Source). % syntactic timeout edge
 priority(Node, Level).               % valid # priority: critical|high|normal|low
 ```
 
@@ -126,7 +128,7 @@ $ swipl spec/rules/marionette.pl plan.pl
 ```
 
 Since issue #21 phase C the rule base also states **walker semantics**
-(§7 of `marionette.pl`): `init_walk`, `do_choose`/`do_advance`,
+(§7 of `marionette.pl`): `init_walk`, `do_choose`/`do_advance`/`do_observe`,
 `available/1` and `walk_blocked/2` over live state facts — the same
 contract `src/state.ts` implements, held to the same
 `spec/conformance/cases/` walk scripts, with both walkers run in CI. So a
@@ -135,6 +137,8 @@ traversal question is queryable too:
 ```prolog
 ?- init_walk, do_choose("0", "agent", true, R).   % walk a step in the toplevel
 ?- available(C).                                  % the live frontier
+?- do_observe(remaining, num(3), true, R).         % supply a pending value
+?- set_walk_elapsed(3600).                         % advance the logical timeout clock
 ```
 
 The building blocks (`can_reach/2` reachability, `on_same_cycle/2`,

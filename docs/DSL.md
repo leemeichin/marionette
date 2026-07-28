@@ -10,6 +10,7 @@ of truth, so it stays small and legible.
 # project: my-project          // plan-level metadata tag (preamble)
 VAR iteration = 0              // typed variables: number, boolean, "string"
 VAR approved = false
+VAR remaining: number = ?      // late-bound: supplied by the runtime
 
 -> build_mvp                   // optional explicit start (default: first phase)
 
@@ -37,12 +38,17 @@ Launch to the beta cohort.
 | Phase | `=== name ===` | Unique `[A-Za-z_]\w*` id; trailing `===` optional. `END` is reserved. |
 | Body | prose lines | Joined verbatim; first line is used as the node title when rendering. |
 | Variable | `VAR name = literal` | Preamble only. Type inferred from the literal (number, `true`/`false`, `"string"`). |
+| Late-bound variable | `VAR name: number = ?` | Preamble only. Explicit type is required; traversal suspends until the runtime supplies its initial value. |
 | Mutation | `~ name = expr` · `~ name += expr` · `~ name -= expr` | Applied in order when the phase is **entered**. `+=`/`-=` require numbers. |
+| Observation | `? name` | Invalidates `name` on each visit and requests a fresh typed value after the phase work, before branching. |
 | Choice (once) | `* [Label] -> target` | May be taken at most once per traversal. |
 | Choice (sticky) | `+ [Label] -> target` | Repeatable. Use for loop edges. |
 | Gate | `{expr}` before or after the label | Choice is available only while the expression is true. |
 | Human checkpoint | `@human` on a choice | The agent must pause and escalate; only a human may record this decision. |
 | Loop | `~loop~` on a choice | Declares an intentional cycle. A cycle is declared when **any one** of its edges carries `~loop~` (convention: the returning edge); overlapping cycles each need a marked edge. Undeclared cycles are compile errors. |
+| Conditional loop | `while {expr} -> target` · `else -> target` | An exhaustive sticky pair. `while` declares its true arm as the repeating edge. Optional `[labels]` may precede each arrow. |
+| Conditional exit | `until {expr} -> target` · `else -> target` | An exhaustive sticky pair. `until` exits on true and declares its `else` arm as the repeating edge. |
+| Timeout exit | `timeout 3d -> target` | Hard phase budget. Before expiry the edge is blocked; after expiry it is the authoritative exit and ordinary choices are blocked. Optional `[label]` before the arrow. |
 | Automatic next step (`next` in JSON) | `-> target` on its own line | Unconditional route when a stage is done. At most one per phase; place it after choices. |
 | End | `-> END` | Terminal. Reaching it completes the plan. |
 | Metadata | `# key: value` · `# tag` | Plan-level in the preamble, node-level inside a phase. Namespaced keys (`github:issue`) are the extension mechanism. Repeated keys accumulate into a list. |
@@ -53,6 +59,88 @@ Operands: numbers (`3`, `1.5`), booleans, `"strings"`, variables.
 Operators, loosest to tightest: `||`/`or` · `&&`/`and` · `==` `!=` ·
 `<` `<=` `>` `>=` · `+` `-` · `*` `/` `%` · unary `!`/`not`, `-` · `( )`.
 Comparisons are type-checked at runtime; `+` concatenates strings.
+
+## Runtime observations
+
+`?` is a suspension point, not a connector or an implicit lookup. Marionette
+names the value and enforces its type; the executing host obtains it with
+whatever capabilities it already has and records it through
+`state observe` or the runtime protocol's `observe` operation.
+
+```
+VAR remaining: number = ?
+
+=== work ===
+Process one unit from the current batch.
+~ remaining -= 1
+while {remaining > 0} -> work
+else -> refresh
+
+=== refresh ===
+Refresh the external count once, after the captured batch is exhausted.
+? remaining
+while {remaining > 0} -> work
+else -> END
+```
+
+`VAR remaining: number = ?` requests the first value before start-node entry
+mutations run. A later `? remaining` controls the refresh cadence explicitly:
+the old value is removed, choices are blocked with `observation-required`,
+and the supplied value remains stable until another observation or mutation.
+Every observation records actor, timestamp, value and rationale separately
+from the decision log.
+
+This is deliberately source-neutral. The same construct can represent a work
+count, test health, rollout capacity, a measured score or any other scalar
+fact. Marionette never assumes how the host obtains it.
+
+## While and until
+
+`while`/`until` remove the boilerplate from the common two-door loop:
+
+```
+while {remaining > 0} [More work] -> work
+else [Done] -> finish
+
+until {tests_green} -> release
+else -> retry
+```
+
+The `else` line must immediately follow its `while`/`until`. Both arms are
+sticky because the decision point may be revisited. The compiler generates
+the complementary `!condition` gate and the appropriate loop declaration;
+labels are optional and default to the condition/`otherwise`. These forms
+compile to the same choices, gates and loop facts as the longhand syntax, so
+existing analysis and runtimes do not have a second control-flow model.
+
+Use a `VAR` counter and longhand gates for a fixed retry budget. Use
+`while`/`until` when the stopping condition is the point of the loop. A
+condition driven by runtime observations may still produce MAR014 when its
+eventual truth cannot be proven; that warning is the compiler being honest,
+not a rejection of the construct.
+
+## Timeouts
+
+A timeout affects traversal and is therefore syntax:
+
+```
+=== experiment ===
+Try the speculative approach.
+* [Succeeded] -> integrate
++ [Another attempt] ~loop~ -> experiment
+timeout 3d [Budget spent] -> fallback
+```
+
+The duration is measured from the current phase activation. A direct self-loop
+does not reset it; leaving the phase and later returning does. Before expiry,
+the timeout choice is blocked with `timeout-pending`. Once expired, ordinary
+choices and automatic next steps are blocked and the timeout exit is
+available. Marionette does not schedule a wake-up: a long-lived host may do
+that, while a CLI run observes the timeout on its next `brief`/choice.
+
+For compatibility, `# timebox:` remains an advisory annotation for older
+plans. It never affects the walker. New plans whose time budget changes the
+route should use `timeout <duration> -> target`.
 
 ## What the compiler guarantees (G1)
 
@@ -92,20 +180,18 @@ containing only """.
 """
 ```
 
-Two node-level pacing keys encode time and urgency **as evidence, never as
-a gate** — the walker never consults the clock (determinism, replay and
-static gate verification depend on that):
+Node-level priority remains execution metadata. The legacy `# timebox:` form
+is advisory only; executable time limits use the `timeout` syntax above.
 
 ```
 === spike_realtime_sync ===
 Try CRDT-based sync; a working prototype against the test suite decides.
-# timebox: 3d
 # priority: high
 * [Prototype holds up — adopt] -> integrate_sync
-* [Not viable or timebox spent] -> polling_fallback
+timeout 3d [Not viable in time] -> polling_fallback
 ```
 
-- `# timebox: <n><m|h|d|w>` — advisory wall-clock budget for a speculative
+- `# timebox: <n><m|h|d|w>` — legacy advisory wall-clock budget for a speculative
   phase. The brief carries it alongside `enteredAt` (derived from the
   decision log); an overdue timebox is the executor's evidence for taking
   the abandon door, and the log records that time drove the exit. Malformed

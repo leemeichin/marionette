@@ -9,6 +9,7 @@
     "plan",
     "status",
     "variables",
+    "pendingObservations",
     "node",
     "delivery",
     "frontier",
@@ -93,11 +94,13 @@
     "status": {
       "enum": [
         "active",
+        "awaiting-observation",
+        "waiting-timeout",
         "awaiting-human",
         "stranded",
         "completed"
       ],
-      "description": "active: at least one autonomous step is available. awaiting-human: only @human choices are available \u2014 escalate and pause. stranded: nothing available and no automatic next step. completed: the plan reached END."
+      "description": "active: an autonomous step is available. awaiting-observation: runtime values are required. waiting-timeout: a temporal edge will open later. awaiting-human: only @human choices are available. stranded: nothing can proceed. completed: END."
     },
     "variables": {
       "type": "object",
@@ -107,6 +110,18 @@
           "boolean",
           "string"
         ]
+      }
+    },
+    "pendingObservations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "enum": ["number", "boolean", "string", "unknown"] }
+        }
       }
     },
     "node": {
@@ -269,7 +284,8 @@
           "gate",
           "available",
           "blocked",
-          "blockedCode"
+          "blockedCode",
+          "timeout"
         ],
         "additionalProperties": false,
         "properties": {
@@ -336,8 +352,25 @@
               {
                 "enum": [
                   "once-exhausted",
-                  "gate-blocked"
+                  "gate-blocked",
+                  "observation-required",
+                  "timeout-pending",
+                  "timed-out"
                 ]
+              }
+            ]
+          },
+          "timeout": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["source", "seconds"],
+                "additionalProperties": false,
+                "properties": {
+                  "source": { "type": "string" },
+                  "seconds": { "type": "number", "exclusiveMinimum": 0 }
+                }
               }
             ]
           }
@@ -441,6 +474,7 @@
       "required": [
         "choose",
         "advance",
+        "observe",
         "rules"
       ],
       "additionalProperties": false,
@@ -449,6 +483,9 @@
           "type": "string"
         },
         "advance": {
+          "type": "string"
+        },
+        "observe": {
           "type": "string"
         },
         "rules": {

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compile, trajectoryHash } from '../src/compile.js';
 import {
-  DriftError, WalkError, advance, bindState, frontier, initState, takeChoice,
+  DriftError, WalkError, advance, bindState, frontier, initState, observe, takeChoice,
 } from '../src/state.js';
 
 const SOURCE = `
@@ -107,4 +107,80 @@ test('walker: once-only choices exhaust; unknown refs error helpfully', async ()
   const options = frontier(t, state);
   assert.match(options[0].blocked ?? '', /already taken/);
   assert.throws(() => takeChoice(t, state, 'Nope', { actor: 'agent', rationale: 'x' }), /available/);
+});
+
+test('walker: late-bound values suspend entry and explicit checkpoints control refresh cadence', async () => {
+  const t = (await compile(`
+VAR remaining: number = ?
+=== work ===
+Do one unit.
+~ remaining -= 1
+while {remaining > 0} -> work
+else -> refresh
+=== refresh ===
+Refresh once after the batch is exhausted.
+? remaining
+while {remaining > 0} -> work
+else -> END
+`)).trajectory!;
+  const state = initState(t, 'system', '2026-01-01T00:00:00Z');
+  assert.deepEqual(state.pendingObservations, ['remaining']);
+  assert.equal(frontier(t, state)[0].blockedCode, 'observation-required');
+  assert.throws(
+    () => takeChoice(t, state, '0', { actor: 'agent', rationale: 'too early' }),
+    (error: unknown) => error instanceof WalkError && error.code === 'observation-required',
+  );
+  assert.throws(
+    () => observe(t, state, 'remaining', Number.POSITIVE_INFINITY, {
+      actor: 'agent', rationale: 'invalid measurement',
+    }),
+    (error: unknown) => error instanceof WalkError && error.code === 'observation-type',
+  );
+
+  observe(t, state, 'remaining', 2, {
+    actor: 'agent', rationale: 'captured a two-item batch', at: '2026-01-01T00:00:01Z',
+  });
+  assert.equal(state.variables['remaining'], 1, 'deferred start-node mutation runs after binding');
+  takeChoice(t, state, 'work#0', {
+    actor: 'agent', rationale: 'first item done', at: '2026-01-01T00:00:02Z',
+  });
+  assert.equal(state.variables['remaining'], 0);
+  takeChoice(t, state, 'work#1', {
+    actor: 'agent', rationale: 'batch exhausted', at: '2026-01-01T00:00:03Z',
+  });
+  assert.deepEqual(state.pendingObservations, ['remaining']);
+  assert.equal(state.variables['remaining'], undefined);
+
+  observe(t, state, 'remaining', 0, {
+    actor: 'agent', rationale: 'refresh found no more work', at: '2026-01-01T00:00:04Z',
+  });
+  takeChoice(t, state, 'refresh#1', {
+    actor: 'agent', rationale: 'condition false', at: '2026-01-01T00:00:05Z',
+  });
+  assert.equal(state.status, 'completed');
+  assert.equal(state.observations.length, 2);
+});
+
+test('walker: timeout exits are unavailable before expiry and authoritative afterwards', async () => {
+  const t = (await compile(`
+=== experiment ===
+Try it.
++ [Again] ~loop~ -> experiment
+timeout 1h -> END
+`)).trajectory!;
+  const state = initState(t, 'system', '2026-01-01T00:00:00Z');
+  let choices = frontier(t, state, { at: '2026-01-01T00:30:00Z' });
+  assert.equal(choices[0].blocked, null);
+  assert.equal(choices[1].blockedCode, 'timeout-pending');
+
+  takeChoice(t, state, 'experiment#0', {
+    actor: 'agent', rationale: 'one more attempt', at: '2026-01-01T00:30:00Z',
+  });
+  choices = frontier(t, state, { at: '2026-01-01T02:00:00Z' });
+  assert.equal(choices[0].blockedCode, 'timed-out');
+  assert.equal(choices[1].blocked, null);
+  takeChoice(t, state, 'experiment#1', {
+    actor: 'agent', rationale: 'one-hour budget elapsed', at: '2026-01-01T02:00:00Z',
+  });
+  assert.equal(state.status, 'completed');
 });

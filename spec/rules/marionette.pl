@@ -32,8 +32,9 @@
  *
  *    plan_start(Node)                     the start phase
  *    node(Node, Line, Ord)                a phase, its source line + order
- *    variable(Name, Type, Init, Line)     VAR declaration
+ *    variable(Name, Type, Init, Line)     VAR declaration (Init may be late_bound)
  *    action(Node, Var, Op, Expr, Line)    ~ mutation on entry (assign|inc|dec)
+ *    observation(Node, Var, Line)         ? runtime refresh checkpoint
  *    choice(Id, Node, Target, Line, Ord)  an exit edge; Ord is global order
  *    label(Id, Text)                      the choice's human-readable claim
  *    sticky(Id)                           "+" repeatable ("*" when absent)
@@ -42,6 +43,7 @@
  *    gate(Id, Expr, Source)               {gate} as an AST + original text
  *    next_step(Node, Target, Line)        automatic next step
  *    timebox(Node, Seconds)               # timebox: (speculative phases)
+ *    timeout_choice(Id, Seconds, Source)  syntactic timeout edge
  *    priority(Node, Level)                # priority:
  *
  *  Expressions are ground terms: lit(num(3)), lit(bool(true)),
@@ -62,9 +64,9 @@
 
 % Facts arrive from a separate file (or load_string), so declare them
 % dynamic — and discontiguous, since the emitter groups them per phase.
-:- dynamic plan_start/1, node/3, variable/4, action/5, choice/5,
+:- dynamic plan_start/1, node/3, variable/4, action/5, observation/3, choice/5,
            label/2, sticky/1, human/1, loop_marked/1, gate/3, next_step/3,
-           timebox/2, priority/2.
+           timebox/2, timeout_choice/3, priority/2.
 :- discontiguous finding/2.
 
 end_id('END').
@@ -133,7 +135,7 @@ const_eval(E, V) :- \+ has_vars(E), once(eval(E, [], V)).
 % Evaluate against declared initial values (used when nothing ever
 % mutates the variables an expression mentions).
 eval_with_initials(E, V) :-
-    setof(N-I, T^L^(expr_var(E, N), variable(N, T, I, L)), Env),
+    setof(N-I, T^L^(expr_var(E, N), variable(N, T, I, L), I \== late_bound), Env),
     once(eval(E, Env, V)).
 
 /* ═════════════════════ 2 · Gate analysis ═══════════════════════════════
@@ -188,9 +190,11 @@ flip(lt, gt). flip(le, ge). flip(gt, lt). flip(ge, le). flip(eq, eq). flip(ne, n
 gate_status(E, Scope, Status) :-
     (  \+ has_vars(E)
     -> decide(const_eval(E, bool(true)), const_eval(E, bool(false)), Status)
-    ;  forall(expr_var(E, V), (variable(V, _, _, _), \+ mutated(V)))
+    ;  forall(expr_var(E, V), (variable(V, _, I, _), I \== late_bound, \+ mutated(V)))
     -> decide(eval_with_initials(E, bool(true)), eval_with_initials(E, bool(false)), Status)
     ;  counter_eventually_true(E, Scope)
+    -> Status = sat
+    ;  E = un(not, Inner), eventually_false(Inner, Scope)
     -> Status = sat
     ;  Status = unknown
     ).
@@ -454,6 +458,7 @@ human_gate(C, N, Label) :- human(C), choice(C, N, _, _, _), label(C, Label).
 
 %% speculative(?N) — a timeboxed phase (try it; abandon if the budget dries up).
 speculative(N) :- timebox(N, _).
+speculative(N) :- timeout_choice(C, _, _), choice(C, N, _, _, _).
 
 % Steps an agent may take alone: automatic next steps and non-human choices.
 agent_step(F, T) :- next_step(F, T, _).
@@ -481,6 +486,7 @@ reset_plan :-
     retractall(node(_, _, _)),
     retractall(variable(_, _, _, _)),
     retractall(action(_, _, _, _, _)),
+    retractall(observation(_, _, _)),
     retractall(choice(_, _, _, _, _)),
     retractall(label(_, _)),
     retractall(sticky(_)),
@@ -489,6 +495,7 @@ reset_plan :-
     retractall(gate(_, _, _)),
     retractall(next_step(_, _, _)),
     retractall(timebox(_, _)),
+    retractall(timeout_choice(_, _, _)),
     retractall(priority(_, _)),
     abolish_all_tables.
 
@@ -519,24 +526,35 @@ report :-
  *   w_status(S)        active | completed
  *   w_var(Name, V)     live variables (typed values: num/bool/str)
  *   w_taken(ChoiceId)  once-only choices already consumed
+ *   w_pending(Name)    late-bound/refreshed values awaiting input
+ *   w_elapsed(Seconds) logical time in the current node activation
  *
  * Driver API:
  *   init_walk                       fresh state; enters the start phase
  *   do_choose(Ref, Actor, HasRationale, Result)
  *   do_advance(Result)
  *   Result = moved(To) | refused(Code)   — a refusal changes nothing.
+ *   do_observe(Name, Value, HasRationale, Result) supply one typed value
  *   walk_var(Name, Type, Plain)     read variables back, untyped
  */
 
-:- dynamic w_current/1, w_status/1, w_var/2, w_taken/1.
+:- dynamic w_current/1, w_status/1, w_var/2, w_taken/1,
+           w_pending/1, w_pending_entry/0, w_elapsed/1.
 
 init_walk :-
     retractall(w_current(_)), retractall(w_status(_)),
     retractall(w_var(_, _)), retractall(w_taken(_)),
+    retractall(w_pending(_)), retractall(w_pending_entry),
+    retractall(w_elapsed(_)), assertz(w_elapsed(0)),
     assertz(w_status(active)),
-    forall(variable(Name, _, Init, _), assertz(w_var(Name, Init))),
+    forall(variable(Name, _, Init, _),
+           ( Init == late_bound -> assertz(w_pending(Name)) ; assertz(w_var(Name, Init)) )),
     plan_start(S),
-    enter_node(S).
+    ( w_pending(_)
+    -> assertz(w_pending_entry),
+       retractall(w_current(_)), assertz(w_current(S))
+    ;  enter_node(S)
+    ).
 
 % Entering a phase: END completes the walk; anything else becomes current
 % and applies its mutations in source order (later mutations see earlier
@@ -546,8 +564,18 @@ enter_node(T) :-
     retractall(w_current(_)), assertz(w_current(T)),
     retractall(w_status(_)), assertz(w_status(completed)).
 enter_node(T) :-
+    ( w_current(T) -> Same = true ; Same = false ),
     retractall(w_current(_)), assertz(w_current(T)),
-    forall(action(T, Var, Op, Expr, _), apply_action(Var, Op, Expr)).
+    ( Same == true -> true ; retractall(w_elapsed(_)), assertz(w_elapsed(0)) ),
+    apply_entry(T).
+
+apply_entry(T) :-
+    forall(action(T, Var, Op, Expr, _), apply_action(Var, Op, Expr)),
+    forall(observation(T, Var, _), arm_observation(Var)).
+
+arm_observation(Var) :-
+    retractall(w_var(Var, _)),
+    ( w_pending(Var) -> true ; assertz(w_pending(Var)) ).
 
 apply_action(Var, Op, Expr) :-
     walk_env(Env),
@@ -563,7 +591,14 @@ walk_env(Env) :- findall(N-V, w_var(N, V), Env).
 %% available(?C) / walk_blocked(+C, -Code): the live frontier at w_current.
 %% Once-only exhaustion is checked before the gate, as in the reference.
 available(C) :- w_current(N), choice(C, N, _, _, _), \+ walk_blocked(C, _).
+walk_blocked(_, 'observation-required') :- w_pending(_), !.
 walk_blocked(C, 'once-exhausted') :- \+ sticky(C), w_taken(C), !.
+walk_blocked(C, 'timeout-pending') :-
+    timeout_choice(C, Seconds, _), w_elapsed(Elapsed), Elapsed < Seconds, !.
+walk_blocked(C, 'timed-out') :-
+    \+ timeout_choice(C, _, _),
+    w_current(N), choice(T, N, _, _, _),
+    timeout_choice(T, Seconds, _), w_elapsed(Elapsed), Elapsed >= Seconds, !.
 walk_blocked(C, 'gate-blocked') :-
     gate(C, E, _), walk_env(Env), \+ once(eval(E, Env, bool(true))).
 
@@ -594,9 +629,36 @@ take_choice(C, moved(To)) :-
 do_advance(refused(completed)) :- w_status(completed), !.
 do_advance(Result) :-
     w_current(N),
-    (  next_step(N, To, _) -> enter_node(To), Result = moved(To)
+    (  w_pending(_) -> Result = refused('observation-required')
+    ;  choice(T, N, _, _, _), timeout_choice(T, Seconds, _),
+       w_elapsed(Elapsed), Elapsed >= Seconds -> Result = refused('timed-out')
+    ;  next_step(N, To, _) -> enter_node(To), Result = moved(To)
     ;  Result = refused('no-next-step')
     ).
+
+%% Supply an observation as a typed Prolog value (num/bool/str).
+do_observe(_, _, _, refused(completed)) :- w_status(completed), !.
+do_observe(Name, _, _, refused('unknown-observation')) :- \+ w_pending(Name), !.
+do_observe(_, _, false, refused('rationale-required')) :- !.
+do_observe(Name, Value, true, Result) :-
+    ( observation_type(Name, Value)
+    -> retractall(w_var(Name, _)), assertz(w_var(Name, Value)),
+       retractall(w_pending(Name)),
+       ( w_pending_entry, \+ w_pending(_)
+       -> retractall(w_pending_entry), w_current(N), apply_entry(N)
+       ;  true
+       ),
+       Result = observed
+    ;  Result = refused('observation-type')
+    ).
+
+observation_type(Name, num(_))  :- variable(Name, number, _, _).
+observation_type(Name, bool(_)) :- variable(Name, boolean, _, _).
+observation_type(Name, str(_))  :- variable(Name, string, _, _).
+
+set_walk_elapsed(Seconds) :-
+    number(Seconds), Seconds >= 0,
+    retractall(w_elapsed(_)), assertz(w_elapsed(Seconds)).
 
 /* Choice resolution — id, then numeric index, then unambiguous
  * case-insensitive label prefix; the same order as the reference. */
@@ -638,3 +700,11 @@ drive_choose(Ref, Actor, HasRationale, Outcome) :-
 drive_advance(Outcome) :-
     do_advance(R),
     ( R = refused(Code) -> Outcome = Code ; Outcome = ok ).
+drive_observe(Name, Type, Plain, HasRationale, Outcome) :-
+    plain_value(Type, Plain, Value),
+    do_observe(Name, Value, HasRationale, R),
+    ( R = refused(Code) -> Outcome = Code ; Outcome = ok ).
+
+plain_value(number, X, num(X)).
+plain_value(boolean, X, bool(X)).
+plain_value(string, X, str(X)).

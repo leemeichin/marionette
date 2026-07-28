@@ -1,13 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/leemeichin/marionette/spec/runtime-protocol.schema.json",
-  "title": "Marionette local runtime protocol v0.1",
+  "title": "Marionette local runtime protocol v0.2",
   "description": "Compact newline-delimited requests accepted by `marionette runtime`. The connection binds principal identity; actor fields are intentionally absent.",
   "oneOf": [
     { "$ref": "#/$defs/initialize" },
     { "$ref": "#/$defs/next" },
     { "$ref": "#/$defs/choose" },
     { "$ref": "#/$defs/advance" },
+    { "$ref": "#/$defs/observe" },
     { "$ref": "#/$defs/record" },
     { "$ref": "#/$defs/events" }
   ],
@@ -16,7 +17,7 @@
       "type": "object",
       "required": ["protocol", "id", "op"],
       "properties": {
-        "protocol": { "const": "0.1.0" },
+        "protocol": { "const": "0.2.0" },
         "id": { "type": ["string", "number"] },
         "op": { "type": "string" }
       }
@@ -100,6 +101,23 @@
             "op": { "const": "advance" },
             "evidence": { "type": "array" }
           },
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "observe": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        { "$ref": "#/$defs/write" },
+        { "$ref": "#/$defs/projection" },
+        {
+          "properties": {
+            "op": { "const": "observe" },
+            "name": { "type": "string", "minLength": 1 },
+            "value": { "type": ["number", "boolean", "string"] },
+            "evidence": { "type": "array" }
+          },
+          "required": ["name", "value"],
           "unevaluatedProperties": false
         }
       ]

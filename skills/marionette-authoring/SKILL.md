@@ -83,8 +83,8 @@ transcribe tickets into DSL by hand — fetch and scaffold
    ```
 
    `marionette import issues.json -o plan.mar` emits a compiling draft:
-   `--mode queue` (default) is one work-queue phase with a verified bounded
-   loop — one iteration per issue, O(1) tokens in phase count; `--mode
+   `--mode queue` (default) is one work-queue phase with a compact loop —
+   one iteration per imported issue, O(1) tokens in phase count; `--mode
    phases` is one linked phase per issue. Treat the draft as raw material
    for the workflow above — reshape phases, add gates and `@human`
    checkpoints; the issue links ride along on the metadata.
@@ -134,23 +134,22 @@ transcribe tickets into DSL by hand — fetch and scaffold
 
   The loop is unbounded by design; the bound is the evidence claim on the
   loop edge (only taken when work exists) plus the human door.
-- **Speculative phases get a timebox and two doors.** "Try this; if it
-  works continue, if not abandon — don't sink time into it" is a phase with
-  `# timebox:` and both exits (the compiler warns — MAR023 — if the abandon
-  door is missing, because a timebox with one exit decides nothing):
+- **Speculative phases get a temporal exit.** "Try this; if it works
+  continue, if not abandon — don't sink time into it" uses `timeout` when
+  expiry must change what traversal permits:
 
   ```
   === spike_realtime_sync ===
   Try CRDT-based sync; a working prototype against the test suite decides.
-  # timebox: 3d
   * [Prototype holds up — adopt] -> integrate_sync
-  * [Not viable or timebox spent] -> polling_fallback
+  timeout 3d [Budget spent] -> polling_fallback
   ```
 
-  Time is evidence, not a gate: the walker never blocks on the clock; the
-  executor reads "overdue" from the brief and takes the abandon door
-  honestly. `# priority:` (critical|high|normal|low) marks urgency when
-  phases compete for a session.
+  The timeout is a hard edge: before expiry it is blocked; after expiry it
+  becomes authoritative and ordinary exits close. Use legacy `# timebox:`
+  only when elapsed time is advisory evidence and should not control the
+  walker. `# priority:` (critical|high|normal|low) remains metadata because
+  it orders work outside a single traversal.
 - **Every phase needs an exit** — a choice or an automatic next step. Terminal
   outcomes point to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this
@@ -160,9 +159,8 @@ transcribe tickets into DSL by hand — fetch and scaffold
   judgment calls the notes assign to a person. Do not put it on steps an
   agent can verify mechanically (tests green, artifact produced). If a plan
   has zero `@human` checkpoints, ask the user whether that's intended.
-- **Loops must be declared and bounded.** Any edge that revisits an earlier
-  phase gets `~loop~` and should be sticky (`+`), with a counter pattern so
-  the compiler can verify the exit:
+- **Choose the loop form that matches the stopping condition.** Fixed retry
+  budgets still use a monotonic counter, explicit gates and `~loop~`:
 
   ```
   VAR attempts = 0
@@ -173,9 +171,34 @@ transcribe tickets into DSL by hand — fetch and scaffold
   * [It works] -> next_phase
   ```
 
+  For a condition only known at runtime, declare a typed late-bound value,
+  refresh it at explicit `?` checkpoints, and use the paired form:
+
+  ```
+  VAR remaining: number = ?
+
+  === work ===
+  Process one unit from the captured batch.
+  ~ remaining -= 1
+  while {remaining > 0} -> work
+  else -> refresh
+
+  === refresh ===
+  Refresh the count after the batch is exhausted.
+  ? remaining
+  while {remaining > 0} -> work
+  else -> END
+  ```
+
+  This syntax is source-neutral: the value might be queue depth, health,
+  capacity, or a score. `while` marks its true arm as the loop; `until`
+  marks its `else` arm. Their immediate `else` makes the decision exhaustive,
+  and both compile to ordinary sticky choices. The compiler may emit MAR014
+  when it cannot prove how an observed condition evolves; surface the warning
+  rather than inventing a bound.
+
   The always-available `@human` escape (`+ [Enough. Decide.] @human -> …`)
-  is the alternative when no natural counter exists (PRD OQ4 — both are
-  acceptable; prefer the counter when the notes imply a budget).
+  remains appropriate when a person owns termination.
 
   **`~loop~` placement:** the compiler accepts a cycle once **any one edge
   on it** carries `~loop~`; put it on the returning edge (the one that
@@ -190,7 +213,8 @@ transcribe tickets into DSL by hand — fetch and scaffold
   (MAR017) about the `~loop~` edge itself, so this one is on you. Reserve
   `*` for edges on straight-line, visited-once paths.
 - **Gates use declared variables only.** Declare every variable with `VAR`
-  in the preamble with a typed literal. Prefer gates the compiler can verify
+  in the preamble: use a typed literal for authored state, or
+  `VAR name: type = ?` for a runtime observation. Prefer gates the compiler can verify
   (constants, monotonic counters). Dynamic-fact gates (e.g.
   `{metrics_green}` set by a mutation) are fine but will be listed as
   "unverified — review manually"; mention them to the user.

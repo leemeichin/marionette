@@ -1,0 +1,15 @@
+# project: dynamic-batch
+# summary: Snapshot an external workload, drain it without repeated lookups, then refresh once.
+VAR remaining: number = ?
+
+=== work ===
+Process one unit from the captured batch.
+~ remaining -= 1
+while {remaining > 0} [More in this batch] -> work
+else [Batch flushed] -> refresh
+
+=== refresh ===
+Refresh the external workload only after the captured batch is exhausted.
+? remaining
+while {remaining > 0} [New batch available] -> work
+else [Workload clear] -> END

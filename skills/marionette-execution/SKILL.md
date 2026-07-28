@@ -36,6 +36,15 @@ Repeat until the brief says otherwise:
      `marionette state choose <plan> <choice-id> --actor agent --rationale "<evidence>"`,
      or `marionette state advance <plan> --actor agent --rationale "<what happened>"`
      when the brief shows only an automatic next step.
+   - `awaiting-observation` — obtain each scalar named in
+     `pendingObservations` from the source implied by the phase/refs, then
+     record it:
+     `marionette state observe <plan> <name> <json-value> --actor agent
+     --rationale "<source, lookup and timestamp>"`. Do not guess or reuse a
+     stale value. Re-brief after each observation.
+   - `waiting-timeout` — no ordinary route is currently available and a hard
+     timeout has not expired. Park; if the platform can schedule a wake-up,
+     arrange it for the deadline, then re-brief. Do not poll in a tight loop.
    - `awaiting-human` — deliver the brief's `escalation` payload to the
      primary session/human verbatim: the phase body, each choice (label,
      target, gate) and the recorded `how`. Then **stop and wait**. Never
@@ -61,8 +70,10 @@ Repeat until the brief says otherwise:
    - `completed` — write the final report (see *Reporting*) and stop.
 3. **Re-brief after every recorded step.** Gates move when variables move.
 
-Refusals are protocol, not failures: if `state choose` refuses
-(`human-checkpoint`, `gate-blocked`, `once-exhausted`, `rationale-required`),
+Refusals are protocol, not failures: if a state command refuses
+(`human-checkpoint`, `gate-blocked`, `once-exhausted`,
+`observation-required`, `timeout-pending`, `timed-out`,
+`rationale-required`),
 the walker is enforcing the plan — re-brief and follow it. Exit code 3 means
 the plan changed underneath the state: stop and surface the drift message;
 `marionette state rebind <plan>` migrates the log onto the edited plan.
@@ -74,9 +85,13 @@ the plan changed underneath the state: stop and surface the drift message;
   green", "Parity held two weeks") — only record one when its claim is true,
   and say why in the rationale. The rationale is the audit trail (who reads
   it: reviewers, and future you after a `rebind`).
-- **Timeboxes are evidence, not alarms.** A brief showing
+- **Syntactic timeouts are hard exits.** A `timeout 3d` frontier edge is
+  unavailable before its deadline; once it expires, the walker blocks every
+  ordinary exit and makes that edge authoritative. The runtime checks time on
+  its next operation; arrange a platform wake-up when useful.
+- **Legacy timebox metadata is evidence, not an alarm.** A brief showing
   `timebox 3d — in phase 5d (overdue)` does not stop you — nothing in the
-  walker ever will on time — it tells you the honest move: wrap up and take
+  walker will on metadata alone — it tells you the honest move: wrap up and take
   the phase's abandon exit (its claim "timebox spent" is now simply true),
   or escalate if only `@human` doors remain. State the elapsed time in the
   rationale so the log shows time drove the decision. Use `# priority:`
@@ -148,6 +163,11 @@ re-activates it. Protocol:
   actually empty and no more work is expected — or a human retires the
   service at its `@human` door.
 
+For finite external batches, follow the plan's observation cadence. A
+`? remaining` checkpoint snapshots the queue; drain that captured batch before
+refreshing it at the next checkpoint. Do not look the count up after every
+item unless the plan explicitly requests that behavior.
+
 ## Portioning and reporting (`delivery`)
 
 The brief's `delivery` object tells you how the plan's author wants work
@@ -203,7 +223,7 @@ carries a `# tracker:` tag — the manifest tells you exactly what to do
 ## Hard rules
 
 - Never edit the `.mar`, the trajectory JSON, or the state file by hand;
-  state changes go through `state choose|advance|rebind` only.
+  state changes go through `state observe|choose|advance|rebind` only.
 - Never pass `--actor` other than `agent` for your own steps. Recording a
   human's decision as their proxy requires their explicit in-conversation
   instruction, their name as `--actor`, and their stated rationale — a

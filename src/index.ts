@@ -9,9 +9,9 @@ export { analyzeGate, monotonicDirection, type GateVerdict, type GateStatus } fr
 export { renderMermaid, type RenderOptions } from './render.js';
 export { summarize, type SummarizeOptions } from './summarize.js';
 export {
-  initState, bindState, frontier, takeChoice, advance, visitedPath,
+  initState, bindState, frontier, takeChoice, advance, observe, enteredAt, visitedPath,
   parseState, serializeState, rebindState, type RebindOptions, DriftError, WalkError,
-  type AvailableChoice, type TakeOptions, type WalkErrorCode, type MigrationReport,
+  type AvailableChoice, type TakeOptions, type ObserveOptions, type WalkErrorCode, type MigrationReport,
 } from './state.js';
 export {
   extractRefs, resolveDelivery, validateDelivery, analyzeMeta,

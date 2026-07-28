@@ -4,21 +4,28 @@
  * Grammar (v0):
  *   // comment                                anywhere (stripped)
  *   VAR name = <literal>                      preamble: typed variable declaration
+ *   VAR name: <type> = ?                      late-bound runtime variable
  *   -> target                                 preamble: explicit starting phase
  *   # key: value   |   # tag                  metadata tag (plan-level in preamble, node-level in a phase)
  *   === phase_name ===                        phase (node) header
  *   prose...                                  phase body
  *   ~ name (=|+=|-=) expr                     mutation, applied on node entry
+ *   ? name                                    refresh a runtime value after phase work
  *   * {gate} [Label] @human ~loop~ -> target  once-only choice (gate/@human/~loop~ optional)
  *   + {gate} [Label] -> target                sticky (repeatable) choice
+ *   while {gate} [Label] -> target             repeat while true; paired with else
+ *   until {gate} [Label] -> target             exit when true; paired with else
+ *   else [Label] -> target                     complementary conditional branch
+ *   timeout 3d [Label] -> target               temporal exit
  *   -> target                                 automatic next step (target may be END)
  */
 
 import type {
-  Action, Choice, Diagnostic, NextStep, TrajectoryNode, VariableDecl, Value,
+  Action, Choice, Diagnostic, Gate, NextStep, TrajectoryNode, VariableDecl, Value, VarType,
 } from './types.js';
 import { CODES, END } from './types.js';
 import { ExprError, parseExpr, tryConstEval, typeOf } from './expr.js';
+import { parseTimebox } from './refs.js';
 
 export interface ParsedPlan {
   variables: Record<string, VariableDecl>;
@@ -84,6 +91,12 @@ export function parsePlan(source: string): ParsedPlan {
   let start: string | null = null;
   let current: TrajectoryNode | null = null;
   const bodyLines = new Map<string, string[]>();
+  let pendingConditional: {
+    node: TrajectoryNode;
+    kind: 'while' | 'until';
+    gate: Gate;
+    line: number;
+  } | null = null;
 
   const error = (line: number, code: string, message: string, suggestion?: string) =>
     diagnostics.push({ severity: 'error', code, message, line, suggestion });
@@ -107,6 +120,13 @@ export function parsePlan(source: string): ParsedPlan {
     const line = stripComment(lines[idx]).trim();
     if (line.length === 0) continue;
 
+    if (pendingConditional && !/^else\b/.test(line)) {
+      error(pendingConditional.line, CODES.PARSE,
+        `${pendingConditional.kind} requires a following else branch`,
+        `add "else -> target" immediately after the ${pendingConditional.kind} line`);
+      pendingConditional = null;
+    }
+
     // Phase header: === name === (trailing === optional)
     const header = line.match(/^={2,}\s*([^=\s]+)\s*=*$/);
     if (header) {
@@ -128,7 +148,10 @@ export function parsePlan(source: string): ParsedPlan {
         current = null;
         continue;
       }
-      current = { id: name, body: '', actions: [], choices: [], next: null, line: lineNo, meta: {}, refs: [] };
+      current = {
+        id: name, body: '', actions: [], observations: [], choices: [],
+        next: null, line: lineNo, meta: {}, refs: [],
+      };
       nodes.push(current);
       bodyLines.set(name, []);
       continue;
@@ -147,9 +170,9 @@ export function parsePlan(source: string): ParsedPlan {
     }
 
     // VAR declaration (preamble only)
-    const varDecl = line.match(/^VAR\s+([^\s=]+)\s*=\s*(.+)$/);
+    const varDecl = line.match(/^VAR\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*(number|boolean|string))?\s*=\s*(.+)$/);
     if (varDecl) {
-      const [, name, rawValue] = varDecl;
+      const [, name, explicitType, rawValue] = varDecl;
       if (current) {
         error(lineNo, CODES.PARSE, 'VAR declarations must appear before the first phase',
           `move "VAR ${name} = ..." above the first "=== phase ===" header`);
@@ -164,6 +187,15 @@ export function parsePlan(source: string): ParsedPlan {
           'variables may only be declared once');
         continue;
       }
+      if (rawValue.trim() === '?') {
+        if (!explicitType) {
+          error(lineNo, CODES.PARSE, `late-bound variable "${name}" requires an explicit type`,
+            `write "VAR ${name}: number = ?" (or boolean/string)`);
+          continue;
+        }
+        variables[name] = { type: explicitType as VarType, initial: null, line: lineNo };
+        continue;
+      }
       let value: Value | undefined;
       try {
         value = tryConstEval(parseExpr(rawValue));
@@ -176,7 +208,29 @@ export function parsePlan(source: string): ParsedPlan {
           'use a number, true/false, or a "string" literal');
         continue;
       }
+      if (explicitType && explicitType !== typeOf(value)) {
+        error(lineNo, CODES.PARSE,
+          `initial value for "${name}" is ${typeOf(value)}, not ${explicitType}`);
+        continue;
+      }
       variables[name] = { type: typeOf(value), initial: value, line: lineNo };
+      continue;
+    }
+
+    // Observation checkpoint: the executor supplies a fresh typed value
+    // after doing the phase body, before any exit can be taken.
+    const observation = line.match(/^\?\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/);
+    if (observation) {
+      if (!current) {
+        error(lineNo, CODES.PARSE, 'observation checkpoints must appear inside a phase');
+        continue;
+      }
+      if (current.next) {
+        error(lineNo, CODES.PARSE, 'statement after an automatic next step is unreachable',
+          'move this line above the "->" arrow');
+        continue;
+      }
+      current.observations.push({ var: observation[1], line: lineNo });
       continue;
     }
 
@@ -224,6 +278,85 @@ export function parsePlan(source: string): ParsedPlan {
       continue;
     }
 
+    // First-class conditional loops. They lower to ordinary sticky choices
+    // with complementary gates, so both validators and runtimes share the
+    // existing graph semantics.
+    const conditional = line.match(/^(while|until)\b(.*)$/);
+    if (conditional) {
+      if (!current) {
+        error(lineNo, CODES.PARSE, `${conditional[1]} must appear inside a phase`);
+        continue;
+      }
+      if (current.next) {
+        error(lineNo, CODES.PARSE, 'conditional after an automatic next step is unreachable',
+          'move it above the "->" arrow');
+        continue;
+      }
+      const parsed = parseConditionalArm(
+        conditional[2].trim(), current, conditional[1] as 'while' | 'until', lineNo, error,
+      );
+      if (parsed) {
+        current.choices.push(parsed.choice);
+        pendingConditional = {
+          node: current, kind: conditional[1] as 'while' | 'until',
+          gate: parsed.gate, line: lineNo,
+        };
+      }
+      continue;
+    }
+
+    const otherwise = line.match(/^else\b(.*)$/);
+    if (otherwise) {
+      if (!pendingConditional || !current || pendingConditional.node !== current) {
+        error(lineNo, CODES.PARSE, 'else has no preceding while/until branch',
+          'place else immediately after a while or until line');
+        continue;
+      }
+      const branch = parseSimpleArm(otherwise[1].trim(), current, lineNo, error, 'otherwise');
+      if (branch) {
+        branch.gate = {
+          source: `!(${pendingConditional.gate.source})`,
+          ast: { kind: 'unary', op: '!', operand: pendingConditional.gate.ast },
+        };
+        branch.loop = pendingConditional.kind === 'until';
+        current.choices.push(branch);
+      }
+      pendingConditional = null;
+      continue;
+    }
+
+    const timeout = line.match(/^timeout\b(?:\s+(\S+))?(.*)$/);
+    if (timeout) {
+      if (!current) {
+        error(lineNo, CODES.PARSE, 'timeout exits must appear inside a phase');
+        continue;
+      }
+      if (current.next) {
+        error(lineNo, CODES.PARSE, 'timeout after an automatic next step is unreachable',
+          'move it above the "->" arrow');
+        continue;
+      }
+      if (!timeout[1]) {
+        error(lineNo, CODES.PARSE, 'timeout requires a duration',
+          'expected: timeout <n><m|h|d|w> [optional label] -> target');
+        continue;
+      }
+      const duration = parseTimebox(timeout[1]);
+      if (!duration) {
+        error(lineNo, CODES.PARSE, `invalid timeout duration "${timeout[1]}"`,
+          'expected <n><unit> with unit m|h|d|w, e.g. 90m, 4h, 3d, 2w');
+        continue;
+      }
+      const branch = parseSimpleArm(
+        timeout[2].trim(), current, lineNo, error, `timeout after ${duration.source}`,
+      );
+      if (branch) {
+        branch.timeout = duration;
+        current.choices.push(branch);
+      }
+      continue;
+    }
+
     // Automatic next step: -> target
     const nextStep = line.match(/^->\s*(\S+)\s*$/);
     if (nextStep) {
@@ -244,6 +377,12 @@ export function parsePlan(source: string): ParsedPlan {
       if (current.next) {
         error(lineNo, CODES.PARSE, `phase "${current.id}" already has an automatic next step`,
           'a phase may have at most one automatic next step');
+        continue;
+      }
+      if (current.choices.some((choice) => choice.timeout)) {
+        error(lineNo, CODES.PARSE,
+          `phase "${current.id}" cannot combine a timeout exit with an automatic next step`,
+          'replace the automatic next step with an explicit choice');
         continue;
       }
       current.next = { target, line: lineNo } satisfies NextStep;
@@ -268,6 +407,11 @@ export function parsePlan(source: string): ParsedPlan {
   if (fence) {
     error(fence.line, CODES.PARSE, `unterminated """ block for metadata key "${fence.key}"`,
       'close the fenced value with a line containing only """');
+  }
+  if (pendingConditional) {
+    error(pendingConditional.line, CODES.PARSE,
+      `${pendingConditional.kind} requires a following else branch`,
+      `add "else -> target" immediately after the ${pendingConditional.kind} line`);
   }
 
   return { variables, start, nodes, meta: planMeta, diagnostics };
@@ -334,7 +478,70 @@ function parseChoice(
     gate,
     human,
     loop,
+    timeout: null,
     target,
+    line: lineNo,
+  };
+}
+
+function parseConditionalArm(
+  rest: string,
+  node: TrajectoryNode,
+  kind: 'while' | 'until',
+  lineNo: number,
+  error: (line: number, code: string, message: string, suggestion?: string) => void,
+): { choice: Choice; gate: Gate } | null {
+  const gateMatch = rest.match(/^\{([^}]*)\}(.*)$/);
+  if (!gateMatch || gateMatch[1].trim().length === 0) {
+    error(lineNo, CODES.PARSE, `${kind} requires a {condition}`,
+      `expected: ${kind} {condition} [optional label] -> target`);
+    return null;
+  }
+  let gate: Gate;
+  try {
+    gate = { source: gateMatch[1].trim(), ast: parseExpr(gateMatch[1]) };
+  } catch (e) {
+    error(lineNo, CODES.PARSE, `invalid ${kind} condition: ${(e as Error).message}`);
+    return null;
+  }
+  const choice = parseSimpleArm(
+    gateMatch[2].trim(), node, lineNo, error, `${kind} ${gate.source}`,
+  );
+  if (!choice) return null;
+  choice.gate = gate;
+  choice.loop = kind === 'while';
+  return { choice, gate };
+}
+
+function parseSimpleArm(
+  rest: string,
+  node: TrajectoryNode,
+  lineNo: number,
+  error: (line: number, code: string, message: string, suggestion?: string) => void,
+  defaultLabel: string,
+): Choice | null {
+  const targetMatch = rest.match(/->\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/);
+  if (!targetMatch) {
+    error(lineNo, CODES.PARSE, `"${defaultLabel}" has no destination`,
+      'add "-> target" (or "-> END")');
+    return null;
+  }
+  const before = rest.slice(0, targetMatch.index).trim();
+  const labelMatch = before.match(/^\[([^\]]+)\]$/);
+  if (before && !labelMatch) {
+    error(lineNo, CODES.PARSE, `unexpected content in ${defaultLabel}: "${before}"`,
+      'only an optional [label] may appear before -> target');
+    return null;
+  }
+  return {
+    id: `${node.id}#${node.choices.length}`,
+    label: labelMatch?.[1].trim() || defaultLabel,
+    sticky: true,
+    gate: null,
+    human: false,
+    loop: false,
+    timeout: null,
+    target: targetMatch[1],
     line: lineNo,
   };
 }

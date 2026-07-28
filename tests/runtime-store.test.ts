@@ -102,3 +102,33 @@ test('runtime process registration cleans up stale ownership records', () => wit
   releaseRuntimeProcess(root, 'run-6', trajectory.hash, 999_999);
   assert.equal(existsSync(runtimePaths(root, 'run-6', trajectory.hash).process), false);
 }));
+
+test('runtime journal replays observation writes before later decisions', () => withStore(async (root) => {
+  const dynamic = (await compile(`
+VAR remaining: number = ?
+=== a ===
+~ remaining -= 1
+while {remaining > 0} -> a
+else -> END
+`)).trajectory!;
+  const before = await initializeRuntimeStore(root, dynamic, {
+    runId: 'run-observe', at: AT, principal: AGENT,
+  });
+  const observed = await executeRuntimeRequest(dynamic, before, AGENT, {
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 20,
+    op: 'observe',
+    name: 'remaining',
+    value: 2,
+    rationale: 'fresh two-item snapshot',
+    expectedRevision: 0,
+    idempotencyKey: 'observe-1',
+  }, { at: AT });
+  commitRuntimeStore(root, dynamic, before, observed.snapshot, observed.events);
+
+  const reopened = loadRuntimeStore(root, 'run-observe', dynamic);
+  assert.equal(reopened.revision, 1);
+  assert.equal(reopened.state.variables['remaining'], 1);
+  assert.equal(reopened.state.observations[0].variable, 'remaining');
+  assert.equal(reopened.idempotency['observe-1']?.revision, 1);
+}));

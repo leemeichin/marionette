@@ -99,16 +99,20 @@ export interface WalkSnapshot {
   current: string;
   status: 'active' | 'completed';
   variables: Record<string, number | boolean | string>;
+  pendingObservations: string[];
 }
 
 export interface PrologWalker {
   /** Returns the refusal code, or null when the operation succeeded. */
   choose(ref: string, actor: string, hasRationale: boolean): string | null;
   advance(): string | null;
+  observe(name: string, value: number | boolean | string, hasRationale?: boolean): string | null;
+  setElapsed(seconds: number): void;
   snapshot(): WalkSnapshot;
 }
 
 const q = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+const a = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 
 export async function prologWalker(facts: string): Promise<PrologWalker> {
   const swipl = await withFacts(facts);
@@ -124,6 +128,14 @@ export async function prologWalker(facts: string): Promise<PrologWalker> {
     choose: (ref, actor, hasRationale) =>
       outcome(`drive_choose(${q(ref)}, ${q(actor)}, ${hasRationale ? 'true' : 'false'}, Outcome)`),
     advance: () => outcome('drive_advance(Outcome)'),
+    observe: (name, value, hasRationale = true) => {
+      const type = typeof value === 'number' ? 'number' : typeof value === 'boolean' ? 'boolean' : 'string';
+      const plain = typeof value === 'string' ? q(value) : String(value);
+      return outcome(`drive_observe(${a(name)}, ${type}, ${plain}, ${hasRationale ? 'true' : 'false'}, Outcome)`);
+    },
+    setElapsed: (seconds) => {
+      swipl.prolog.query(`set_walk_elapsed(${seconds})`).once();
+    },
     snapshot: () => {
       const current = String(swipl.prolog.query('w_current(N)').once()['N']);
       const status = String(swipl.prolog.query('w_status(S)').once()['S']) as WalkSnapshot['status'];
@@ -135,7 +147,9 @@ export async function prologWalker(facts: string): Promise<PrologWalker> {
           : type === 'boolean' ? String(b['V']) === 'true'
           : String(b['V']);
       }
-      return { current, status, variables };
+      const pendingObservations = [...swipl.prolog.query('w_pending(Name)')]
+        .map((b) => String(b['Name']));
+      return { current, status, variables, pendingObservations };
     },
   };
 }

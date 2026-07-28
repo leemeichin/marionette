@@ -1,6 +1,6 @@
 import { buildBrief } from './brief.js';
 import { sha256Hex } from './hash.js';
-import { advance, initState, takeChoice, WalkError } from './state.js';
+import { advance, initState, observe, takeChoice, WalkError } from './state.js';
 import type { PlanState, Ref, Trajectory } from './types.js';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference,
@@ -48,8 +48,9 @@ const requestFingerprint = async (request: RuntimeRequest): Promise<string> => {
 };
 
 const isWrite = (request: RuntimeRequest): request is Extract<RuntimeRequest, {
-  op: 'choose' | 'advance' | 'record';
-}> => request.op === 'choose' || request.op === 'advance' || request.op === 'record';
+  op: 'choose' | 'advance' | 'observe' | 'record';
+}> => request.op === 'choose' || request.op === 'advance' ||
+  request.op === 'observe' || request.op === 'record';
 
 const event = (
   snapshot: RuntimeSnapshot,
@@ -80,7 +81,7 @@ function statusEvent(
   at: string,
   offset: number,
 ): RuntimeEvent | null {
-  const brief = buildBrief(trajectory, snapshot.state);
+  const brief = buildBrief(trajectory, snapshot.state, { at });
   const nodeId = brief.node?.id;
   if (brief.status === 'completed') {
     return event(snapshot, trajectory, 'run.completed', at, {}, { nodeId, offset });
@@ -89,6 +90,11 @@ function statusEvent(
     return event(snapshot, trajectory, 'human.required', at, {
       choices: brief.escalation?.choices ?? [],
       reason: brief.escalation?.reason ?? '',
+    }, { nodeId, offset });
+  }
+  if (brief.status === 'awaiting-observation') {
+    return event(snapshot, trajectory, 'observation.required', at, {
+      observations: brief.pendingObservations,
     }, { nodeId, offset });
   }
   if (brief.status === 'stranded') {
@@ -137,10 +143,10 @@ export function createRuntimeSnapshot(
 export function buildRuntimeProjection(
   trajectory: Trajectory,
   snapshot: RuntimeSnapshot,
-  options: { profile?: ProjectionProfile; budget?: RuntimeBudget } = {},
+  options: { profile?: ProjectionProfile; budget?: RuntimeBudget; at?: string } = {},
 ): RuntimeProjection {
   const profile = options.profile ?? 'work';
-  const brief = buildBrief(trajectory, snapshot.state);
+  const brief = buildBrief(trajectory, snapshot.state, { at: options.at });
   const omitted: string[] = [];
   let truncated = false;
   const maxItems = options.budget?.maxItems ?? 8;
@@ -187,11 +193,13 @@ export function buildRuntimeProjection(
       human: choice.human,
       target: profile === 'signal' ? undefined : choice.target,
       gate: profile === 'debug' ? choice.gate : undefined,
+      timeout: profile === 'signal' ? undefined : choice.timeout,
       blocked: profile === 'debug' && choice.blocked && choice.blockedCode
         ? { code: choice.blockedCode, reason: choice.blocked }
         : undefined,
     })),
     next: brief.next ? { target: brief.next.target } : null,
+    observations: brief.pendingObservations,
     variables: profile === 'debug' ? brief.variables : undefined,
     progress: profile === 'debug' ? brief.progress : undefined,
     truncated,
@@ -211,7 +219,7 @@ function checkRevision(snapshot: RuntimeSnapshot, expected: number, requestId: s
 
 async function checkIdempotency(
   snapshot: RuntimeSnapshot,
-  request: Extract<RuntimeRequest, { op: 'choose' | 'advance' | 'record' }>,
+  request: Extract<RuntimeRequest, { op: 'choose' | 'advance' | 'observe' | 'record' }>,
 ): Promise<RuntimeIdempotencyRecord | null> {
   if (!request.idempotencyKey) return null;
   const prior = snapshot.idempotency[request.idempotencyKey];
@@ -257,7 +265,7 @@ export async function executeRuntimeRequest(
       result: {
         protocol: RUNTIME_PROTOCOL_VERSION,
         capabilities: {
-          operations: ['next', 'choose', 'advance', 'record', 'events'],
+          operations: ['next', 'choose', 'advance', 'observe', 'record', 'events'],
           projections: ['signal', 'work', 'debug'],
           idempotency: true,
           eventCursor: true,
@@ -274,7 +282,10 @@ export async function executeRuntimeRequest(
       events: [],
       replayed: false,
       result: {
-        projection: buildRuntimeProjection(trajectory, input, request),
+        projection: buildRuntimeProjection(trajectory, input, {
+          ...request,
+          at: options.at,
+        }),
       },
     };
   }
@@ -306,7 +317,9 @@ export async function executeRuntimeRequest(
         revision: prior.revision,
         eventSeqs: prior.eventSeqs,
         projection: buildRuntimeProjection(trajectory, input,
-          request.op === 'record' ? {} : request),
+          request.op === 'record'
+            ? { at: options.at }
+            : { ...request, at: options.at }),
       },
     };
   }
@@ -358,6 +371,23 @@ export async function executeRuntimeRequest(
         idempotencyKey: request.idempotencyKey ?? null,
         commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: from }));
+    } else if (request.op === 'observe') {
+      observe(trajectory, snapshot.state, request.name, request.value, {
+        actor: bindWalkActor(principal),
+        rationale: request.rationale,
+        at,
+      });
+      emitted.push(event(snapshot, trajectory, 'observation.recorded', at, {
+        name: request.name,
+        value: request.value,
+        rationale: request.rationale,
+        evidence: request.evidence ?? [],
+        idempotencyKey: request.idempotencyKey ?? null,
+        commandFingerprint: await requestFingerprint(request),
+      }, {
+        principal,
+        nodeId: snapshot.state.status === 'completed' ? undefined : snapshot.state.current,
+      }));
     } else {
       emitted.push(event(snapshot, trajectory, 'record.attached', at, {
         recordKind: request.kind,
@@ -377,7 +407,8 @@ export async function executeRuntimeRequest(
   }
 
   if (request.op !== 'record') {
-    if (snapshot.state.status === 'active') {
+    if ((request.op === 'choose' || request.op === 'advance') &&
+        snapshot.state.status === 'active') {
       emitted.push(event(snapshot, trajectory, 'node.entered', at, {
         from: input.state.current,
       }, {
@@ -411,7 +442,7 @@ export async function executeRuntimeRequest(
       revision: snapshot.revision,
       eventSeqs: emitted.map((item) => item.seq),
       projection: buildRuntimeProjection(trajectory, snapshot,
-        request.op === 'record' ? {} : request),
+        request.op === 'record' ? { at } : { ...request, at }),
     },
   };
 }

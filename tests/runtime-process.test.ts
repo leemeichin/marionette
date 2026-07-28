@@ -98,7 +98,7 @@ test('stdio runtime requires initialization and returns errors without mutation'
     const output = collect();
     await serveRuntimeLines(service, {
       input: Readable.from([
-        '{"protocol":"0.1.0","id":1,"op":"next"}\n',
+        '{"protocol":"0.2.0","id":1,"op":"next"}\n',
         '{not json}\n',
       ]),
       output: output.stream,

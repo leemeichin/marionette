@@ -28,6 +28,12 @@ surface; it does not change this CLI loop or the DSL.
 │      │        --actor agent --rationale "<evidence>"        │
 │      │     (or `state advance` for an automatic next step)  │
 │      │                                                      │
+│      ├─ status: awaiting-observation → obtain each named    │
+│      │     scalar, then `state observe` with its evidence   │
+│      │                                                      │
+│      ├─ status: waiting-timeout → park until the temporal   │
+│      │     exit is due; the host may arrange the wake-up    │
+│      │                                                      │
 │      ├─ status: awaiting-human → deliver the escalation     │
 │      │     payload to the primary session and STOP          │
 │      │                                                      │
@@ -54,15 +60,21 @@ renders the same packet for humans. It contains:
 - **plan** — file, project name, content hash (state binding), plan-level
   refs, and `intent` — the plan's `# summary:` and `# prompt:` metadata, so
   the executor holds the original ask, not just the current phase.
-- **status** — `active` | `awaiting-human` | `stranded` | `completed`.
+- **status** — `active` | `awaiting-observation` | `waiting-timeout` |
+  `awaiting-human` | `stranded` | `completed`.
 - **node** — the current phase: id, title (first body line), full prose body,
   raw meta, and normalised refs. The prose is the task description; it is
   the plan author's instruction to the executor.
 - **variables** — the live variable snapshot gates are computed from.
+- **pending observations** — the names and types the host must supply before
+  traversal can continue. Record each with
+  `marionette state observe <plan> <name> <json-value> --actor <name>
+  --rationale "<source and timestamp>"`.
 - **delivery** — the effective delivery config at this node (below).
 - **frontier** — every choice with `available`/`blocked(+code)`, gate source,
-  `human`/`loop`/`sticky` flags, target and target title. Blocked choices are
-  shown so the executor can explain *why* it isn't taking them.
+  `human`/`loop`/`sticky` flags, optional hard `timeout`, target and target
+  title. Blocked choices are shown so the executor can explain *why* it
+  isn't taking them.
 - **automatic next step** (`next` in the JSON contract) — the
   unconditional route to follow when the stage is done.
 - **escalation** — present exactly when status is `awaiting-human` (below).
@@ -70,6 +82,41 @@ renders the same packet for humans. It contains:
 - **protocol** — the exact commands to record an outcome, plus the standing
   rules (do the work first; honest rationale; never take `@human` as agent;
   re-brief after every step).
+
+## Runtime observations
+
+An observation checkpoint deliberately separates *when a fact is refreshed*
+from *how a host obtains it*. The brief may request a late-bound initial value
+or a node-level refresh:
+
+```console
+marionette state observe plan.mar remaining 7 \
+  --actor agent \
+  --rationale "queue query at 09:30Z returned 7 items"
+```
+
+Use only the named source the phase or its refs imply; do not infer the value
+from stale traversal state. The rationale identifies the lookup, measurement,
+or human statement that produced it. Observations are type-checked and audited
+separately from branch decisions.
+
+Do not refresh an external queue after every item unless the plan explicitly
+places a checkpoint there. A common batch shape observes once, drains the
+captured count through a `while`, then reaches a refresh phase and observes
+again. This keeps the snapshot stable while work is in flight and avoids
+repeated lookups.
+
+## Temporal exits
+
+`timeout <duration> -> target` is a hard edge, not metadata. Before expiry it
+is blocked; after expiry the walker blocks ordinary choices/automatic next and
+makes the timeout exit authoritative. If the brief says `waiting-timeout`,
+park and let the host arrange a wake-up; Marionette re-evaluates elapsed time
+on its next operation rather than scheduling one itself.
+
+Legacy `# timebox:` metadata remains advisory evidence for old plans. A brief
+may still render it as overdue, but only the `timeout` syntax changes what the
+walker permits.
 
 ## Portioning out the work (delivery config)
 
@@ -180,8 +227,9 @@ walk command then refuses with a drift error (exit 3). The sanctioned paths:
 - `marionette state rebind <plan> [--actor <name>] [--rationale <text>]` —
   migrate the existing state onto the edited plan, *keeping the decision
   log*: taken-choice ids that vanished are dropped (reported), removed
-  variables dropped, new variables added at their initials, type-changed
-  variables reset (reported). The migration itself is appended to the
+  variables dropped, new variables added at their initials or requested as
+  observations, type-changed variables reset (reported). The migration itself
+  is appended to the
   decision log as an amendment entry — actor, timestamp, rationale, and the
   old → new graph hashes — so plan evolution carries the same G4
   attribution as any branch. Refused (`migration-blocked`) when the current

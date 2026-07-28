@@ -92,9 +92,11 @@ export function analyzeGate(gate: Gate, ctx: GateContext): GateVerdict {
 
   // 2. All referenced variables exist and are never mutated → evaluate against initials.
   const allDeclared = [...vars].every((v) => v in ctx.variables);
-  if (allDeclared && [...vars].every((v) => (ctx.mutations.get(v) ?? []).length === 0)) {
+  const allHaveInitials = [...vars].every((v) => ctx.variables[v]?.initial !== null);
+  if (allDeclared && allHaveInitials &&
+      [...vars].every((v) => (ctx.mutations.get(v) ?? []).length === 0)) {
     const env: Record<string, Value> = {};
-    for (const v of vars) env[v] = ctx.variables[v].initial;
+    for (const v of vars) env[v] = ctx.variables[v].initial!;
     try {
       const value = evalExpr(gate.ast, env);
       if (typeof value === 'boolean') {
@@ -128,6 +130,19 @@ export function analyzeGate(gate: Gate, ctx: GateContext): GateVerdict {
           reason: `"${cmp.variable}" decreases monotonically, so {${gate.source}} eventually holds`,
         };
       }
+    }
+  }
+
+  // The implicit `else` arm of while/until is a negated gate. If its
+  // operand is a monotonic continue condition that must eventually close,
+  // the negation must eventually open.
+  if (gate.ast.kind === 'unary' && gate.ast.op === '!') {
+    const operand = { source: gate.source, ast: gate.ast.operand };
+    if (eventuallyFalse(operand, ctx)) {
+      return {
+        status: 'satisfiable',
+        reason: `the complementary gate must open when {${gate.source}} becomes false`,
+      };
     }
   }
 

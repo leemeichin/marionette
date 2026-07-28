@@ -43,6 +43,81 @@ VAR name = "mvp"
   assert.deepEqual(t.variables['name'], { type: 'string', initial: 'mvp', line: 4 });
 });
 
+test('late-bound variables and explicit observation checkpoints are compiled as graph semantics', async () => {
+  const t = await mustCompile(`
+VAR remaining: number = ?
+=== refresh ===
+Refresh the external fact.
+? remaining
+while {remaining > 0} -> work
+else -> END
+=== work ===
+Consume one unit.
+~ remaining -= 1
+while {remaining > 0} -> work
+else -> refresh
+`);
+  assert.deepEqual(t.variables['remaining'], { type: 'number', initial: null, line: 2 });
+  assert.deepEqual(t.nodes[0].observations, [{ var: 'remaining', line: 5 }]);
+});
+
+test('while/until pairs lower to exhaustive sticky gates and declare the repeating arm', async () => {
+  const whilePlan = await mustCompile(`
+VAR n = 2
+=== work ===
+~ n -= 1
+while {n > 0} [More] -> work
+else [Done] -> END
+`);
+  const [repeat, done] = whilePlan.nodes[0].choices;
+  assert.equal(repeat.sticky, true);
+  assert.equal(repeat.loop, true);
+  assert.equal(repeat.gate?.source, 'n > 0');
+  assert.equal(done.loop, false);
+  assert.equal(done.gate?.source, '!(n > 0)');
+
+  const untilPlan = await mustCompile(`
+VAR healthy: boolean = ?
+=== repair ===
+? healthy
+until {healthy} -> END
+else -> repair
+`);
+  assert.equal(untilPlan.nodes[0].choices[0].loop, false);
+  assert.equal(untilPlan.nodes[0].choices[1].loop, true);
+});
+
+test('timeout is a typed temporal exit rather than metadata', async () => {
+  const t = await mustCompile(`
+=== experiment ===
+Try it.
++ [Again] ~loop~ -> experiment
+timeout 3d [Budget spent] -> END
+`);
+  assert.deepEqual(t.nodes[0].choices[1].timeout, { source: '3d', seconds: 259200 });
+  assert.equal(t.nodes[0].choices[1].label, 'Budget spent');
+});
+
+test('while/until require an immediate else and timeout durations are validated', async () => {
+  const missingElse = await compile(`
+=== a ===
+while {true} -> a
+`);
+  assert.match(missingElse.diagnostics[0].message, /requires a following else/);
+
+  const badTimeout = await compile(`
+=== a ===
+timeout soon -> END
+`);
+  assert.match(badTimeout.diagnostics[0].message, /invalid timeout duration/);
+
+  const missingDuration = await compile(`
+=== a ===
+timeout
+`);
+  assert.match(missingDuration.diagnostics[0].message, /requires a duration/);
+});
+
 test('P0.2 construct: once-only (*) vs sticky (+) choices', async () => {
   const t = await mustCompile(`
 === a ===

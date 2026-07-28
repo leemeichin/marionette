@@ -2,7 +2,7 @@ import type { Ref, Value } from './types.js';
 import type { BriefStatus } from './brief.js';
 import type { WalkErrorCode } from './state.js';
 
-export const RUNTIME_PROTOCOL_VERSION = '0.1.0';
+export const RUNTIME_PROTOCOL_VERSION = '0.2.0';
 
 export type RuntimeRole = 'agent' | 'human' | 'system';
 export type ProjectionProfile = 'signal' | 'work' | 'debug';
@@ -58,6 +58,18 @@ export interface AdvanceRequest extends RequestBase {
   evidence?: Ref[];
 }
 
+export interface ObserveRequest extends RequestBase {
+  op: 'observe';
+  name: string;
+  value: Value;
+  rationale: string;
+  expectedRevision: number;
+  idempotencyKey?: string;
+  profile?: ProjectionProfile;
+  budget?: RuntimeBudget;
+  evidence?: Ref[];
+}
+
 export interface RecordRequest extends RequestBase {
   op: 'record';
   kind: string;
@@ -79,6 +91,7 @@ export type RuntimeRequest =
   | NextRequest
   | ChooseRequest
   | AdvanceRequest
+  | ObserveRequest
   | RecordRequest
   | EventsRequest;
 
@@ -87,6 +100,8 @@ export type RuntimeEventKind =
   | 'node.entered'
   | 'decision.committed'
   | 'decision.refused'
+  | 'observation.required'
+  | 'observation.recorded'
   | 'record.attached'
   | 'human.required'
   | 'run.stranded'
@@ -118,7 +133,16 @@ export interface RuntimeChoiceProjection {
   human: boolean;
   target?: string;
   gate?: string | null;
-  blocked?: { code: 'once-exhausted' | 'gate-blocked'; reason: string } | null;
+  timeout?: { source: string; seconds: number } | null;
+  blocked?: {
+    code:
+      | 'once-exhausted'
+      | 'gate-blocked'
+      | 'observation-required'
+      | 'timeout-pending'
+      | 'timed-out';
+    reason: string;
+  } | null;
 }
 
 export interface RuntimeProjection {
@@ -137,6 +161,7 @@ export interface RuntimeProjection {
   } | null;
   choices: RuntimeChoiceProjection[];
   next: { target: string } | null;
+  observations: Array<{ name: string; type: string }>;
   variables?: Record<string, Value>;
   progress?: { steps: number; nodesVisited: number; nodesTotal: number; path: string[] };
   truncated: boolean;
@@ -197,6 +222,14 @@ const requireRevision = (value: unknown, id: string | number | null): number => 
     throw new ProtocolError('"expectedRevision" must be a non-negative integer', 'invalid-request', id);
   }
   return value as number;
+};
+
+const requireValue = (value: unknown, id: string | number | null): Value => {
+  if (typeof value === 'string' || typeof value === 'boolean' ||
+      (typeof value === 'number' && Number.isFinite(value))) {
+    return value;
+  }
+  throw new ProtocolError('"value" must be a finite number, boolean, or string', 'invalid-request', id);
 };
 
 function assertOnlyKeys(
@@ -298,6 +331,24 @@ export function parseRuntimeRequest(input: unknown): RuntimeRequest {
       ], id);
       return {
         protocol: RUNTIME_PROTOCOL_VERSION, id, op,
+        rationale: requireString(input['rationale'], 'rationale', id),
+        expectedRevision: requireRevision(input['expectedRevision'], id),
+        idempotencyKey: input['idempotencyKey'] === undefined
+          ? undefined : requireString(input['idempotencyKey'], 'idempotencyKey', id),
+        profile: parseProfile(input['profile'], id),
+        budget: parseBudget(input['budget'], id),
+        evidence: input['evidence'] as Ref[] | undefined,
+      };
+    }
+    case 'observe': {
+      assertOnlyKeys(input, [
+        'protocol', 'id', 'op', 'name', 'value', 'rationale', 'expectedRevision',
+        'idempotencyKey', 'profile', 'budget', 'evidence',
+      ], id);
+      return {
+        protocol: RUNTIME_PROTOCOL_VERSION, id, op,
+        name: requireString(input['name'], 'name', id),
+        value: requireValue(input['value'], id),
         rationale: requireString(input['rationale'], 'rationale', id),
         expectedRevision: requireRevision(input['expectedRevision'], id),
         idempotencyKey: input['idempotencyKey'] === undefined
