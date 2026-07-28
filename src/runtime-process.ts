@@ -5,8 +5,9 @@ import {
   type RuntimeEvent, type RuntimeFailure, type RuntimePrincipal,
   type RuntimeResponse, type RuntimeSuccess,
 } from './runtime-protocol.js';
-import { executeRuntimeRequest, type RuntimeSnapshot } from './runtime.js';
-import { RuntimeStoreError, commitRuntimeStore } from './runtime-store.js';
+import type { RuntimeSnapshot } from './runtime.js';
+import { RuntimeRunController } from './runtime-host.js';
+import { RuntimeStoreError } from './runtime-store.js';
 
 export const MAX_REQUEST_BYTES = 64 * 1024;
 
@@ -42,16 +43,19 @@ const failure = (
 
 export class RuntimeService {
   private initialized = false;
+  private readonly controller: RuntimeRunController;
 
   constructor(
-    private readonly trajectory: Trajectory,
-    private snapshot: RuntimeSnapshot,
-    private readonly storeRoot: string,
+    trajectory: Trajectory,
+    snapshot: RuntimeSnapshot,
+    storeRoot: string,
     private readonly principal: RuntimePrincipal,
-  ) {}
+  ) {
+    this.controller = new RuntimeRunController(trajectory, snapshot, storeRoot);
+  }
 
   currentSnapshot(): RuntimeSnapshot {
-    return this.snapshot;
+    return this.controller.currentSnapshot();
   }
 
   async handleLine(line: string): Promise<RuntimeLineResult> {
@@ -82,18 +86,11 @@ export class RuntimeService {
         throw new ProtocolError('connection is already initialized', 'invalid-request', request.id);
       }
 
-      const before = this.snapshot;
-      const executed = await executeRuntimeRequest(
-        this.trajectory,
-        before,
+      const executed = await this.controller.execute(
         this.principal,
         request,
       );
       if (request.op === 'initialize') this.initialized = true;
-      if (executed.snapshot !== before) {
-        commitRuntimeStore(this.storeRoot, this.trajectory, before, executed.snapshot, executed.events);
-        this.snapshot = executed.snapshot;
-      }
       return {
         response: success(request.id, { ...executed.result, replayed: executed.replayed }),
         notifications: executed.events.map((item) => ({

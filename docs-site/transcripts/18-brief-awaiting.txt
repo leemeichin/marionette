@@ -19,4 +19,4 @@ choices:
   [2] Not converging — rethink [35m@human[39m [2m{attempts >= 5}[22m -> rethink[2m — Five iterations without lift: take the flow back to research.[22m
 
 [35m[1mescalation required: [22m[39mevery currently-available choice is an @human checkpoint
-  pause and escalate: present this phase and its choices to a human; a human records the decision with `marionette state choose checkout.mar <choice> --actor <name> --rationale <text>`. Do not take these choices autonomously.
+  pause and escalate: present this phase and its choices to a human; a human records the decision with `marionette state choose checkout.mar <choice> --actor <name> --rationale <text>`. Do not take these choices autonomously. There is no implicit timeout or fallback; silence leaves the run parked.

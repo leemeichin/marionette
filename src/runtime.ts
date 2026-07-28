@@ -1,11 +1,11 @@
-import { buildBrief } from './brief.js';
+import { buildBrief, type Brief } from './brief.js';
 import { sha256Hex } from './hash.js';
 import { advance, initState, observe, takeChoice, WalkError } from './state.js';
 import type { PlanState, Ref, Trajectory } from './types.js';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference,
   type ProjectionProfile, type RuntimeBudget, type RuntimeEvent,
-  type RuntimeEventKind, type RuntimePrincipal, type RuntimeProjection,
+  type RuntimeEscalation, type RuntimeEventKind, type RuntimePrincipal, type RuntimeProjection,
   type RuntimeRequest,
 } from './runtime-protocol.js';
 
@@ -75,11 +75,46 @@ const event = (
   data,
 });
 
+const escalationUri = (runId: string, eventSeq: number): string =>
+  `marionette://run/${encodeURIComponent(runId)}/escalation/${eventSeq}`;
+
+function escalationPayload(
+  brief: Brief,
+  snapshot: RuntimeSnapshot,
+  eventSeq: number,
+  expectedRevision: number,
+  includeTargets = true,
+): RuntimeEscalation | null {
+  if (!brief.escalation) return null;
+  const byId = new Map(brief.frontier.map((choice) => [choice.id, choice]));
+  return {
+    id: escalationUri(snapshot.runId, eventSeq),
+    expectedRevision,
+    reason: brief.escalation.reason,
+    choices: brief.escalation.choices.map((id) => {
+      const choice = byId.get(id);
+      return {
+        id,
+        label: choice?.label ?? id,
+        target: includeTargets ? choice?.target : undefined,
+      };
+    }),
+    fallbacks: brief.escalation.fallbacks.map((fallback) => ({
+      choiceId: fallback.choice,
+      label: fallback.label,
+      target: includeTargets ? fallback.target : undefined,
+      dueAt: fallback.dueAt,
+    })),
+    response: { operation: 'choose' },
+  };
+}
+
 async function statusEvent(
   trajectory: Trajectory,
   snapshot: RuntimeSnapshot,
   at: string,
   offset: number,
+  expectedRevision: number,
 ): Promise<RuntimeEvent | null> {
   const brief = await buildBrief(trajectory, snapshot.state, { at });
   const nodeId = brief.node?.id;
@@ -87,10 +122,14 @@ async function statusEvent(
     return event(snapshot, trajectory, 'run.completed', at, {}, { nodeId, offset });
   }
   if (brief.status === 'awaiting-human') {
-    return event(snapshot, trajectory, 'human.required', at, {
-      choices: brief.escalation?.choices ?? [],
-      reason: brief.escalation?.reason ?? '',
-    }, { nodeId, offset });
+    const required = event(snapshot, trajectory, 'human.required', at, {}, { nodeId, offset });
+    required.data = escalationPayload(
+      brief,
+      snapshot,
+      required.seq,
+      expectedRevision,
+    ) as unknown as Record<string, unknown>;
+    return required;
   }
   if (brief.status === 'awaiting-observation') {
     return event(snapshot, trajectory, 'observation.required', at, {
@@ -134,7 +173,7 @@ export async function createRuntimeSnapshot(
     snapshot.events.push(event(snapshot, trajectory, 'node.entered', at, {
       from: null,
     }, { principal: options.principal, nodeId: state.current, offset: 0 }));
-    const terminal = await statusEvent(trajectory, snapshot, at, 0);
+    const terminal = await statusEvent(trajectory, snapshot, at, 0, snapshot.revision);
     if (terminal) snapshot.events.push(terminal);
   }
   return snapshot;
@@ -180,6 +219,20 @@ export async function buildRuntimeProjection(
     if (profile === 'debug') node.meta = brief.node!.meta;
   }
 
+  const escalationEvent = brief.escalation
+    ? [...snapshot.events].reverse().find((item) =>
+        item.kind === 'human.required' && item.graph.nodeId === brief.node?.id)
+    : undefined;
+  const escalation = brief.escalation
+    ? escalationPayload(
+        brief,
+        snapshot,
+        escalationEvent?.seq ?? (snapshot.events.at(-1)?.seq ?? 0) + 1,
+        snapshot.revision,
+        profile !== 'signal',
+      )
+    : null;
+
   return {
     runId: snapshot.runId,
     revision: snapshot.revision,
@@ -200,6 +253,7 @@ export async function buildRuntimeProjection(
     })),
     next: brief.next ? { target: brief.next.target } : null,
     observations: brief.pendingObservations,
+    escalation,
     variables: profile === 'debug' ? brief.variables : undefined,
     progress: profile === 'debug' ? brief.progress : undefined,
     truncated,
@@ -350,6 +404,7 @@ export async function executeRuntimeRequest(
         label: choice.label,
         rationale: request.rationale,
         evidence: request.evidence ?? [],
+        expectedRevision: request.expectedRevision,
         idempotencyKey: request.idempotencyKey ?? null,
         commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: node.id, choiceId: choice.id }));
@@ -368,6 +423,7 @@ export async function executeRuntimeRequest(
         label: null,
         rationale: request.rationale,
         evidence: request.evidence ?? [],
+        expectedRevision: request.expectedRevision,
         idempotencyKey: request.idempotencyKey ?? null,
         commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: from }));
@@ -382,6 +438,7 @@ export async function executeRuntimeRequest(
         value: request.value,
         rationale: request.rationale,
         evidence: request.evidence ?? [],
+        expectedRevision: request.expectedRevision,
         idempotencyKey: request.idempotencyKey ?? null,
         commandFingerprint: await requestFingerprint(request),
       }, {
@@ -394,6 +451,7 @@ export async function executeRuntimeRequest(
         summary: request.summary,
         rationale: request.rationale ?? null,
         refs: request.refs ?? [],
+        expectedRevision: request.expectedRevision,
         idempotencyKey: request.idempotencyKey ?? null,
         commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: snapshot.state.status === 'completed' ? undefined : snapshot.state.current }));
@@ -417,7 +475,13 @@ export async function executeRuntimeRequest(
         offset: emitted.length,
       }));
     }
-    const terminal = await statusEvent(trajectory, snapshot, at, emitted.length);
+    const terminal = await statusEvent(
+      trajectory,
+      snapshot,
+      at,
+      emitted.length,
+      snapshot.revision + 1,
+    );
     if (terminal) emitted.push(terminal);
   }
 
