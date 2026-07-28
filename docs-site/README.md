@@ -54,10 +54,11 @@ from the Cloudflare dashboard afterwards if wanted.
   repo's own tsc output (staged into `dist/lib` by the build — run
   `npm run build` at the repo root first). Hashing is WebCrypto
   (`globalThis.crypto`), the same code path on Node ≥ 20 and browsers — no
-  shims. Three.js is vendored under `public/vendor/` and loaded only there.
+  shims. The graph is dependency-free SVG with pan, wheel/button zoom and a
+  fit-to-view control.
 - `<mini-playground src="checkout.mar" title="…">` embeds the same engine
   on the examples page as an editable two-pane widget (plan left, walk
-  right), without the 3D canvas — see `public/mini.js`.
+  right), without the graph viewer — see `public/mini.js`.
 - `<mar-file src="checkout.mar">` / `<mar-src>…</mar-src>` render
   syntax-tinted `.mar` sources. Static shell/JSON samples are highlighted
   by the zero-dependency build, and editable `.mar` fields use an

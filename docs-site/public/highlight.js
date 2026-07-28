@@ -37,13 +37,24 @@ function line(source) {
     return esc(match[1]) + `<span class="mar-comment">${esc(match[2])}</span>`;
   }
   if (/^\s*#/.test(source)) return `<span class="mar-meta">${esc(source)}</span>`;
-  if ((match = source.match(/^(\s*)(VAR)(\s+\w+\s*=\s*.*)$/))) {
+  if ((match = source.match(/^(\s*)(VAR)(\s+\w+(?:\s*:\s*(?:number|boolean|string))?\s*=\s*.*)$/))) {
     return esc(match[1]) + `<span class="mar-kw">${esc(match[2])}</span>` + esc(match[3]);
   }
   if (/^\s*===/.test(source)) return `<span class="mar-phase">${esc(source)}</span>`;
   if ((match = source.match(/^(\s*)([*+])(\s*)(.*)$/))) {
     return esc(match[1]) + `<span class="mar-kw">${esc(match[2])}</span>` +
       esc(match[3]) + choiceTail(match[4]);
+  }
+  if ((match = source.match(/^(\s*)(while|until|else)(\s*)(.*)$/))) {
+    return esc(match[1]) + `<span class="mar-kw">${esc(match[2])}</span>` +
+      esc(match[3]) + choiceTail(match[4]);
+  }
+  if ((match = source.match(/^(\s*)(timeout)(\s+\S+)(.*)$/))) {
+    return esc(match[1]) + `<span class="mar-kw">${esc(match[2])}</span>` +
+      esc(match[3]) + choiceTail(match[4]);
+  }
+  if ((match = source.match(/^(\s*)(\?)(\s+\w+)\s*$/))) {
+    return esc(match[1]) + '<span class="mar-kw">?</span>' + esc(match[3]);
   }
   if ((match = source.match(/^(\s*)(->\s*\w+)\s*$/))) {
     return esc(match[1]) + `<span class="mar-target">${esc(match[2])}</span>`;

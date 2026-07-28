@@ -1,18 +1,20 @@
+%%{init: {"theme":"base","flowchart":{"curve":"basis","htmlLabels":true,"nodeSpacing":70,"rankSpacing":90},"themeVariables":{"background":"#f5f5f5","primaryColor":"#ffffff","primaryTextColor":"#303030","primaryBorderColor":"#5f5f5f","lineColor":"#5f5f5f","fontFamily":"ui-monospace, SFMono-Regular, Menlo, monospace"}}}%%
 flowchart TD
-  build_checkout["<b>build_checkout</b><br/>Rebuild the checkout flow behind a feature flag."]
-  rethink["<b>rethink</b><br/>Five iterations without lift: take the flow back to resea…"]
-  rollout["<b>rollout</b><br/>Ramp the flag to 100% and retire the old flow."]
+  build_checkout["<b>build_checkout</b><br/>Rebuild the checkout flow<br/>behind a feature flag."]
+  rethink["<b>rethink</b><br/>Five iterations without<br/>lift: take the flow back …"]
+  rollout["<b>rollout</b><br/>Ramp the flag to 100% and<br/>retire the old flow."]
   build_checkout -- "✋ Cohort converts" --> rollout
-  build_checkout -. "↻ Conversion flat — iterate {attempts &lt; 5}" .-> build_checkout
-  build_checkout -- "✋ Not converging — rethink {attempts &gt;= 5}" --> rethink
+  build_checkout -. "↻ Conversion flat — iterate<br/>{attempts &lt; 5}" .-> build_checkout
+  build_checkout -- "✋ Not converging — rethink<br/>{attempts &gt;= 5}" --> rethink
   rethink -. "✋ ↻ New direction agreed" .-> build_checkout
   rethink -- "✋ Park the revamp" --> END
   rollout --> END
   END(((END)))
-  classDef taken fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px;
-  classDef current fill:#fff59d,stroke:#f57f17,stroke-width:3px;
-  classDef frontier stroke:#1565c0,stroke-width:2px,stroke-dasharray:4 2;
-  linkStyle 0 stroke:#c62828,stroke-width:3px;
-  linkStyle 2 stroke:#c62828,stroke-width:3px;
-  linkStyle 3 stroke:#c62828,stroke-width:3px;
-  linkStyle 4 stroke:#c62828,stroke-width:3px;
+  classDef default fill:#ffffff,color:#303030,stroke:#5f5f5f,stroke-width:1.5px;
+  classDef taken fill:#dcebea,color:#303030,stroke:#176b63,stroke-width:2px;
+  classDef current fill:#ffffff,color:#303030,stroke:#3f6f00,stroke-width:3px;
+  classDef frontier stroke:#006a72,stroke-width:2px,stroke-dasharray:5 3;
+  linkStyle 0 stroke:#7d3e80,stroke-width:2.5px;
+  linkStyle 2 stroke:#7d3e80,stroke-width:2.5px;
+  linkStyle 3 stroke:#7d3e80,stroke-width:2.5px;
+  linkStyle 4 stroke:#7d3e80,stroke-width:2.5px;

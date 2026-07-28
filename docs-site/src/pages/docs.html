@@ -25,14 +25,20 @@ project.</p>
 
 <mar-src title="issue-loop.mar — a small complete plan">
 # project: issue-to-pr
-VAR prs_opened = 0
+VAR remaining: number = ?
 
 === work_issue ===
-Move the next ready issue to "In progress", implement it, open a pull
-request, and move the issue to "In review".
-~ prs_opened += 1
-+ {prs_opened < 3} [Pick up the next issue] ~loop~ -> work_issue
-* {prs_opened >= 3} [Queue is clear] -> share_update
+Work the next issue from the captured batch: move it to "In progress",
+implement it, open a pull request, and move the issue to "In review".
+~ remaining -= 1
+while {remaining > 0} [Pick up the next captured issue] -> work_issue
+else [Batch flushed] -> refresh_queue
+
+=== refresh_queue ===
+Count the ready issues once, after the captured batch has been flushed.
+? remaining
+while {remaining > 0} [A new batch is ready] -> work_issue
+else [Queue is clear] -> share_update
 
 === share_update ===
 Post a short status update with links to the open pull requests.
@@ -57,6 +63,8 @@ Post a short status update with links to the open pull requests.
       <td>The agent's assignment. The first line becomes its title in diagrams.</td></tr>
   <tr><td>Variable</td><td><code>VAR name = literal</code></td>
       <td>Put it before the first stage. Its initial value sets its type: number, boolean, or string.</td></tr>
+  <tr><td>Runtime value</td><td><code>VAR name: number = ?</code> · <code>? name</code></td>
+      <td>Wait for an initial value, or refresh it at an explicit checkpoint. The host records the typed value and its source.</td></tr>
   <tr><td>Update</td><td><code>~ name = expr</code> · <code>+=</code> · <code>-=</code></td>
       <td>Changes a value when the stage begins.</td></tr>
   <tr><td>One-time route</td><td><code>* [Label] -&gt; target</code></td>
@@ -69,6 +77,10 @@ Post a short status update with links to the open pull requests.
       <td>Only a person may record this decision; an agent is refused.</td></tr>
   <tr><td>Intentional loop</td><td><code>~loop~</code> on the returning route</td>
       <td>Confirms that returning to an earlier stage is deliberate.</td></tr>
+  <tr><td>Conditional loop</td><td><code>while {expr} -&gt; target</code> · <code>else -&gt; target</code></td>
+      <td>An exhaustive pair; use <code>until</code> when the true arm is the exit.</td></tr>
+  <tr><td>Hard timeout</td><td><code>timeout 3d -&gt; fallback</code></td>
+      <td>Before expiry the route is closed; after expiry it becomes the authoritative exit.</td></tr>
   <tr><td>Automatic next step</td><td><code>-&gt; target</code> on its own line</td>
       <td>Continue automatically when the stage is done. Put it after any choices.</td></tr>
   <tr><td>Finish</td><td><code>-&gt; END</code></td>
@@ -125,16 +137,16 @@ markdown — blank lines, lists and # characters are plain text.
 # delivery:branch: replatform/{phase}
 # report: per-phase                 // or at-checkpoints | at-end
 
-# timebox: 3d                       // node-level: budget for a speculative phase (m|h|d|w)
+# timebox: 3d                       // legacy advisory budget; does not control traversal
 # priority: high                    // node-level: critical | high | normal | low
 # wake: new "bug" issues in acme/shop   // node-level: what re-activates a standing phase
 </mar-src>
 
-<p>The pacing keys encode time <em>as evidence, never as a gate</em>: the
-walker never consults a clock. A <code>timebox</code> travels in the brief
-next to the phase's entry timestamp, and an overdue budget is the
-executor's cue to take the phase's abandon door honestly (a timeboxed
-phase therefore needs two exits — <code>MAR023</code> warns otherwise).
+<p>Metadata describes execution context; it does not create control flow.
+The legacy <code># timebox:</code> value travels in the brief as advisory
+evidence. When expiry must change the route, put
+<code>timeout 3d -&gt; fallback</code> in the phase: before expiry that edge
+is closed, and afterwards it becomes the authoritative exit.
 <code>wake</code> tells executors what to watch so a service phase can
 park instead of polling; scheduling belongs to the executing platform,
 never the walker.</p>
@@ -212,6 +224,11 @@ blocked:</p>
 
 <demo-cast id="06-state-init" title="state init — start and show the first choices"></demo-cast>
 
+<p>If a plan asks for a runtime value, traversal pauses until the host
+records it with <code>state observe &lt;plan&gt; &lt;name&gt;
+&lt;json-value&gt; --actor &lt;name&gt; --rationale "&lt;source&gt;"</code>.
+The value is type-checked and audited separately from route decisions.</p>
+
 <p>The agent does not inspect that file. It runs <code>brief</code> to get
 its next assignment: the current instructions, useful values such as the
 attempt count, the choices available now, and the command to record the
@@ -254,7 +271,8 @@ different plan. This mismatch is called <em>drift</em>:</p>
 progress file onto the new plan, <strong>keeping the decision
 history</strong>, and lists what changed. Vanished taken-choices are
 dropped (and reported), removed variables dropped, new variables added at
-their initials, type-changed variables reset. It refuses
+their initials (or requested as observations), type-changed variables
+reset. It refuses
 (<code>migration-blocked</code>) when the current phase no longer exists —
 that reconciliation needs a human. To start over instead, discarding
 history: <code>state init --force</code>.</p>

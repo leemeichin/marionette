@@ -18,6 +18,12 @@ the same information.</p>
 │      │        --actor agent --rationale "&lt;evidence&gt;"        │
 │      │     (or `state advance` for an automatic next step)  │
 │      │                                                      │
+│      ├─ status: awaiting-observation → obtain and record    │
+│      │     each named typed value, then ask again           │
+│      │                                                      │
+│      ├─ status: waiting-timeout → park until the hard exit  │
+│      │     is due; the host may arrange the wake-up         │
+│      │                                                      │
 │      ├─ status: awaiting-human → deliver the escalation     │
 │      │     payload to the primary session and STOP          │
 │      │                                                      │
@@ -32,6 +38,14 @@ only use choices that the brief lists as available. Every choice records
 who made it and why. Marionette itself enforces choice conditions,
 one-time choices, <code>@human</code> decisions, and checks for edits to a
 running plan. These rules do not depend on instructions in an AI prompt.</p>
+
+<p>An <code>awaiting-observation</code> brief names each value and type.
+The host obtains it from the phase's source and records it with
+<code>state observe</code> plus a rationale identifying the lookup. The
+plan controls refresh cadence: a batch can be observed once, drained, and
+refreshed only after it is flushed. A <code>waiting-timeout</code> brief
+means no ordinary route is open yet; Marionette checks time on its next
+operation while the host owns scheduling the wake-up.</p>
 
 <h2 id="brief">The agent's assignment, as JSON</h2>
 
@@ -86,11 +100,11 @@ request; the host would normally be an agent framework, not a file):</p>
 
 <pre class="code" data-lang="shell" data-title="Run the scripted session"><code>$ marionette start checkout.mar --run docs-demo --principal coding-agent --role agent &lt; session.ndjson</code></pre>
 
-<pre class="code" data-lang="ndjson" data-title="session.ndjson"><code>{"protocol":"0.1.0","id":1,"op":"initialize","client":{"name":"docs-site","version":"0.1"}}
-{"protocol":"0.1.0","id":2,"op":"next","profile":"work"}
-{"protocol":"0.1.0","id":3,"op":"choose","choiceId":"build_checkout#0","rationale":"metrics look good","expectedRevision":0,"idempotencyKey":"turn-1","profile":"signal"}
-{"protocol":"0.1.0","id":4,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}
-{"protocol":"0.1.0","id":5,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}</code></pre>
+<pre class="code" data-lang="ndjson" data-title="session.ndjson"><code>{"protocol":"0.2.0","id":1,"op":"initialize","client":{"name":"docs-site","version":"0.1"}}
+{"protocol":"0.2.0","id":2,"op":"next","profile":"work"}
+{"protocol":"0.2.0","id":3,"op":"choose","choiceId":"build_checkout#0","rationale":"metrics look good","expectedRevision":0,"idempotencyKey":"turn-1","profile":"signal"}
+{"protocol":"0.2.0","id":4,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}
+{"protocol":"0.2.0","id":5,"op":"choose","choiceId":"build_checkout#1","rationale":"conversion flat; iterating on the payment step","expectedRevision":0,"idempotencyKey":"turn-2","profile":"signal"}</code></pre>
 
 <demo-cast id="21-runtime-session" title="start — an NDJSON runtime session"></demo-cast>
 
@@ -185,7 +199,10 @@ part: treat exit 3 as "stop and surface", never as a retry.</p>
 (<code>spec/conformance/</code>). Any walker implementation must produce
 the same refusal codes (<code>completed</code>, <code>unknown-node</code>,
 <code>unknown-choice</code>, <code>ambiguous-choice</code>,
-<code>gate-blocked</code>, <code>once-exhausted</code>,
+<code>gate-blocked</code>, <code>observation-required</code>,
+<code>unknown-observation</code>, <code>observation-type</code>,
+<code>timeout-pending</code>, <code>timed-out</code>,
+<code>once-exhausted</code>,
 <code>human-checkpoint</code>, <code>rationale-required</code>,
 <code>no-next-step</code>, <code>migration-blocked</code>), refuse without
 mutating state, and append exactly one log entry per successful step. The

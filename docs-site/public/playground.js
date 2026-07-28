@@ -1,12 +1,8 @@
 // The playground: the real compiler + walker (tsc output under /lib,
-// hashing via WebCrypto so the modules run unmodified) with a Three.js view of
-// the graph. The DOM controls are the accessible interface; the canvas is
-// aria-hidden garnish. Diagnostics render in the same stage as the graph:
-// while the plan doesn't compile, the errors occupy the space the graph
-// would. No autoplay; reduced motion = no tweens.
-import * as THREE from 'three';
+// hashing via WebCrypto so the modules run unmodified) with a pannable SVG
+// view of the graph. Diagnostics render in the same stage as the graph.
 import { compile } from '/lib/compile.js';
-import { initState, frontier, takeChoice, advance, WalkError } from '/lib/state.js';
+import { initState, frontier, takeChoice, advance, observe, WalkError } from '/lib/state.js';
 import { EXAMPLES } from '/examples-data.js';
 import { enhanceMarEditor } from '/highlight.js';
 
@@ -20,14 +16,13 @@ function boot(el) {
   const resetEl = el.querySelector('[data-reset]');
   const rationaleEl = el.querySelector('#pg-rationale');
   const canvasHost = el.querySelector('[data-canvas]');
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const paintEditor = enhanceMarEditor(el.querySelector('[data-code-editor]'), srcEl);
 
   let trajectory = null;
   let state = null;
   let refusal = null;
   let compileSeq = 0;
-  const viz = makeViz(canvasHost, reduced);
+  const viz = makeViz(canvasHost);
 
   const exampleSel = el.querySelector('[data-examples]');
   for (const [i, ex] of EXAMPLES.entries()) {
@@ -36,12 +31,16 @@ function boot(el) {
     opt.textContent = ex.label;
     exampleSel.append(opt);
   }
+  const requestedExample = new URLSearchParams(window.location.search).get('example');
+  const initialExample = Math.max(0, EXAMPLES.findIndex((example) =>
+    example.file === requestedExample || example.file.replace(/\.mar$/, '') === requestedExample));
+  exampleSel.value = String(initialExample);
   exampleSel.addEventListener('change', () => {
     srcEl.value = EXAMPLES[Number(exampleSel.value)].source;
     paintEditor();
     recompile();
   });
-  srcEl.value = EXAMPLES[0].source;
+  srcEl.value = EXAMPLES[initialExample].source;
   paintEditor();
   srcEl.addEventListener('input', debounce(recompile, 250));
   resetEl.addEventListener('click', () => {
@@ -50,10 +49,6 @@ function boot(el) {
     refusal = null;
     renderWalk();
   });
-
-  // re-theme the scene when the palette changes
-  document.querySelector('.theme-toggle')?.addEventListener('click', () => queueMicrotask(() => viz.retheme()));
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => viz.retheme());
 
   recompile();
 
@@ -100,10 +95,6 @@ function boot(el) {
     diagEl.hidden = false;
   }
 
-  function actor() {
-    return el.querySelector('input[name="pg-actor"]:checked').value;
-  }
-
   function step(fn) {
     refusal = null;
     try {
@@ -133,6 +124,43 @@ function boot(el) {
       choicesEl.append(p);
     }
     if (!done) {
+      for (const name of state.pendingObservations ?? []) {
+        const decl = trajectory.variables[name];
+        const row = document.createElement('div');
+        row.className = 'pg-rationale-row';
+        const field = document.createElement('label');
+        field.textContent = `${name}:${decl?.type ?? 'unknown'} `;
+        const input = decl?.type === 'boolean'
+          ? document.createElement('select')
+          : document.createElement('input');
+        if (input instanceof HTMLSelectElement) {
+          for (const value of ['true', 'false']) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = value;
+            input.append(option);
+          }
+        } else {
+          input.type = decl?.type === 'number' ? 'number' : 'text';
+          input.step = 'any';
+        }
+        const submit = document.createElement('button');
+        submit.type = 'button';
+        submit.textContent = 'record observation';
+        submit.addEventListener('click', () => {
+          const raw = input.value;
+          const value = decl?.type === 'number' ? (raw.trim() === '' ? Number.NaN : Number(raw))
+            : decl?.type === 'boolean' ? raw === 'true'
+            : raw;
+          step(() => observe(trajectory, state, name, value, {
+            actor: 'agent',
+            rationale: rationaleEl.value || 'observed in the playground',
+          }));
+        });
+        field.append(input);
+        row.append(field, submit);
+        choicesEl.append(row);
+      }
       for (const [i, { choice, blocked }] of frontier(trajectory, state).entries()) {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -144,7 +172,7 @@ function boot(el) {
           btn.textContent += `  (unavailable: ${blocked})`;
         } else {
           btn.addEventListener('click', () => step(() =>
-            takeChoice(trajectory, state, String(i), { actor: actor(), rationale: rationaleEl.value || undefined })));
+            takeChoice(trajectory, state, String(i), { actor: 'agent', rationale: rationaleEl.value || undefined })));
         }
         choicesEl.append(btn);
       }
@@ -153,7 +181,7 @@ function boot(el) {
         btn.type = 'button';
         btn.textContent = `Continue automatically → ${node.next.target}`;
         btn.addEventListener('click', () => step(() =>
-          advance(trajectory, state, { actor: actor(), rationale: rationaleEl.value || undefined })));
+          advance(trajectory, state, { actor: 'agent', rationale: rationaleEl.value || undefined })));
         choicesEl.append(btn);
       }
     }
@@ -169,232 +197,343 @@ function boot(el) {
 }
 
 
-/* ---------- three.js view ---------- */
+/* ---------- SVG graph view ---------- */
 
-function makeViz(host, reduced) {
-  let renderer;
-  try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  } catch (e) {
-    host.innerHTML = '<p class="pg-hint">WebGL is unavailable in this browser — the walk controls below still work fully.</p>';
-    return { setGraph() {}, setWalk() {}, retheme() {}, clear() {} };
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgEl(name, attrs = {}) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  return node;
+}
+
+function makeViz(host) {
+  let graph = null;
+  let view = null;
+  let homeView = null;
+  let naturalView = null;
+  let drag = null;
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'graph-toolbar';
+  const hint = document.createElement('span');
+  hint.className = 'graph-hint';
+  hint.textContent = 'drag to pan · scroll to zoom';
+  const zoomLabel = document.createElement('span');
+  zoomLabel.className = 'graph-zoom-label';
+  const controls = [
+    ['−', 'Zoom out', () => zoom(1.25)],
+    ['+', 'Zoom in', () => zoom(0.8)],
+    ['fit', 'Fit graph to view', fit],
+  ];
+  toolbar.append(hint, zoomLabel);
+  for (const [text, label, action] of controls) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = text;
+    button.setAttribute('aria-label', label);
+    button.addEventListener('click', action);
+    toolbar.append(button);
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  host.append(renderer.domElement);
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
-  scene.add(new THREE.AmbientLight(0xffffff, 1.6));
-  const key = new THREE.DirectionalLight(0xffffff, 1.2);
-  key.position.set(4, 6, 8);
-  scene.add(key);
 
-  let graph = null;        // { nodesById: Map<id, {mesh, label, pos}>, edges: [{choiceId, from, to, line, cone, human}] }
-  let current = null;
-  let takenChoices = new Set();
-  let visited = new Set();
-  let pulse = 0;
-  let raf = null;
+  const svg = svgEl('svg', {
+    class: 'graph-svg',
+    'aria-hidden': 'true',
+    preserveAspectRatio: 'xMidYMid meet',
+  });
+  host.append(toolbar, svg);
 
-  const css = () => getComputedStyle(document.documentElement);
-  const col = (name) => new THREE.Color(css().getPropertyValue(name).trim());
-
-  function resize() {
-    const w = host.clientWidth;
-    const h = host.clientHeight;
-    renderer.setSize(w, h, false);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
-    render();
+  function setControls(enabled) {
+    toolbar.querySelectorAll('button').forEach((button) => { button.disabled = !enabled; });
+    zoomLabel.textContent = enabled && naturalView && view
+      ? `${Math.round((naturalView.w / view.w) * 100)}%`
+      : '';
   }
-  new ResizeObserver(resize).observe(host);
+
+  function updateView() {
+    if (!view) return;
+    svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+    setControls(true);
+  }
+
+  function fit() {
+    if (!homeView) return;
+    view = { ...homeView };
+    updateView();
+  }
+
+  function zoom(factor, anchorX = 0.5, anchorY = 0.5) {
+    if (!homeView || !naturalView || !view) return;
+    const nextW = Math.min(homeView.w * 2, Math.max(naturalView.w * 0.3, view.w * factor));
+    const nextH = Math.min(homeView.h * 2, Math.max(naturalView.h * 0.3, view.h * factor));
+    const pointX = view.x + view.w * anchorX;
+    const pointY = view.y + view.h * anchorY;
+    view = {
+      x: pointX - nextW * anchorX,
+      y: pointY - nextH * anchorY,
+      w: nextW,
+      h: nextH,
+    };
+    updateView();
+  }
+
+  svg.addEventListener('wheel', (event) => {
+    if (!view) return;
+    event.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    zoom(event.deltaY < 0 ? 0.84 : 1.19,
+      (event.clientX - rect.left) / rect.width,
+      (event.clientY - rect.top) / rect.height);
+  }, { passive: false });
+
+  svg.addEventListener('pointerdown', (event) => {
+    if (!view || event.button !== 0) return;
+    svg.setPointerCapture(event.pointerId);
+    drag = { x: event.clientX, y: event.clientY, view: { ...view } };
+    svg.classList.add('is-panning');
+  });
+  svg.addEventListener('pointermove', (event) => {
+    if (!drag || !view) return;
+    const rect = svg.getBoundingClientRect();
+    view = {
+      ...drag.view,
+      x: drag.view.x - (event.clientX - drag.x) * drag.view.w / rect.width,
+      y: drag.view.y - (event.clientY - drag.y) * drag.view.h / rect.height,
+    };
+    updateView();
+  });
+  const stopPan = () => {
+    drag = null;
+    svg.classList.remove('is-panning');
+  };
+  svg.addEventListener('pointerup', stopPan);
+  svg.addEventListener('pointercancel', stopPan);
+  svg.addEventListener('dblclick', fit);
 
   function layout(trajectory) {
-    // BFS layering from the start node; END gets the last column.
+    const byId = new Map(trajectory.nodes.map((node) => [node.id, node]));
+    const targets = (id) => {
+      const node = byId.get(id);
+      return [...(node?.choices.map((choice) => choice.target) ?? []),
+        ...(node?.next ? [node.next.target] : [])];
+    };
     const depth = new Map([[trajectory.start, 0]]);
     const queue = [trajectory.start];
-    const out = (id) => {
-      const n = trajectory.nodes.find((x) => x.id === id);
-      return [...(n?.choices.map((c) => c.target) ?? []), ...(n?.next ? [n.next.target] : [])];
-    };
-    while (queue.length) {
+    while (queue.length > 0) {
       const id = queue.shift();
-      for (const t of out(id)) {
-        if (t === 'END' || depth.has(t)) continue;
-        depth.set(t, depth.get(id) + 1);
-        queue.push(t);
+      for (const target of targets(id)) {
+        if (target === 'END' || depth.has(target)) continue;
+        depth.set(target, depth.get(id) + 1);
+        queue.push(target);
       }
     }
+
     let maxDepth = Math.max(0, ...depth.values());
-    for (const n of trajectory.nodes) if (!depth.has(n.id)) depth.set(n.id, ++maxDepth); // unreachable can't compile, but be safe
-    const endDepth = Math.max(0, ...depth.values()) + 1;
-    const columns = new Map();
-    const place = (id, d) => {
-      const rank = columns.get(d) ?? 0;
-      columns.set(d, rank + 1);
-      return { d, rank };
-    };
-    const slots = new Map();
-    for (const n of trajectory.nodes) slots.set(n.id, place(n.id, depth.get(n.id)));
-    slots.set('END', place('END', endDepth));
-    const colCount = new Map();
-    for (const { d } of slots.values()) colCount.set(d, (colCount.get(d) ?? 0) + 1);
-    const pos = new Map();
-    for (const [id, { d, rank }] of slots) {
-      const n = colCount.get(d);
-      pos.set(id, new THREE.Vector3(d * 3.4 - endDepth * 1.7, (rank - (n - 1) / 2) * -2.0, 0));
+    for (const node of trajectory.nodes) {
+      if (!depth.has(node.id)) depth.set(node.id, ++maxDepth);
     }
-    return pos;
+    const usesEnd = trajectory.nodes.some((node) =>
+      node.next?.target === 'END' || node.choices.some((choice) => choice.target === 'END'));
+    const entries = trajectory.nodes.map((node) => ({
+      id: node.id,
+      node,
+      depth: depth.get(node.id),
+      title: node.body.split('\n')[0] ?? '',
+    }));
+    if (usesEnd) entries.push({ id: 'END', node: null, depth: maxDepth + 1, title: '' });
+
+    const columns = new Map();
+    for (const entry of entries) {
+      const column = columns.get(entry.depth) ?? [];
+      column.push(entry);
+      columns.set(entry.depth, column);
+    }
+
+    const widthFor = (entry) => {
+      if (entry.id === 'END') return 94;
+      const title = entry.title.length > 38 ? entry.title.slice(0, 37) + '…' : entry.title;
+      return Math.min(292, Math.max(170, Math.max(entry.id.length, title.length) * 7.2 + 40));
+    };
+    const rowGap = 116;
+    const marginX = 86;
+    const marginY = 86;
+    const maxRows = Math.max(1, ...[...columns.values()].map((column) => column.length));
+    const height = Math.max(330, maxRows * rowGap + marginY * 2);
+    const boxes = new Map();
+    let cursorX = marginX;
+
+    for (const column of [...columns.entries()].sort(([a], [b]) => a - b).map(([, value]) => value)) {
+      const columnWidth = Math.max(...column.map(widthFor));
+      const columnHeight = (column.length - 1) * rowGap;
+      for (const [rank, entry] of column.entries()) {
+        const width = widthFor(entry);
+        const y = height / 2 - columnHeight / 2 + rank * rowGap;
+        boxes.set(entry.id, {
+          ...entry,
+          x: cursorX + (columnWidth - width) / 2,
+          y: y - 32,
+          w: width,
+          h: 64,
+        });
+      }
+      cursorX += columnWidth + 154;
+    }
+    const width = cursorX - 154 + marginX;
+
+    const edges = [];
+    for (const node of trajectory.nodes) {
+      edges.push(...node.choices.map((choice) => ({
+        id: choice.id,
+        from: node.id,
+        to: choice.target,
+        human: choice.human,
+        loop: choice.loop,
+      })));
+      if (node.next) {
+        edges.push({
+          id: `${node.id}=>next`,
+          from: node.id,
+          to: node.next.target,
+          human: false,
+          loop: false,
+        });
+      }
+    }
+    return { width, height, boxes, edges };
   }
 
-  function labelSprite(text, colorHex) {
-    const c = document.createElement('canvas');
-    const ctx = c.getContext('2d');
-    const font = '600 30px ui-monospace, Menlo, Consolas, monospace';
-    ctx.font = font;
-    const w = Math.ceil(ctx.measureText(text).width) + 24;
-    c.width = w; c.height = 44;
-    ctx.font = font;
-    ctx.fillStyle = colorHex;
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 12, 24);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
-    spr.scale.set(w / 46, 44 / 46, 1);
-    return spr;
+  function edgePath(edge, boxes, backwardIndex) {
+    const from = boxes.get(edge.from);
+    const to = boxes.get(edge.to);
+    if (!from || !to) return '';
+    if (edge.from === edge.to) {
+      const x = from.x + from.w;
+      const y = from.y + from.h / 2;
+      return `M ${x} ${y} C ${x + 70} ${y - 76}, ${x + 70} ${y + 76}, ${x} ${y + 8}`;
+    }
+    if (to.x <= from.x) {
+      const startX = from.x + from.w / 2;
+      const endX = to.x + to.w / 2;
+      const routeY = Math.max(22, Math.min(from.y, to.y) - 48 - (backwardIndex % 4) * 16);
+      return `M ${startX} ${from.y} C ${startX} ${routeY}, ${endX} ${routeY}, ${endX} ${to.y}`;
+    }
+    const startX = from.x + from.w;
+    const startY = from.y + from.h / 2;
+    const endX = to.x;
+    const endY = to.y + to.h / 2;
+    const bend = Math.max(64, (endX - startX) * 0.42);
+    return `M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`;
   }
 
   function setGraph(trajectory) {
-    clear();
-    delete host.dataset.empty;
-    const pos = layout(trajectory);
-    graph = { trajectory, nodesById: new Map(), edges: [], pos };
+    const drawing = layout(trajectory);
+    const defs = svgEl('defs');
+    const marker = svgEl('marker', {
+      id: 'graph-arrow',
+      viewBox: '0 0 10 10',
+      refX: 9,
+      refY: 5,
+      markerWidth: 7,
+      markerHeight: 7,
+      orient: 'auto-start-reverse',
+    });
+    marker.append(svgEl('path', { d: 'M 0 0 L 10 5 L 0 10 z', class: 'graph-arrow' }));
+    defs.append(marker);
 
-    for (const [id, p] of pos) {
-      const isEnd = id === 'END';
-      const geo = isEnd ? new THREE.SphereGeometry(0.34, 24, 16) : new THREE.BoxGeometry(2.4, 0.9, 0.5);
-      const mat = new THREE.MeshLambertMaterial();
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.copy(p);
-      scene.add(mesh);
-      const label = labelSprite(id, '#ffffff');
-      label.position.set(p.x, p.y + (isEnd ? 0.85 : 0.95), p.z + 0.3);
-      scene.add(label);
-      graph.nodesById.set(id, { mesh, label });
+    const root = svgEl('g', { class: 'graph-root' });
+    const edgeLayer = svgEl('g', { class: 'graph-edges' });
+    const nodeLayer = svgEl('g', { class: 'graph-nodes' });
+    const edgeEls = [];
+    let backwardIndex = 0;
+
+    for (const edge of drawing.edges) {
+      const backward = drawing.boxes.get(edge.to)?.x <= drawing.boxes.get(edge.from)?.x;
+      const path = svgEl('path', {
+        d: edgePath(edge, drawing.boxes, backward ? backwardIndex++ : 0),
+        class: [
+          'graph-edge',
+          edge.human ? 'is-human' : '',
+          edge.loop ? 'is-loop' : '',
+        ].filter(Boolean).join(' '),
+        'marker-end': 'url(#graph-arrow)',
+      });
+      edgeLayer.append(path);
+      edgeEls.push({ ...edge, el: path });
     }
 
-    for (const n of trajectory.nodes) {
-      const from = pos.get(n.id);
-      const links = [
-        ...n.choices.map((c) => ({ id: c.id, target: c.target, human: c.human, loop: c.loop })),
-        ...(n.next ? [{ id: `${n.id}=>next`, target: n.next.target, human: false, loop: false }] : []),
-      ];
-      for (const link of links) {
-        const to = pos.get(link.target);
-        const backward = to.x <= from.x && link.target !== n.id;
-        const self = link.target === n.id;
-        const mid = self
-          ? new THREE.Vector3(from.x, from.y + 1.7, from.z + 1.2)
-          : new THREE.Vector3((from.x + to.x) / 2, (from.y + to.y) / 2 + (backward ? 2.2 : 0), (backward ? 1.6 : 0.7));
-        const curve = new THREE.QuadraticBezierCurve3(from.clone(), mid, self ? from.clone().add(new THREE.Vector3(0.01, 0, 0)) : to.clone());
-        const lineGeo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(32));
-        const line = new THREE.Line(lineGeo, new THREE.LineBasicMaterial());
-        scene.add(line);
-        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.3, 10), new THREE.MeshLambertMaterial());
-        const tEnd = 0.92;
-        cone.position.copy(curve.getPoint(tEnd));
-        cone.lookAt(curve.getPoint(1));
-        cone.rotateX(Math.PI / 2);
-        scene.add(cone);
-        graph.edges.push({ choiceId: link.id, human: link.human, line, cone });
+    const nodeEls = new Map();
+    for (const [id, box] of drawing.boxes) {
+      const group = svgEl('g', {
+        class: `graph-node${id === 'END' ? ' is-end' : ''}${id === trajectory.start ? ' is-start' : ''}`,
+        transform: `translate(${box.x} ${box.y})`,
+      });
+      group.append(svgEl('rect', {
+        class: 'graph-node-box',
+        width: box.w,
+        height: box.h,
+        rx: id === 'END' ? 32 : 5,
+      }));
+      const label = svgEl('text', { class: 'graph-node-label', x: box.w / 2, y: id === 'END' ? 38 : 26 });
+      const idLine = svgEl('tspan', { class: 'graph-node-id', x: box.w / 2 });
+      idLine.textContent = id;
+      label.append(idLine);
+      if (id !== 'END' && box.title) {
+        const title = box.title.length > 38 ? box.title.slice(0, 37) + '…' : box.title;
+        const titleLine = svgEl('tspan', {
+          class: 'graph-node-title',
+          x: box.w / 2,
+          dy: 20,
+        });
+        titleLine.textContent = title;
+        label.append(titleLine);
       }
+      group.append(label);
+      if (id === trajectory.start) {
+        const start = svgEl('text', { class: 'graph-start-label', x: 0, y: -12 });
+        start.textContent = 'start';
+        group.append(start);
+      }
+      nodeLayer.append(group);
+      nodeEls.set(id, group);
     }
 
-    // frame the graph
-    const box = new THREE.Box3();
-    for (const { mesh } of graph.nodesById.values()) box.expandByObject(mesh);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    camera.position.set(center.x, center.y, center.z + Math.max(size.x, size.y * 1.6) * 1.15 + 4);
-    camera.lookAt(center);
-    retheme();
+    root.append(edgeLayer, nodeLayer);
+    svg.replaceChildren(defs, root);
+    graph = { trajectory, nodeEls, edgeEls };
+    homeView = { x: 0, y: 0, w: drawing.width, h: drawing.height };
+    naturalView = { x: 0, y: 0, w: Math.min(1150, drawing.width), h: drawing.height };
+    delete host.dataset.empty;
+    view = { ...naturalView };
+    updateView();
   }
 
   function setWalk(state) {
     if (!graph) return;
-    current = state.status === 'completed' ? 'END' : state.current;
-    visited = new Set(['END', ...state.log.map((e) => e.to), graph.trajectory.start]);
-    if (state.status !== 'completed') visited.delete('END');
-    takenChoices = new Set(state.log.filter((e) => e.choice).map((e) => e.choice));
-    for (const e of state.log) if (!e.choice && e.from) takenChoices.add(`${e.from}=>next`);
-    retheme();
-    if (!reduced.matches) startPulse();
-  }
-
-  function retheme() {
-    if (!graph) { render(); return; }
-    const cNode = col('--bg-elev');
-    const cVisited = col('--accent');
-    const cEdge = col('--fg-dim');
-    const cTaken = col('--accent');
-    const cHuman = col('--magenta');
-    const labelCol = css().getPropertyValue('--fg').trim();
-    for (const [id, { mesh, label }] of graph.nodesById) {
-      const isCurrent = id === current;
-      const wasVisited = visited.has(id);
-      mesh.material.color.copy(isCurrent ? col('--green') : wasVisited ? cVisited : cNode);
-      mesh.material.opacity = isCurrent || wasVisited ? 1 : 0.9;
-      mesh.scale.setScalar(isCurrent ? 1.12 : 1);
-      // refresh label color by redrawing (cheap, few nodes)
-      const fresh = labelSprite(id, isCurrent ? css().getPropertyValue('--accent').trim() : labelCol);
-      fresh.position.copy(label.position);
-      scene.remove(label);
-      scene.add(fresh);
-      graph.nodesById.get(id).label = fresh;
+    const current = state.status === 'completed' ? 'END' : state.current;
+    const visited = new Set([graph.trajectory.start, ...state.log.map((entry) => entry.to)]);
+    const taken = new Set(state.log.filter((entry) => entry.choice).map((entry) => entry.choice));
+    for (const entry of state.log) {
+      if (!entry.choice && entry.from) taken.add(`${entry.from}=>next`);
     }
-    for (const e of graph.edges) {
-      const taken = takenChoices.has(e.choiceId);
-      const c = taken ? cTaken : e.human ? cHuman : cEdge;
-      e.line.material.color.copy(c);
-      e.line.material.opacity = taken ? 1 : 0.9;
-      e.line.material.transparent = true;
-      e.cone.material.color.copy(c);
+    for (const [id, node] of graph.nodeEls) {
+      node.classList.toggle('is-current', id === current);
+      node.classList.toggle('is-visited', visited.has(id));
     }
-    render();
-  }
-
-  function startPulse() {
-    if (raf) return;
-    const t0 = performance.now();
-    const tick = (t) => {
-      pulse = (t - t0) / 1000;
-      const cur = current && graph?.nodesById.get(current);
-      if (cur) cur.mesh.scale.setScalar(1.12 + Math.sin(pulse * 3) * 0.04);
-      render();
-      if (pulse < 2.5) raf = requestAnimationFrame(tick);
-      else { raf = null; cur?.mesh.scale.setScalar(1.12); render(); }
-    };
-    raf = requestAnimationFrame(tick);
+    for (const edge of graph.edgeEls) edge.el.classList.toggle('is-taken', taken.has(edge.id));
   }
 
   function clear() {
-    if (raf) { cancelAnimationFrame(raf); raf = null; }
     host.dataset.empty = '';
-    scene.clear();
-    scene.add(new THREE.AmbientLight(0xffffff, 1.6));
-    const k = new THREE.DirectionalLight(0xffffff, 1.2);
-    k.position.set(4, 6, 8);
-    scene.add(k);
+    svg.replaceChildren();
     graph = null;
-    current = null;
-    takenChoices = new Set();
-    visited = new Set();
-    render();
+    view = null;
+    homeView = null;
+    naturalView = null;
+    setControls(false);
   }
 
-  function render() { renderer.render(scene, camera); }
-  resize();
-  return { setGraph, setWalk, retheme, clear };
+  clear();
+  return { setGraph, setWalk, clear };
 }
 
 /* ---------- utils ---------- */
