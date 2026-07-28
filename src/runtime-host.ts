@@ -7,15 +7,15 @@
  * never supplies identity in a runtime request.
  */
 
-import type { Trajectory } from './types.js';
-import type { RuntimePrincipal, RuntimeRequest } from './runtime-protocol.js';
+import type { Trajectory } from './types.ts';
+import type { RuntimePrincipal, RuntimeRequest } from './runtime-protocol.ts';
 import {
   executeRuntimeRequest,
   type RuntimeCommandOptions,
   type RuntimeCommandResult,
   type RuntimeSnapshot,
-} from './runtime.js';
-import { commitRuntimeStore } from './runtime-store.js';
+} from './runtime.ts';
+import { commitRuntimeStore } from './runtime-store.ts';
 
 export class RuntimeRunController {
   private tail: Promise<void> = Promise.resolve();

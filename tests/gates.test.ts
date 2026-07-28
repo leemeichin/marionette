@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseExpr, evalExpr, tryConstEval } from '../src/expr.js';
-import { analyzeGate, eventuallyFalse, monotonicDirection, type GateContext } from './reference/gates.js';
-import type { Action, Gate } from '../src/types.js';
+import { parseExpr, evalExpr, tryConstEval } from '../src/expr.ts';
+import { analyzeGate, eventuallyFalse, monotonicDirection, type GateContext } from './reference/gates.ts';
+import type { Action, Gate } from '../src/types.ts';
 
 const gate = (source: string): Gate => ({ source, ast: parseExpr(source) });
 const action = (v: string, op: Action['op'], value: string): Action =>

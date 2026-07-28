@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile } from '../src/compile.js';
-import { CODES, type Severity } from '../src/types.js';
+import { compile } from '../src/compile.ts';
+import { CODES, type Severity } from '../src/types.ts';
 
 /** Each defect class (P0.3) has a failing fixture; every diagnostic must carry a line and a suggestion where promised. */
 async function expectDiagnostic(source: string, code: string, severity: Severity = 'error') {

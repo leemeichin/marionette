@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePlan } from '../src/parser.js';
-import { emitFacts } from '../src/facts.js';
-import { ruleGraphFindings, ruleWalkInit } from '../src/rule-engine.js';
+import { parsePlan } from '../src/parser.ts';
+import { emitFacts } from '../src/facts.ts';
+import { ruleGraphFindings, ruleWalkInit } from '../src/rule-engine.ts';
 
 test('rule engine serializes concurrent callers without leaking plan facts', async () => {
   const dead = emitFacts(parsePlan(`

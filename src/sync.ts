@@ -18,10 +18,10 @@
  * marionette owning a connection.
  */
 
-import type { Ref, Trajectory, PlanState } from './types.js';
-import { CODES } from './types.js';
-import type { Style } from './term.js';
-import { styleFor } from './term.js';
+import type { Ref, Trajectory, PlanState } from './types.ts';
+import { CODES } from './types.ts';
+import type { Style } from './term.ts';
+import { styleFor } from './term.ts';
 
 /** Well-known trackers a plan can bind to (`# tracker:`). Open set elsewhere; these get URL/context support. */
 export const TRACKERS = ['github', 'jira', 'linear'] as const;

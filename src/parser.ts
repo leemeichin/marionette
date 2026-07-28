@@ -22,10 +22,10 @@
 
 import type {
   Action, Choice, Diagnostic, Gate, NextStep, TrajectoryNode, VariableDecl, Value, VarType,
-} from './types.js';
-import { CODES, END } from './types.js';
-import { ExprError, parseExpr, tryConstEval, typeOf } from './expr.js';
-import { parseTimebox } from './refs.js';
+} from './types.ts';
+import { CODES, END } from './types.ts';
+import { ExprError, parseExpr, tryConstEval, typeOf } from './expr.ts';
+import { parseTimebox } from './refs.ts';
 
 export interface ParsedPlan {
   variables: Record<string, VariableDecl>;

@@ -3,17 +3,17 @@ import {
   renameSync, statSync, unlinkSync, writeFileSync, writeSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { trajectoryHash } from './compile.js';
-import { initState, takeChoice, advance, observe } from './state.js';
-import type { PlanState, Trajectory } from './types.js';
+import { trajectoryHash } from './compile.ts';
+import { initState, takeChoice, advance, observe } from './state.ts';
+import type { PlanState, Trajectory } from './types.ts';
 import type {
   RuntimeEvent, RuntimePrincipal,
-} from './runtime-protocol.js';
+} from './runtime-protocol.ts';
 import {
   createRuntimeSnapshot,
   type RuntimeIdempotencyRecord,
   type RuntimeSnapshot,
-} from './runtime.js';
+} from './runtime.ts';
 
 export const RUNTIME_STORE_VERSION = 2;
 export const MAX_EVENT_BYTES = 64 * 1024;

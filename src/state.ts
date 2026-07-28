@@ -12,10 +12,10 @@ import type {
   Trajectory,
   TrajectoryNode,
   Value,
-} from './types.js';
-import { END, PLAN_STATE_VERSION } from './types.js';
-import { emitFacts } from './facts.js';
-import { blockedText, refusalText } from './diagnostics.js';
+} from './types.ts';
+import { END, PLAN_STATE_VERSION } from './types.ts';
+import { emitFacts } from './facts.ts';
+import { blockedText, refusalText } from './diagnostics.ts';
 import {
   ruleWalkApply,
   ruleWalkFrontier,
@@ -23,7 +23,7 @@ import {
   type RuleFrontierItem,
   type RuleSemanticState,
   type RuleWalkResult,
-} from './rule-engine.js';
+} from './rule-engine.ts';
 
 export class DriftError extends Error {
   constructor(public readonly stateHash: string, public readonly planHash: string) {

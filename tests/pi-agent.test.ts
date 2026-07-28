@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PiAgentBridge } from '../src/pi-agent.js';
-import { ProtocolError, type RuntimeProjection } from '../src/runtime-protocol.js';
+import { PiAgentBridge } from '../src/pi-agent.ts';
+import { ProtocolError, type RuntimeProjection } from '../src/runtime-protocol.ts';
 
 const projectionOf = (result: Awaited<ReturnType<PiAgentBridge['next']>>): RuntimeProjection =>
   result.result.projection as RuntimeProjection;

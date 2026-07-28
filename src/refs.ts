@@ -21,9 +21,9 @@
  * Plan-level tags set the default; node-level tags override per phase.
  */
 
-import type { Diagnostic, Ref } from './types.js';
-import { CODES } from './types.js';
-import { validateNodeTracker, validateTracker } from './sync.js';
+import type { Diagnostic, Ref } from './types.ts';
+import { CODES } from './types.ts';
+import { validateNodeTracker, validateTracker } from './sync.ts';
 
 type Meta = Record<string, string | string[]>;
 

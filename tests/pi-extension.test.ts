@@ -7,13 +7,13 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from '@earendil-works/pi-coding-agent';
-import marionetteExtension from '../src/pi-extension.js';
+import marionetteExtension from '../src/pi-extension.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_EVENT_CHANNEL,
   type MarionettePiEvent,
   type MarionettePiHostApi,
-} from '../src/pi-integration.js';
+} from '../src/pi-integration.ts';
 
 interface CustomEntry {
   type: 'custom';

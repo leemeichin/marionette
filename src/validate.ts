@@ -5,13 +5,13 @@
  * engine exclusively owns graph findings (ADR-0003 / issue #21).
  */
 
-import type { Action, Diagnostic, Finding, VariableDecl } from './types.js';
-import { CODES, END } from './types.js';
-import { tryConstEval, typeOf, varsIn } from './expr.js';
-import { renderFinding } from './diagnostics.js';
-import { emitFacts } from './facts.js';
-import { ruleGraphFindings, type RuleGraphFinding } from './rule-engine.js';
-import type { ParsedPlan } from './parser.js';
+import type { Action, Diagnostic, Finding, VariableDecl } from './types.ts';
+import { CODES, END } from './types.ts';
+import { tryConstEval, typeOf, varsIn } from './expr.ts';
+import { renderFinding } from './diagnostics.ts';
+import { emitFacts } from './facts.ts';
+import { ruleGraphFindings, type RuleGraphFinding } from './rule-engine.ts';
+import type { ParsedPlan } from './parser.ts';
 
 /** Compose semantic findings into user-facing diagnostics. */
 export async function validatePlan(

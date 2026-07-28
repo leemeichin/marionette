@@ -4,8 +4,8 @@
  * gates — plus the compiler's defect and warning report.
  */
 
-import type { Diagnostic, PlanState, Trajectory } from './types.js';
-import { CODES, END } from './types.js';
+import type { Diagnostic, PlanState, Trajectory } from './types.ts';
+import { CODES, END } from './types.ts';
 
 export interface SummarizeOptions {
   diagnostics?: Diagnostic[];

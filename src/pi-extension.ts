@@ -16,21 +16,21 @@ import {
   type MarionettePiEvent,
   type MarionettePiHostApi,
   type MarionettePiHumanDecision,
-} from './pi-integration.js';
+} from './pi-integration.ts';
 import {
   PiAgentBridge,
   PiAgentBridgeError,
-} from './pi-agent.js';
+} from './pi-agent.ts';
 import {
   ProtocolError,
   RUNTIME_PROTOCOL_VERSION,
   type ProjectionProfile,
   type RuntimeBudget,
   type RuntimeProjection,
-} from './runtime-protocol.js';
-import type { RuntimeCommandResult } from './runtime.js';
-import { RuntimeStoreError } from './runtime-store.js';
-import type { Ref, Value } from './types.js';
+} from './runtime-protocol.ts';
+import type { RuntimeCommandResult } from './runtime.ts';
+import { RuntimeStoreError } from './runtime-store.ts';
+import type { Ref, Value } from './types.ts';
 
 const BINDING_ENTRY = 'marionette-binding';
 const EVENT_ENTRY = 'marionette-event';

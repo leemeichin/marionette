@@ -5,10 +5,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compile } from '../src/compile.js';
-import { buildBrief, renderBrief } from '../src/brief.js';
-import { resolveDelivery } from '../src/refs.js';
-import { WalkError, initState, rebindState, takeChoice } from '../src/state.js';
+import { compile } from '../src/compile.ts';
+import { buildBrief, renderBrief } from '../src/brief.ts';
+import { resolveDelivery } from '../src/refs.ts';
+import { WalkError, initState, rebindState, takeChoice } from '../src/state.ts';
 
 const AT = '2026-01-01T00:00:00.000Z';
 

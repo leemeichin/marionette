@@ -12,9 +12,9 @@
  * (docs-site/build/capture.mjs).
  */
 
-import type { Diagnostic, Finding } from './types.js';
-import { END } from './types.js';
-import { nearest } from './suggest.js';
+import type { Diagnostic, Finding } from './types.ts';
+import { END } from './types.ts';
+import { nearest } from './suggest.ts';
 
 const s = (f: Finding, key: string): string => String(f.data[key]);
 

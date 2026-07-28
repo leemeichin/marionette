@@ -4,9 +4,9 @@
  * current node and frontier.
  */
 
-import type { PlanState, Trajectory } from './types.js';
-import { END } from './types.js';
-import { frontier, visitedPath } from './state.js';
+import type { PlanState, Trajectory } from './types.ts';
+import { END } from './types.ts';
+import { frontier, visitedPath } from './state.ts';
 
 export interface RenderOptions {
   state?: PlanState | null;
