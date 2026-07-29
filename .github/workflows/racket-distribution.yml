@@ -1,0 +1,112 @@
+name: Racket distribution
+
+on:
+  pull_request:
+    paths:
+      - 'racket/**'
+      - '.github/workflows/racket-distribution.yml'
+  push:
+    tags:
+      - 'racket-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-linux
+            runner: ubuntu-24.04
+            architecture: x64
+          - target: aarch64-linux
+            runner: ubuntu-24.04-arm
+            architecture: arm64
+          - target: aarch64-macos
+            runner: macos-15
+            architecture: arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Racket
+        uses: Bogdanp/setup-racket@v1.15
+        with:
+          architecture: ${{ matrix.architecture }}
+          distribution: full
+          variant: CS
+          version: '9.2'
+
+      - name: Select artifact version
+        id: artifact
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#racket-v}"
+          else
+            version="0.0.0-bootstrap-${GITHUB_SHA:0:12}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "stem=marionette-$version-${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+
+      - name: Install seed package
+        run: raco pkg install --auto --copy --name marionette-racket ./racket
+
+      - name: Test seed package
+        run: raco test -p marionette-racket
+
+      - name: Build self-contained distribution
+        run: |
+          racket racket/scripts/build-distribution.rkt \
+            --target '${{ matrix.target }}' \
+            --version '${{ steps.artifact.outputs.version }}' \
+            --commit "$GITHUB_SHA"
+
+      - name: Smoke-test unpacked distribution
+        shell: bash
+        run: |
+          smoke_root="$RUNNER_TEMP/marionette-smoke"
+          mkdir -p "$smoke_root"
+          tar -xzf \
+            "racket/artifacts/${{ steps.artifact.outputs.stem }}.tar.gz" \
+            -C "$smoke_root"
+          "$smoke_root/${{ steps.artifact.outputs.stem }}/bin/marionette" --version
+
+      - name: Upload distribution and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: marionette-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            racket/artifacts/${{ steps.artifact.outputs.stem }}.tar.gz
+            racket/artifacts/${{ steps.artifact.outputs.stem }}.json
+
+  publish:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/racket-v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: marionette-*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create release and attach distributions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            release-artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --generate-notes \
+            --title "Marionette ${GITHUB_REF_NAME#racket-v}"
