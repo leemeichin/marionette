@@ -29,6 +29,8 @@ export type BriefStatus =
   | 'waiting-timeout'
   /** Only @human choices are available: escalate and pause. */
   | 'awaiting-human'
+  /** An agent-opened @ask checkpoint is waiting for human context. */
+  | 'awaiting-elicitation'
   /** Nothing is available and there is no automatic next step: the traversal is stuck. */
   | 'stranded'
   /** The plan reached END. */
@@ -43,6 +45,7 @@ export interface BriefChoice {
   targetTitle: string | null;
   sticky: boolean;
   human: boolean;
+  ask: boolean;
   loop: boolean;
   gate: string | null;
   available: boolean;
@@ -51,6 +54,7 @@ export interface BriefChoice {
     | 'once-exhausted'
     | 'gate-blocked'
     | 'observation-required'
+    | 'elicitation-pending'
     | 'timeout-pending'
     | 'timed-out'
     | null;
@@ -73,6 +77,24 @@ export interface Escalation {
     dueAt: string | null;
   }>;
   how: string;
+}
+
+export interface Elicitation {
+  choice: string;
+  label: string;
+  target: string;
+  question: string;
+  askedAt: string;
+  askedBy: string;
+  rationale: string | null;
+  how: string;
+}
+
+export interface Clarification {
+  choice: string;
+  question: string;
+  answer: string;
+  answeredBy: string;
 }
 
 export interface Brief {
@@ -113,6 +135,10 @@ export interface Brief {
   next: { target: string; targetTitle: string | null } | null;
   /** Present exactly when status is "awaiting-human". */
   escalation: Escalation | null;
+  /** Present exactly when status is "awaiting-elicitation". */
+  elicitation: Elicitation | null;
+  /** The answer that advanced into the current phase, when it came through @ask. */
+  clarification: Clarification | null;
   progress: {
     steps: number;
     nodesVisited: number;
@@ -122,6 +148,8 @@ export interface Brief {
   /** How to record the outcome — the executor's side of the protocol. */
   protocol: {
     choose: string;
+    ask: string;
+    answer: string;
     advance: string;
     observe: string;
     rules: string[];
@@ -164,6 +192,7 @@ export async function buildBrief(
     targetTitle: a.choice.target === END ? null : title(nodeById(a.choice.target)),
     sticky: a.choice.sticky,
     human: a.choice.human,
+    ask: a.choice.ask,
     loop: a.choice.loop,
     gate: a.choice.gate?.source ?? null,
     available: a.blocked === null,
@@ -179,8 +208,26 @@ export async function buildBrief(
 
   let status: BriefStatus = 'active';
   let escalation: Escalation | null = null;
+  let elicitation: Elicitation | null = null;
   if (completed) {
     status = 'completed';
+  } else if (state.pendingElicitation) {
+    status = 'awaiting-elicitation';
+    const pending = state.pendingElicitation;
+    const choice = node?.choices.find((candidate) => candidate.id === pending.choice);
+    if (choice) {
+      elicitation = {
+        choice: choice.id,
+        label: choice.label,
+        target: choice.target,
+        question: pending.question,
+        askedAt: pending.askedAt,
+        askedBy: pending.askedBy,
+        rationale: pending.rationale,
+        how: `answer with \`marionette state answer ${file} <answer> --actor <name>\`. ` +
+          `The answer supplies context; it does not approve or select a route. The authored edge advances after the answer is recorded.`,
+      };
+    }
   } else if (state.pendingObservations.length > 0) {
     status = 'awaiting-observation';
   } else if (available.length === 0 && choices.some((c) => c.blockedCode === 'timeout-pending')) {
@@ -219,6 +266,23 @@ export async function buildBrief(
   }
 
   const visited = visitedPath(state).filter((id) => id !== END);
+  let clarification: Clarification | null = null;
+  const lastStep = state.log.at(-1);
+  if (lastStep?.choice && lastStep.to === state.current) {
+    for (let index = state.elicitations.length - 1; index >= 0; index--) {
+      const exchange = state.elicitations[index];
+      if (exchange.choice === lastStep.choice && exchange.answer !== null &&
+          exchange.answeredBy !== null) {
+        clarification = {
+          choice: exchange.choice,
+          question: exchange.question,
+          answer: exchange.answer,
+          answeredBy: exchange.answeredBy,
+        };
+        break;
+      }
+    }
+  }
 
   return {
     spec: trajectory.spec,
@@ -254,6 +318,8 @@ export async function buildBrief(
     frontier: choices,
     next,
     escalation,
+    elicitation,
+    clarification,
     progress: {
       steps: state.log.length,
       nodesVisited: new Set(visited).size,
@@ -262,6 +328,8 @@ export async function buildBrief(
     },
     protocol: {
       choose: `marionette state choose ${file} <choice> --actor <name> --rationale <text>`,
+      ask: `marionette state ask ${file} <choice> --question <text> --actor agent --rationale <why>`,
+      answer: `marionette state answer ${file} <answer> --actor <name>`,
       advance: `marionette state advance ${file} --actor <name> --rationale <text>`,
       observe: `marionette state observe ${file} <name> <json-value> --actor <name> --rationale <text>`,
       rules: [
@@ -269,6 +337,7 @@ export async function buildBrief(
         'supply only observations the brief requests, with the source in the rationale',
         'record every taken branch with an honest rationale (it is the audit trail)',
         'never take an @human choice as the agent: escalate and wait for a human decision',
+        'open an @ask choice with one focused question; the human answer is context, not approval',
         'gates are computed from the variables above: if a choice is blocked, it is not an option',
         're-run `marionette brief` after every recorded step: it is the single source of "what now"',
       ],
@@ -297,6 +366,7 @@ export function renderBrief(brief: Brief, style?: Style): string {
     : brief.status === 'awaiting-observation' ? s.yellow('awaiting runtime observation ?')
     : brief.status === 'waiting-timeout' ? s.yellow('waiting for timeout')
     : brief.status === 'awaiting-human' ? s.magenta('awaiting human decision ✋')
+    : brief.status === 'awaiting-elicitation' ? s.yellow('awaiting clarification ‽')
     : brief.status === 'stranded' ? s.red('stranded — no available step')
     : s.cyan('active');
   lines.push(`status: ${badge}   progress: ${brief.progress.nodesVisited}/${brief.progress.nodesTotal} phases, ${brief.progress.steps} steps`);
@@ -343,6 +413,11 @@ export function renderBrief(brief: Brief, style?: Style): string {
       brief.pendingObservations.map((item) => `${item.name}:${item.type}`).join(', '));
     lines.push(s.dim(`  supply with: ${brief.protocol.observe}`));
   }
+  if (brief.clarification) {
+    lines.push(s.yellow('clarification carried into this phase:'));
+    lines.push(`  Q: ${brief.clarification.question}`);
+    lines.push(`  A (${brief.clarification.answeredBy}): ${brief.clarification.answer}`);
+  }
 
   if (brief.frontier.length > 0) {
     lines.push('');
@@ -350,6 +425,7 @@ export function renderBrief(brief: Brief, style?: Style): string {
     for (const c of brief.frontier) {
       const marks = [
         c.human ? s.magenta('@human') : null,
+        c.ask ? s.yellow('@ask') : null,
         c.loop ? s.cyan('~loop~') : null,
         c.gate ? s.dim(`{${c.gate}}`) : null,
         c.timeout ? s.yellow(`timeout ${c.timeout.source}`) : null,
@@ -373,6 +449,13 @@ export function renderBrief(brief: Brief, style?: Style): string {
       ));
     }
     lines.push('  ' + brief.escalation.how);
+  }
+  if (brief.elicitation) {
+    lines.push('');
+    lines.push(s.yellow(s.bold('clarification required ‽ ')) + brief.elicitation.label);
+    lines.push(`  ${brief.elicitation.question}`);
+    lines.push(s.dim(`  asked by ${brief.elicitation.askedBy} at ${brief.elicitation.askedAt}`));
+    lines.push('  ' + brief.elicitation.how);
   }
   if (brief.status === 'stranded') {
     lines.push('');

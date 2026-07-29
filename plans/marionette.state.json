@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "hash": "sha256:9100394e74675da0b2f15ec84ba4a21cbfd75a4cf4cfd8173d06e6b7212f5c78",
+  "hash": "sha256:135af05bf5f95fbc8da61e3c5a344ca67324921ae5de371946d58dd52497c589",
   "status": "active",
   "current": "escalation_protocol",
   "variables": {
@@ -66,10 +66,21 @@
       "label": "plan rebound sha256:4275ff5eb0b1… → sha256:9100394e7467…",
       "to": "escalation_protocol",
       "rationale": "Approved dynamic observations, while/until loops, timeout syntax, and documentation updates for merge in PR #25"
+    },
+    {
+      "at": "2026-07-29T21:06:37.427Z",
+      "actor": "agent",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:9100394e7467… → sha256:135af05bf5f9…",
+      "to": "escalation_protocol",
+      "rationale": "Trajectory contract 0.5 adds @ask elicitation metadata; existing graph semantics are unchanged."
     }
   ],
   "pendingObservations": [],
   "pendingEntry": false,
   "activationStartedAt": "2026-07-23T15:37:20.386Z",
-  "observations": []
+  "observations": [],
+  "pendingElicitation": null,
+  "elicitations": []
 }

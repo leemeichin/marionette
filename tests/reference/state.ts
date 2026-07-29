@@ -69,6 +69,8 @@ export function initState(trajectory: Trajectory, actor = 'system', at = new Dat
     pendingEntry: pending.length > 0,
     activationStartedAt: at,
     observations: [],
+    pendingElicitation: null,
+    elicitations: [],
     taken: [],
     log: [],
   };

@@ -8,9 +8,10 @@ export { renderFinding, refusalText, blockedText } from './diagnostics.ts';
 export { renderMermaid, type RenderOptions } from './render.ts';
 export { summarize, type SummarizeOptions } from './summarize.ts';
 export {
-  initState, bindState, frontier, takeChoice, advance, observe, enteredAt, visitedPath,
+  initState, bindState, frontier, takeChoice, ask, answer, advance, observe, enteredAt, visitedPath,
   parseState, serializeState, rebindState, type RebindOptions, DriftError, WalkError,
-  type AvailableChoice, type TakeOptions, type ObserveOptions, type WalkErrorCode, type MigrationReport,
+  type AvailableChoice, type TakeOptions, type AskOptions, type AnswerOptions,
+  type ObserveOptions, type WalkErrorCode, type MigrationReport,
 } from './state.ts';
 export {
   extractRefs, resolveDelivery, validateDelivery, analyzeMeta,
@@ -19,7 +20,8 @@ export {
 } from './refs.ts';
 export {
   buildBrief, renderBrief,
-  type Brief, type BriefChoice, type BriefStatus, type Escalation,
+  type Brief, type BriefChoice, type BriefStatus, type Escalation, type Elicitation,
+  type Clarification,
 } from './brief.ts';
 export {
   TRACKERS, LINK_KEY, SyncEditError, resolveTracker, validateTracker,
@@ -37,7 +39,8 @@ export {
   RUNTIME_PROTOCOL_VERSION, ProtocolError, parseRuntimeRequest, graphReference,
   type RuntimeRole, type RuntimePrincipal, type ProjectionProfile, type RuntimeBudget,
   type RuntimeRequest, type RuntimeEventKind, type GraphReference, type RuntimeEvent,
-  type RuntimeChoiceProjection, type RuntimeEscalation, type RuntimeProjection, type RuntimeResponse,
+  type RuntimeChoiceProjection, type RuntimeEscalation, type RuntimeElicitation,
+  type RuntimeProjection, type RuntimeResponse,
   type RuntimeSuccess, type RuntimeFailure, type RuntimeErrorCode,
 } from './runtime-protocol.ts';
 export {
@@ -62,6 +65,7 @@ export {
   type MarionettePiEvent,
   type MarionettePiAgentCommand,
   type MarionettePiHumanDecision,
+  type MarionettePiHumanAnswer,
   type MarionettePiBindRequest,
   type MarionettePiHostApi,
   type MarionettePiDiscoveryRequest,

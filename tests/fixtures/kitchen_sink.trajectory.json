@@ -1,6 +1,6 @@
 {
-  "spec": "0.4.0",
-  "hash": "sha256:0c4ab19133fb6794c59d90df98f11d1129ef2b8ec45ec6c66fb0273372ae02f0",
+  "spec": "0.5.0",
+  "hash": "sha256:d3325bb6ee1238297b595826c62a61de2056a034b4eaf3dad151a74b1044ce6d",
   "source": {
     "file": "tests/fixtures/kitchen_sink.mar"
   },
@@ -56,6 +56,7 @@
           "sticky": false,
           "gate": null,
           "human": true,
+          "ask": false,
           "loop": false,
           "timeout": null,
           "target": "beta_launch",
@@ -81,6 +82,7 @@
             }
           },
           "human": false,
+          "ask": false,
           "loop": true,
           "timeout": null,
           "target": "build_mvp",
@@ -106,6 +108,7 @@
             }
           },
           "human": false,
+          "ask": false,
           "loop": false,
           "timeout": null,
           "target": "pivot_or_kill",
@@ -152,6 +155,7 @@
             }
           },
           "human": false,
+          "ask": false,
           "loop": false,
           "timeout": null,
           "target": "retro",
@@ -163,6 +167,7 @@
           "sticky": false,
           "gate": null,
           "human": false,
+          "ask": false,
           "loop": false,
           "timeout": null,
           "target": "retro",
@@ -186,6 +191,7 @@
           "sticky": true,
           "gate": null,
           "human": true,
+          "ask": false,
           "loop": true,
           "timeout": null,
           "target": "build_mvp",
@@ -197,6 +203,7 @@
           "sticky": false,
           "gate": null,
           "human": true,
+          "ask": false,
           "loop": false,
           "timeout": null,
           "target": "retro",

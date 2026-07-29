@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "hash": "sha256:0ad88235854560dedb31fe20735580c9a6a400aa5fe772a339c684424bb54ed1",
+  "hash": "sha256:a77a36ff79db3a348ff70b54e13c8c1aebc3d83d9e3cb27617e190932a27230f",
   "status": "completed",
   "current": "END",
   "variables": {
@@ -153,6 +153,17 @@
       "label": "Approved — merge and deploy",
       "rationale": "approved -- merge and deploy [relayed from session]",
       "to": "END"
+    },
+    {
+      "at": "2026-07-29T21:06:37.661Z",
+      "actor": "agent",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:0ad882358545… → sha256:a77a36ff79db…",
+      "to": "END",
+      "rationale": "Trajectory contract 0.5 adds @ask elicitation metadata; existing graph semantics are unchanged."
     }
-  ]
+  ],
+  "pendingElicitation": null,
+  "elicitations": []
 }

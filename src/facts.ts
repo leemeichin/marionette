@@ -70,7 +70,7 @@ const ACTION_OPS: Record<string, string> = { '=': 'assign', '+=': 'inc', '-=': '
  *   observation(Node, Var, Line).
  *   choice(Id, Node, Target, Line, Ord).      % Ord: global source order
  *   label(Id, Label).
- *   sticky(Id).  human(Id).  loop_marked(Id).
+ *   sticky(Id).  human(Id).  ask(Id).  loop_marked(Id).
  *   gate(Id, Expr, Source).
  *   next_step(Node, Target, Line).
  *   timebox(Node, Seconds).                   % valid # timebox: only
@@ -88,7 +88,7 @@ export function emitFacts(plan: FactPlan): string {
     ':- encoding(utf8).',
     '% Marionette fact base - generated, do not edit.',
     ':- discontiguous plan_start/1, node/3, variable/4, action/5, observation/3, choice/5,',
-    '   label/2, sticky/1, human/1, loop_marked/1, gate/3, next_step/3,',
+    '   label/2, sticky/1, human/1, ask/1, loop_marked/1, gate/3, next_step/3,',
     '   timebox/2, timeout_choice/3, priority/2.',
   ];
   if (plan.start) lines.push(`plan_start(${atom(plan.start)}).`);
@@ -112,6 +112,7 @@ export function emitFacts(plan: FactPlan): string {
       lines.push(`label(${atom(choice.id)}, ${str(choice.label)}).`);
       if (choice.sticky) lines.push(`sticky(${atom(choice.id)}).`);
       if (choice.human) lines.push(`human(${atom(choice.id)}).`);
+      if (choice.ask) lines.push(`ask(${atom(choice.id)}).`);
       if (choice.loop) lines.push(`loop_marked(${atom(choice.id)}).`);
       if (choice.gate) lines.push(`gate(${atom(choice.id)}, ${exprTerm(choice.gate.ast)}, ${str(choice.gate.source)}).`);
       if (choice.timeout) {

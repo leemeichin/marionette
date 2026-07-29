@@ -16,7 +16,7 @@ import type {
 } from './runtime-protocol.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.1.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.2.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -71,7 +71,7 @@ export interface MarionettePiEvent {
     id?: string;
   };
   binding: MarionettePiBinding | null;
-  operation?: MarionettePiAgentCommand['operation'] | 'humanChoose';
+  operation?: MarionettePiAgentCommand['operation'] | 'humanChoose' | 'humanAnswer';
   projection?: RuntimeProjection;
   events?: RuntimeEvent[];
   receipt?: MarionettePiReceipt;
@@ -98,6 +98,13 @@ export type MarionettePiAgentCommand =
   | ({
       operation: 'choose';
       choiceId: string;
+      rationale: string;
+      idempotencyKey: string;
+    } & EvidenceOptions)
+  | ({
+      operation: 'ask';
+      choiceId: string;
+      question: string;
       rationale: string;
       idempotencyKey: string;
     } & EvidenceOptions)
@@ -136,6 +143,15 @@ export interface MarionettePiHumanDecision extends EvidenceOptions {
   triggerTurn?: boolean;
 }
 
+export interface MarionettePiHumanAnswer extends ProjectionOptions {
+  human: Omit<RuntimePrincipal, 'role'>;
+  answer: string;
+  rationale?: string;
+  idempotencyKey: string;
+  /** Defaults to true so the agent resumes with the clarified context. */
+  triggerTurn?: boolean;
+}
+
 export interface MarionettePiBindRequest {
   planFile: string;
   runId?: string;
@@ -155,6 +171,7 @@ export interface MarionettePiHostApi {
   unbind(): Promise<MarionettePiEvent>;
   execute(command: MarionettePiAgentCommand): Promise<MarionettePiEvent>;
   humanChoose(decision: MarionettePiHumanDecision): Promise<MarionettePiEvent>;
+  humanAnswer(answer: MarionettePiHumanAnswer): Promise<MarionettePiEvent>;
 }
 
 export interface MarionettePiDiscoveryRequest {

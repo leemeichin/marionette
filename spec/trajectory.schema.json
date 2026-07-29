@@ -135,7 +135,7 @@
     },
     "choice": {
       "type": "object",
-      "required": ["id", "label", "sticky", "gate", "human", "loop", "timeout", "target"],
+      "required": ["id", "label", "sticky", "gate", "human", "ask", "loop", "timeout", "target"],
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -154,6 +154,10 @@
         "human": {
           "type": "boolean",
           "description": "Human checkpoint (`@human`): an agent must pause and escalate; it may not take this choice autonomously."
+        },
+        "ask": {
+          "type": "boolean",
+          "description": "Elicitation checkpoint (`@ask`): an agent opens a focused question and the edge advances only after a human answer is recorded."
         },
         "loop": {
           "type": "boolean",

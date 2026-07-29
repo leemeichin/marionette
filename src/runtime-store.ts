@@ -4,7 +4,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { trajectoryHash } from './compile.ts';
-import { initState, takeChoice, advance, observe } from './state.ts';
+import { answer, ask, initState, takeChoice, advance, observe } from './state.ts';
 import type { PlanState, Trajectory } from './types.ts';
 import type {
   RuntimeEvent, RuntimePrincipal,
@@ -322,6 +322,8 @@ async function replayRuntimeEvents(
 
   for (const item of events) {
     if (item.kind !== 'decision.committed' &&
+        item.kind !== 'elicitation.required' &&
+        item.kind !== 'elicitation.answered' &&
         item.kind !== 'observation.recorded' &&
         item.kind !== 'record.attached') continue;
     revision++;
@@ -333,6 +335,36 @@ async function replayRuntimeEvents(
       } else {
         state = await advance(trajectory, state, { actor, rationale, at: item.at });
       }
+    } else if (item.kind === 'elicitation.required') {
+      const question = item.data['question'];
+      const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
+      if (!item.graph.choiceId || typeof question !== 'string') {
+        throw new RuntimeStoreError(
+          `elicitation event ${item.seq} has no choice or question`,
+          'corrupt-journal',
+        );
+      }
+      state = await ask(trajectory, state, item.graph.choiceId, {
+        actor: item.principal?.role === 'agent' ? 'agent' : item.principal?.id ?? 'agent',
+        question,
+        rationale,
+        at: item.at,
+      });
+    } else if (item.kind === 'elicitation.answered') {
+      const response = item.data['answer'];
+      const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
+      if (typeof response !== 'string' || item.principal?.role !== 'human') {
+        throw new RuntimeStoreError(
+          `elicitation answer event ${item.seq} has no human answer`,
+          'corrupt-journal',
+        );
+      }
+      state = await answer(trajectory, state, {
+        actor: item.principal.id,
+        answer: response,
+        rationale,
+        at: item.at,
+      });
     } else if (item.kind === 'observation.recorded') {
       const name = item.data['name'];
       const value = item.data['value'];

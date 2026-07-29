@@ -19,6 +19,7 @@ Ship the smallest testable slice.       // prose body: what this phase is
 # github:issue: 12                      // node-level metadata tag
 ~ iteration += 1                        // mutation, applied on entry (=, +=, -=)
 * [Metrics green] @human -> beta_launch          // once-only choice, human checkpoint
+* [I'm not sure] @ask -> clarify                 // ask before this edge advances
 + {iteration < 3} [Go again] ~loop~ -> build_mvp // sticky choice, gated, declared loop
 * {iteration >= 3} [Three strikes] -> pivot
 
@@ -45,6 +46,7 @@ Launch to the beta cohort.
 | Choice (sticky) | `+ [Label] -> target` | Repeatable. Use for loop edges. |
 | Gate | `{expr}` before or after the label | Choice is available only while the expression is true. |
 | Human checkpoint | `@human` on a choice | The agent must pause and escalate; only a human may record this decision. |
+| Elicitation checkpoint | `@ask` on a choice | The agent opens a focused question; a human supplies context, then the fixed edge advances. Rendered as `‽`. |
 | Loop | `~loop~` on a choice | Declares an intentional cycle. A cycle is declared when **any one** of its edges carries `~loop~` (convention: the returning edge); overlapping cycles each need a marked edge. Undeclared cycles are compile errors. |
 | Conditional loop | `while {expr} -> target` · `else -> target` | An exhaustive sticky pair. `while` declares its true arm as the repeating edge. Optional `[labels]` may precede each arrow. |
 | Conditional exit | `until {expr} -> target` · `else -> target` | An exhaustive sticky pair. `until` exits on true and declares its `else` arm as the repeating edge. |
@@ -93,6 +95,40 @@ from the decision log.
 This is deliberately source-neutral. The same construct can represent a work
 count, test health, rollout capacity, a measured score or any other scalar
 fact. Marionette never assumes how the host obtains it.
+
+## Elicitation checkpoints
+
+`@ask` is the ambiguity boundary next to `@human`, but it does not transfer
+route ownership:
+
+```
+* [The next step is clear] -> implement
+* [I'm not sure] @ask -> reconsider
+```
+
+The agent cannot take the second edge with an ordinary `choose`. It opens it
+with one focused question:
+
+```console
+marionette state ask plan.mar 1 \
+  --question "Must this work without network access after installation?" \
+  --actor agent \
+  --rationale "the packaging route depends on this constraint"
+```
+
+Traversal remains at the current phase with status `awaiting-elicitation`.
+A human supplies free-form context with `state answer`; this is recorded in a
+separate elicitation audit entry, after which the already-authored edge
+advances. The entered phase receives the question and answer as
+`clarification` in its work packet. The answer is evidence, not approval and
+not a choice of target.
+
+Use ordinary choices when the possible answers and routes are known in
+advance. Use `@ask` when the missing information is open-ended. A choice
+cannot be both `@human` and `@ask`: `@human` means the person owns the route,
+while `@ask` means the agent owns the ambiguity and the person clarifies it.
+The source spelling stays ASCII and searchable; Mermaid and host UIs use `‽`
+as its compact visual badge.
 
 ## While and until
 
