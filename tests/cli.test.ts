@@ -87,12 +87,12 @@ test('runtime CLI exposes a clean NDJSON process surface', async () => {
   ].join('\n'));
   const input = [
     JSON.stringify({
-      protocol: '0.3.0',
+      protocol: '0.4.0',
       id: 1,
       op: 'initialize',
       client: { name: 'cli-test', version: '1' },
     }),
-    JSON.stringify({ protocol: '0.3.0', id: 2, op: 'next', profile: 'signal' }),
+    JSON.stringify({ protocol: '0.4.0', id: 2, op: 'next', profile: 'signal' }),
     '',
   ].join('\n');
   const result = spawnSync(
@@ -151,4 +151,42 @@ test('state observe records a late-bound scalar through the CLI', () => {
   ], dir);
   assert.equal(nonFinite.code, 2);
   assert.match(nonFinite.stderr, /finite number/);
+});
+
+test('state ask and answer keep clarification distinct from choosing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'marionette-ask-cli-'));
+  writeFileSync(join(dir, 'ask.mar'), [
+    '=== decide ===',
+    '* [I am not sure] @ask -> reconsider',
+    '=== reconsider ===',
+    'Use the supplied context.',
+    '-> END',
+    '',
+  ].join('\n'));
+
+  assert.equal(cli(['state', 'init', 'ask.mar'], dir).code, 0);
+  const chose = cli([
+    'state', 'choose', 'ask.mar', '0',
+    '--actor', 'agent', '--rationale', 'uncertain',
+  ], dir);
+  assert.equal(chose.code, 1);
+  assert.match(chose.stderr, /@ask/);
+
+  const opened = cli([
+    'state', 'ask', 'ask.mar', '0',
+    '--question', 'Which release targets are required?',
+    '--actor', 'agent',
+    '--rationale', 'the matrix is ambiguous',
+  ], dir);
+  assert.equal(opened.code, 0, opened.stderr);
+  assert.match(opened.stdout, /clarification required ‽/);
+
+  const resolved = cli([
+    'state', 'answer', 'ask.mar', 'macOS arm64 and x86_64 Linux',
+    '--actor', 'lee',
+  ], dir);
+  assert.equal(resolved.code, 0, resolved.stderr);
+  const state = JSON.parse(readFileSync(join(dir, 'ask.state.json'), 'utf8'));
+  assert.equal(state.current, 'reconsider');
+  assert.equal(state.elicitations[0].answeredBy, 'lee');
 });

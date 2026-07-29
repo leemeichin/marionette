@@ -193,7 +193,11 @@ export function buildSyncManifest(
       if (linked.length === 0) {
         const exits = [
           ...node.choices.map((c) => {
-            const marks = [c.human ? '@human' : null, c.gate ? `{${c.gate.source}}` : null]
+            const marks = [
+              c.human ? '@human' : null,
+              c.ask ? '@ask' : null,
+              c.gate ? `{${c.gate.source}}` : null,
+            ]
               .filter(Boolean).join(' ');
             return `- [${c.label}]${marks ? ' ' + marks : ''} → ${c.target}`;
           }),

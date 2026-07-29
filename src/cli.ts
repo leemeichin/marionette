@@ -21,8 +21,8 @@ import { nearest } from './suggest.ts';
 import { styleFor } from './term.ts';
 import { buildBrief, renderBrief } from './brief.ts';
 import {
-  DriftError, WalkError, advance, bindState, frontier, initState, parseState,
-  observe, rebindState, serializeState, takeChoice,
+  DriftError, WalkError, advance, answer, ask, bindState, frontier, initState,
+  parseState, observe, rebindState, serializeState, takeChoice,
 } from './state.ts';
 import {
   ImportError, parseImportSpec, scaffoldPlan, type ImportMode,
@@ -44,7 +44,7 @@ const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
 const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'sync', 'import', 'start', 'stop', 'state', 'help', 'version'];
-const STATE_SUBCOMMANDS = ['init', 'show', 'observe', 'choose', 'advance', 'rebind'];
+const STATE_SUBCOMMANDS = ['init', 'show', 'observe', 'choose', 'ask', 'answer', 'advance', 'rebind'];
 const SYNC_SUBCOMMANDS = ['status', 'bind', 'link', 'mark'];
 
 function readTextFile(file: string, what = 'plan'): string {
@@ -89,6 +89,8 @@ Usage:
   marionette state show    <plan.mar|.json> [--state f]
   marionette state observe <plan.mar|.json> <name> <json-value> --actor <name> --rationale <text> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
+  marionette state ask     <plan.mar|.json> <choice> --question <text> --actor agent [--rationale <text>] [--state f]
+  marionette state answer  <plan.mar|.json> <answer> --actor <name> [--rationale <text>] [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
   marionette state rebind  <plan.mar|.json> [--actor <name>] [--rationale <text>] [--state f]
                            Migrate state onto an edited plan; the amendment is logged (G4)
@@ -122,7 +124,7 @@ function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
   const takesValue = new Set([
-    '-o', '--out', '--state', '--actor', '--rationale',
+    '-o', '--out', '--state', '--actor', '--rationale', '--question',
     '--tracker', '--cursor', '--mode',
     '--run', '--store', '--principal', '--role', '--principal-uri',
   ]);
@@ -205,6 +207,10 @@ async function printFrontier(trajectory: Trajectory, state: PlanState): Promise<
     process.stdout.write('observations required: ' + state.pendingObservations.map((name) =>
       `${name}:${trajectory.variables[name]?.type ?? 'unknown'}`).join(', ') + '\n');
   }
+  if (state.pendingElicitation) {
+    process.stdout.write(out.yellow('clarification required ‽ ') +
+      state.pendingElicitation.question + '\n');
+  }
   if (state.status === 'completed') return;
   const options = await frontier(trajectory, state);
   if (options.length === 0) {
@@ -216,6 +222,7 @@ async function printFrontier(trajectory: Trajectory, state: PlanState): Promise<
     const { choice, blocked } = options[i];
     const marks = [
       choice.human ? out.magenta('@human') : null,
+      choice.ask ? out.yellow('@ask') : null,
       choice.loop ? out.cyan('~loop~') : null,
       choice.gate ? out.dim(`{${choice.gate.source}}`) : null,
       choice.timeout ? out.yellow(`timeout ${choice.timeout.source}`) : null,
@@ -630,7 +637,7 @@ export async function run(argv: string[]): Promise<number> {
         const file = positional[0];
         if (!sub || !file) {
           throw new UsageError(
-            'state: expected "state <init|show|observe|choose|advance|rebind> <plan>"',
+            'state: expected "state <init|show|observe|choose|ask|answer|advance|rebind> <plan>"',
           );
         }
         const { trajectory, ok, diagnostics, source } = await readSource(file);
@@ -715,6 +722,29 @@ export async function run(argv: string[]): Promise<number> {
           const actor = typeof flags['actor'] === 'string' ? flags['actor'] : 'agent';
           const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
           state = await takeChoice(trajectory, state, ref, { actor, rationale });
+          writeFileSync(sf, serializeState(state));
+          await printFrontier(trajectory, state);
+          return 0;
+        }
+        if (sub === 'ask') {
+          const ref = positional[1];
+          if (!ref) throw new UsageError('state ask: missing <choice> (index, id, or label prefix)');
+          const question = typeof flags['question'] === 'string' ? flags['question'] : undefined;
+          if (!question) throw new UsageError('state ask: missing required --question <text>');
+          const actor = typeof flags['actor'] === 'string' ? flags['actor'] : 'agent';
+          const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
+          state = await ask(trajectory, state, ref, { actor, question, rationale });
+          writeFileSync(sf, serializeState(state));
+          await printFrontier(trajectory, state);
+          return 0;
+        }
+        if (sub === 'answer') {
+          const response = positional[1];
+          if (!response) throw new UsageError('state answer: missing <answer>');
+          const actor = typeof flags['actor'] === 'string' ? flags['actor'] : undefined;
+          if (!actor) throw new UsageError('state answer: missing required --actor <name>');
+          const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
+          state = await answer(trajectory, state, { actor, answer: response, rationale });
           writeFileSync(sf, serializeState(state));
           await printFrontier(trajectory, state);
           return 0;

@@ -9,6 +9,8 @@ let an AI draft it from your notes); a compiler validates it into a canonical
 JSON graph; an AI agent then executes the project by *walking* that graph —
 controlled, auditable, and unable to route around the plan. Decisions marked
 `@human` are ones the agent cannot take: it must stop and escalate to you.
+`@ask` is the adjacent ambiguity boundary: the agent opens a focused question,
+you supply context, and the fixed edge continues. Graphs render it as `‽`.
 
 The design is borrowed from [Ink](https://github.com/inkle/ink), the
 interactive-fiction language, with the player swapped out: instead of a human
@@ -20,7 +22,8 @@ chooses its way through your project — and the human holds the gates.
 A plan is a `.mar` file: phases (`=== name ===`), choices (`*` once-only,
 `+` repeatable), gates (`{expr}`), declared loops (`~loop~`), paired
 `while`/`until` branches, runtime observations (`? value`), hard
-`timeout` exits, and human checkpoints (`@human`).
+`timeout` exits, human checkpoints (`@human`), and elicitation checkpoints
+(`@ask`).
 
 ```
 # project: checkout-revamp
@@ -168,6 +171,8 @@ $ marionette query plan.mar 'unattended_completion'
 false.                                # a human holds a gate on every path to END
 $ marionette query plan.mar 'human_gate(C, Phase, Label)'
 C = "dogfood_gate#0", Label = "Phase 1 exit approved", Phase = "dogfood_gate"
+$ marionette query plan.mar 'elicitation_gate(C, Phase, Label)'
+C = "design#1", Label = "I'm not sure", Phase = "design"
 $ marionette oracle plan.mar          # the rule-base report: MAR findings, plus
 STRAND	line 25	once-only choice on a cycle can strand a traversal
 ```

@@ -20,6 +20,7 @@ export function summarize(trajectory: Trajectory, options: SummarizeOptions = {}
   const choices = nodes.flatMap((n) => n.choices);
   const decisionPoints = nodes.filter((n) => n.choices.length >= 2);
   const humanChoices = choices.filter((c) => c.human);
+  const askChoices = choices.filter((c) => c.ask);
   const loopChoices = choices.filter((c) => c.loop);
   const gated = choices.filter((c) => c.gate);
   const unverified = diagnostics.filter((d) => d.code === CODES.UNVERIFIED_GATE);
@@ -43,6 +44,8 @@ export function summarize(trajectory: Trajectory, options: SummarizeOptions = {}
   out.push('');
   out.push(`- **Human checkpoints:** ${humanChoices.length === 0 ? 'none — the agent can traverse the whole plan autonomously' :
     humanChoices.map((c) => `"${c.label}" (at ${c.id.split('#')[0]})`).join('; ')}`);
+  out.push(`- **Elicitation checkpoints:** ${askChoices.length === 0 ? 'none' :
+    askChoices.map((c) => `"${c.label}" (at ${c.id.split('#')[0]})`).join('; ')}`);
   out.push(`- **Declared loops:** ${loopChoices.length === 0 ? 'none' :
     loopChoices.map((c) => `${c.id.split('#')[0]} → ${c.target} ("${c.label}")`).join('; ')}`);
   out.push(`- **Gates:** ${gated.length} gated choice${s(gated.length)}, of which ${unverified.length} ` +
@@ -86,6 +89,7 @@ export function summarize(trajectory: Trajectory, options: SummarizeOptions = {}
       const attrs: string[] = [];
       if (choice.gate) attrs.push(`only if \`${choice.gate.source}\``);
       if (choice.human) attrs.push('**requires a human decision**');
+      if (choice.ask) attrs.push('**requires human clarification**');
       if (choice.loop) attrs.push('loops back');
       if (choice.sticky) attrs.push('repeatable');
       out.push(`- **${choice.label}** → ${choice.target}${attrs.length ? ` (${attrs.join('; ')})` : ''}`);

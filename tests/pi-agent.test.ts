@@ -111,7 +111,7 @@ test('Pi bridge exposes protocol capabilities, records, events, and external ref
     const initialized = await first.initialize({ name: 'pibarm', version: '1' });
     assert.deepEqual(
       (initialized.result.capabilities as { operations: string[] }).operations,
-      ['next', 'choose', 'advance', 'observe', 'record', 'events'],
+      ['next', 'choose', 'ask', 'answer', 'advance', 'observe', 'record', 'events'],
     );
 
     const attached = await first.record(
@@ -145,3 +145,45 @@ test('Pi bridge exposes protocol capabilities, records, events, and external ref
     ]);
     assert.equal(projectionOf(await first.next()).node?.id, 'phase_4');
   }));
+
+test('Pi bridge opens @ask as agent and answers through the trusted human surface', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-ask-'));
+  const file = join(root, 'plan.mar');
+  const storeRoot = join(root, 'store');
+  writeFileSync(file, [
+    '=== decide ===',
+    '* [I am not sure] @ask -> reconsider',
+    '=== reconsider ===',
+    'Use the clarification.',
+    '-> END',
+    '',
+  ].join('\n'));
+  try {
+    const bridge = await PiAgentBridge.open({
+      planFile: file,
+      runId: 'ask',
+      sessionId: 'session-ask',
+      storeRoot,
+    });
+    const opened = await bridge.ask(
+      'decide#0',
+      'Which release targets are required?',
+      'the matrix is ambiguous',
+      'ask-1',
+    );
+    const waiting = projectionOf(opened);
+    assert.equal(waiting.status, 'awaiting-elicitation');
+    assert.equal(waiting.elicitation?.question, 'Which release targets are required?');
+
+    const resolved = await bridge.humanAnswer(
+      { id: 'lee', uri: 'pi://human/lee' },
+      'macOS arm64 and x86_64 Linux',
+      'answer-1',
+    );
+    const active = projectionOf(resolved);
+    assert.equal(active.node?.id, 'reconsider');
+    assert.equal(active.clarification?.answer, 'macOS arm64 and x86_64 Linux');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -11,7 +11,8 @@
  *   prose...                                  phase body
  *   ~ name (=|+=|-=) expr                     mutation, applied on node entry
  *   ? name                                    refresh a runtime value after phase work
- *   * {gate} [Label] @human ~loop~ -> target  once-only choice (gate/@human/~loop~ optional)
+ *   * {gate} [Label] @human ~loop~ -> target  once-only choice
+ *   * [I'm not sure] @ask -> target           open an elicitation before advancing
  *   + {gate} [Label] -> target                sticky (repeatable) choice
  *   while {gate} [Label] -> target             repeat while true; paired with else
  *   until {gate} [Label] -> target             exit when true; paired with else
@@ -436,12 +437,18 @@ function parseChoice(
   const gateSrc = take(/\{([^}]*)\}/);
   const label = take(/\[([^\]]*)\]/);
   const human = take(/@human\b/) !== null;
+  const ask = take(/@ask\b/) !== null;
   const loop = take(/~loop~/) !== null;
   const target = take(/->\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/);
 
   if (remaining.length > 0) {
     error(lineNo, CODES.PARSE, `unexpected content in choice: "${remaining}"`,
-      'expected: * {gate} [Label] @human ~loop~ -> target (gate, @human and ~loop~ optional)');
+      'expected: * {gate} [Label] @human|@ask ~loop~ -> target (flags optional)');
+    return null;
+  }
+  if (human && ask) {
+    error(lineNo, CODES.PARSE, 'a choice cannot be both @human and @ask',
+      'use @human when the person owns the route; use @ask when the agent only needs clarification');
     return null;
   }
   if (label === null || label.trim().length === 0) {
@@ -477,6 +484,7 @@ function parseChoice(
     sticky,
     gate,
     human,
+    ask,
     loop,
     timeout: null,
     target,
@@ -539,6 +547,7 @@ function parseSimpleArm(
     sticky: true,
     gate: null,
     human: false,
+    ask: false,
     loop: false,
     timeout: null,
     target: targetMatch[1],

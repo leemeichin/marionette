@@ -157,7 +157,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.1.0');
+    assert.equal(api.protocol, '1.2.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });

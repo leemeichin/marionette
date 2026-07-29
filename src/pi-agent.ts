@@ -216,6 +216,28 @@ export class PiAgentBridge {
     }));
   }
 
+  ask(
+    choiceId: string,
+    question: string,
+    rationale: string,
+    idempotencyKey: string,
+    profile: ProjectionProfile = 'work',
+    options: { budget?: RuntimeBudget; evidence?: Ref[] } = {},
+  ): Promise<RuntimeCommandResult> {
+    return this.write(idempotencyKey, (expectedRevision) => ({
+      protocol: RUNTIME_PROTOCOL_VERSION,
+      id: this.requestId(),
+      op: 'ask',
+      choiceId,
+      question,
+      rationale,
+      expectedRevision,
+      idempotencyKey,
+      profile,
+      ...options,
+    }));
+  }
+
   advance(
     rationale: string,
     idempotencyKey: string,
@@ -305,6 +327,26 @@ export class PiAgentBridge {
       idempotencyKey,
       profile,
       ...options,
+    }), { ...human, role: 'human' });
+  }
+
+  humanAnswer(
+    human: Omit<RuntimePrincipal, 'role'>,
+    answer: string,
+    idempotencyKey: string,
+    profile: ProjectionProfile = 'work',
+    options: { budget?: RuntimeBudget; rationale?: string } = {},
+  ): Promise<RuntimeCommandResult> {
+    return this.write(idempotencyKey, (expectedRevision) => ({
+      protocol: RUNTIME_PROTOCOL_VERSION,
+      id: this.requestId(),
+      op: 'answer',
+      answer,
+      rationale: options.rationale,
+      expectedRevision,
+      idempotencyKey,
+      profile,
+      budget: options.budget,
     }), { ...human, role: 'human' });
   }
 }

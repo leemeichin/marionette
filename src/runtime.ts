@@ -1,11 +1,12 @@
 import { buildBrief, type Brief } from './brief.ts';
 import { sha256Hex } from './hash.ts';
-import { advance, initState, observe, takeChoice, WalkError } from './state.ts';
+import { advance, answer, ask, initState, observe, takeChoice, WalkError } from './state.ts';
 import type { PlanState, Ref, Trajectory } from './types.ts';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference,
   type ProjectionProfile, type RuntimeBudget, type RuntimeEvent,
-  type RuntimeEscalation, type RuntimeEventKind, type RuntimePrincipal, type RuntimeProjection,
+  type RuntimeElicitation, type RuntimeEscalation, type RuntimeEventKind,
+  type RuntimePrincipal, type RuntimeProjection,
   type RuntimeRequest,
 } from './runtime-protocol.ts';
 
@@ -48,9 +49,9 @@ const requestFingerprint = async (request: RuntimeRequest): Promise<string> => {
 };
 
 const isWrite = (request: RuntimeRequest): request is Extract<RuntimeRequest, {
-  op: 'choose' | 'advance' | 'observe' | 'record';
-}> => request.op === 'choose' || request.op === 'advance' ||
-  request.op === 'observe' || request.op === 'record';
+  op: 'choose' | 'ask' | 'answer' | 'advance' | 'observe' | 'record';
+}> => request.op === 'choose' || request.op === 'ask' || request.op === 'answer' ||
+  request.op === 'advance' || request.op === 'observe' || request.op === 'record';
 
 const event = (
   snapshot: RuntimeSnapshot,
@@ -77,6 +78,9 @@ const event = (
 
 const escalationUri = (runId: string, eventSeq: number): string =>
   `marionette://run/${encodeURIComponent(runId)}/escalation/${eventSeq}`;
+
+const elicitationUri = (runId: string, eventSeq: number): string =>
+  `marionette://run/${encodeURIComponent(runId)}/elicitation/${eventSeq}`;
 
 function escalationPayload(
   brief: Brief,
@@ -109,6 +113,30 @@ function escalationPayload(
   };
 }
 
+function elicitationPayload(
+  brief: Brief,
+  snapshot: RuntimeSnapshot,
+  eventSeq: number,
+  expectedRevision: number,
+  includeTarget = true,
+): RuntimeElicitation | null {
+  if (!brief.elicitation) return null;
+  return {
+    id: elicitationUri(snapshot.runId, eventSeq),
+    expectedRevision,
+    choice: {
+      id: brief.elicitation.choice,
+      label: brief.elicitation.label,
+      target: includeTarget ? brief.elicitation.target : undefined,
+    },
+    question: brief.elicitation.question,
+    askedAt: brief.elicitation.askedAt,
+    askedBy: brief.elicitation.askedBy,
+    rationale: brief.elicitation.rationale,
+    response: { operation: 'answer' },
+  };
+}
+
 async function statusEvent(
   trajectory: Trajectory,
   snapshot: RuntimeSnapshot,
@@ -124,6 +152,16 @@ async function statusEvent(
   if (brief.status === 'awaiting-human') {
     const required = event(snapshot, trajectory, 'human.required', at, {}, { nodeId, offset });
     required.data = escalationPayload(
+      brief,
+      snapshot,
+      required.seq,
+      expectedRevision,
+    ) as unknown as Record<string, unknown>;
+    return required;
+  }
+  if (brief.status === 'awaiting-elicitation') {
+    const required = event(snapshot, trajectory, 'elicitation.required', at, {}, { nodeId, offset });
+    required.data = elicitationPayload(
       brief,
       snapshot,
       required.seq,
@@ -236,6 +274,19 @@ export async function buildRuntimeProjection(
         profile !== 'signal',
       )
     : null;
+  const elicitationEvent = brief.elicitation
+    ? [...snapshot.events].reverse().find((item) =>
+        item.kind === 'elicitation.required' && item.graph.nodeId === brief.node?.id)
+    : undefined;
+  const elicitation = brief.elicitation
+    ? elicitationPayload(
+        brief,
+        snapshot,
+        elicitationEvent?.seq ?? (snapshot.events.at(-1)?.seq ?? 0) + 1,
+        snapshot.revision,
+        profile !== 'signal',
+      )
+    : null;
 
   return {
     runId: snapshot.runId,
@@ -250,6 +301,7 @@ export async function buildRuntimeProjection(
       id: choice.id,
       label: choice.label,
       human: choice.human,
+      ask: choice.ask,
       target: profile === 'signal' ? undefined : choice.target,
       targetTitle: profile === 'signal' ? undefined : choice.targetTitle,
       sticky: profile === 'signal' ? undefined : choice.sticky,
@@ -277,6 +329,8 @@ export async function buildRuntimeProjection(
       : null,
     observations: brief.pendingObservations,
     escalation,
+    elicitation,
+    clarification: profile === 'signal' ? undefined : brief.clarification,
     variables: profile === 'signal' ? undefined : brief.variables,
     progress: profile === 'signal' ? undefined : brief.progress,
     truncated,
@@ -296,7 +350,9 @@ function checkRevision(snapshot: RuntimeSnapshot, expected: number, requestId: s
 
 async function checkIdempotency(
   snapshot: RuntimeSnapshot,
-  request: Extract<RuntimeRequest, { op: 'choose' | 'advance' | 'observe' | 'record' }>,
+  request: Extract<RuntimeRequest, {
+    op: 'choose' | 'ask' | 'answer' | 'advance' | 'observe' | 'record'
+  }>,
 ): Promise<RuntimeIdempotencyRecord | null> {
   if (!request.idempotencyKey) return null;
   const prior = snapshot.idempotency[request.idempotencyKey];
@@ -342,7 +398,7 @@ export async function executeRuntimeRequest(
       result: {
         protocol: RUNTIME_PROTOCOL_VERSION,
         capabilities: {
-          operations: ['next', 'choose', 'advance', 'observe', 'record', 'events'],
+          operations: ['next', 'choose', 'ask', 'answer', 'advance', 'observe', 'record', 'events'],
           projections: ['signal', 'work', 'debug'],
           idempotency: true,
           eventCursor: true,
@@ -416,6 +472,13 @@ export async function executeRuntimeRequest(
           request.id,
         );
       }
+      if (choice.ask) {
+        throw new ProtocolError(
+          `choice "${choice.label}" is an @ask checkpoint; open it with the ask operation`,
+          'elicitation-required',
+          request.id,
+        );
+      }
       snapshot.state = await takeChoice(trajectory, snapshot.state, choice.id, {
         actor: bindWalkActor(principal),
         rationale: request.rationale,
@@ -427,6 +490,56 @@ export async function executeRuntimeRequest(
         label: choice.label,
         rationale: request.rationale,
         evidence: request.evidence ?? [],
+        expectedRevision: request.expectedRevision,
+        idempotencyKey: request.idempotencyKey ?? null,
+        commandFingerprint: await requestFingerprint(request),
+      }, { principal, nodeId: node.id, choiceId: choice.id }));
+    } else if (request.op === 'ask') {
+      const { node, choice } = exactChoice(trajectory, snapshot.state, request.choiceId);
+      if (principal.role !== 'agent') {
+        throw new ProtocolError('@ask checkpoints are opened by an agent', 'forbidden', request.id);
+      }
+      snapshot.state = await ask(trajectory, snapshot.state, choice.id, {
+        actor: bindWalkActor(principal),
+        question: request.question,
+        rationale: request.rationale,
+        at,
+      });
+      const brief = await buildBrief(trajectory, snapshot.state, { at });
+      const required = event(snapshot, trajectory, 'elicitation.required', at, {}, {
+        principal,
+        nodeId: node.id,
+        choiceId: choice.id,
+      });
+      required.data = {
+        ...elicitationPayload(brief, snapshot, required.seq, request.expectedRevision + 1),
+        evidence: request.evidence ?? [],
+        idempotencyKey: request.idempotencyKey ?? null,
+        commandFingerprint: await requestFingerprint(request),
+      };
+      emitted.push(required);
+    } else if (request.op === 'answer') {
+      if (principal.role !== 'human') {
+        throw new ProtocolError('@ask answers require a human-bound principal', 'forbidden', request.id);
+      }
+      const pending = snapshot.state.pendingElicitation;
+      if (!pending) {
+        throw new ProtocolError('there is no @ask clarification awaiting an answer',
+          'elicitation-required', request.id);
+      }
+      const { node, choice } = exactChoice(trajectory, snapshot.state, pending.choice);
+      snapshot.state = await answer(trajectory, snapshot.state, {
+        actor: principal.id,
+        answer: request.answer,
+        rationale: request.rationale,
+        at,
+      });
+      emitted.push(event(snapshot, trajectory, 'elicitation.answered', at, {
+        question: pending.question,
+        answer: request.answer,
+        rationale: request.rationale ?? null,
+        from: node.id,
+        to: choice.target,
         expectedRevision: request.expectedRevision,
         idempotencyKey: request.idempotencyKey ?? null,
         commandFingerprint: await requestFingerprint(request),
@@ -487,8 +600,8 @@ export async function executeRuntimeRequest(
     throw error;
   }
 
-  if (request.op !== 'record') {
-    if ((request.op === 'choose' || request.op === 'advance') &&
+  if (request.op !== 'record' && request.op !== 'ask') {
+    if ((request.op === 'choose' || request.op === 'answer' || request.op === 'advance') &&
         snapshot.state.status === 'active') {
       emitted.push(event(snapshot, trajectory, 'node.entered', at, {
         from: input.state.current,

@@ -4,7 +4,7 @@ description: >-
   Turn natural-language project notes, goals, or a conversation into a
   compiled Marionette trajectory (.mar plan + trajectory JSON). Use when the
   user wants to plan a project as a directed graph of phases, decisions,
-  gates, loops and human checkpoints, or asks to draft/revise/review a .mar
+  gates, loops, human checkpoints and elicitation checkpoints, or asks to draft/revise/review a .mar
   plan. Drafts are compiler-checked; errors get one revision loop.
 ---
 
@@ -35,7 +35,8 @@ Below, `marionette` means whichever form resolved.
 1. **Extract the graph from the notes.** Identify: phases (states of the
    project, not tickets), the decisions that connect them, the conditions
    gating each path, where iteration genuinely happens, and — most
-   importantly — which decisions a human must make. Ask at most one round of
+   importantly — which decisions a human must make and where an agent may
+   need open-ended context through `@ask`. Ask at most one round of
    clarifying questions, and only for decisions that change the graph's
    shape.
 2. **Draft the `.mar` script** (conventions below).
@@ -61,8 +62,9 @@ Below, `marionette` means whichever form resolved.
    call out why exhausting that route cannot strand the traversal.
 5. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
    contract), `render` (Mermaid), and `summarize` (plain language). Present
-   the summary and graph to the user, calling out every `@human` checkpoint
-   and any "unverified gate" warnings for manual review.
+   the summary and graph to the user, calling out every `@human` checkpoint,
+   every `@ask` elicitation and any "unverified gate" warnings for manual
+   review.
 6. **Only if the user wants to start traversal:**
    `marionette state init <plan>.mar`.
 7. **Log the outcome** (dogfood metric): tell the user whether the first
@@ -163,6 +165,13 @@ transcribe tickets into DSL by hand — fetch and scaffold
   judgment calls the notes assign to a person. Do not put it on steps an
   agent can verify mechanically (tests green, artifact produced). If a plan
   has zero `@human` checkpoints, ask the user whether that's intended.
+- **`@ask` marks the ambiguity boundary.** Put it on an agent-owned route
+  which cannot continue without open-ended human context:
+  `* [I'm not sure] @ask -> reconsider`. The agent opens one focused
+  question, the answer is audited, and the fixed edge advances. Do not use it
+  when the human owns the route (`@human`) or when known answers should be
+  ordinary choices. A choice cannot carry both flags. Source uses the
+  searchable ASCII `@ask`; renders use `‽`.
 - **Choose the loop form that matches the stopping condition.** Fixed retry
   budgets still use a monotonic counter, explicit gates and `~loop~`:
 

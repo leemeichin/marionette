@@ -2,7 +2,7 @@ import type { Ref, Value } from './types.ts';
 import type { Brief, BriefStatus } from './brief.ts';
 import type { WalkErrorCode } from './state.ts';
 
-export const RUNTIME_PROTOCOL_VERSION = '0.3.0';
+export const RUNTIME_PROTOCOL_VERSION = '0.4.0';
 
 export type RuntimeRole = 'agent' | 'human' | 'system';
 export type ProjectionProfile = 'signal' | 'work' | 'debug';
@@ -48,6 +48,28 @@ export interface ChooseRequest extends RequestBase {
   evidence?: Ref[];
 }
 
+export interface AskRequest extends RequestBase {
+  op: 'ask';
+  choiceId: string;
+  question: string;
+  rationale: string;
+  expectedRevision: number;
+  idempotencyKey?: string;
+  profile?: ProjectionProfile;
+  budget?: RuntimeBudget;
+  evidence?: Ref[];
+}
+
+export interface AnswerRequest extends RequestBase {
+  op: 'answer';
+  answer: string;
+  rationale?: string;
+  expectedRevision: number;
+  idempotencyKey?: string;
+  profile?: ProjectionProfile;
+  budget?: RuntimeBudget;
+}
+
 export interface AdvanceRequest extends RequestBase {
   op: 'advance';
   rationale: string;
@@ -90,6 +112,8 @@ export type RuntimeRequest =
   | InitializeRequest
   | NextRequest
   | ChooseRequest
+  | AskRequest
+  | AnswerRequest
   | AdvanceRequest
   | ObserveRequest
   | RecordRequest
@@ -104,6 +128,8 @@ export type RuntimeEventKind =
   | 'observation.recorded'
   | 'record.attached'
   | 'human.required'
+  | 'elicitation.required'
+  | 'elicitation.answered'
   | 'run.stranded'
   | 'run.completed'
   | 'plan.drifted'
@@ -131,6 +157,7 @@ export interface RuntimeChoiceProjection {
   id: string;
   label: string;
   human: boolean;
+  ask: boolean;
   target?: string;
   targetTitle?: string | null;
   sticky?: boolean;
@@ -145,6 +172,7 @@ export interface RuntimeChoiceProjection {
       | 'once-exhausted'
       | 'gate-blocked'
       | 'observation-required'
+      | 'elicitation-pending'
       | 'timeout-pending'
       | 'timed-out';
     reason: string;
@@ -181,6 +209,24 @@ export interface RuntimeEscalation {
   };
 }
 
+export interface RuntimeElicitation {
+  /** Stable for one activation of an @ask checkpoint. */
+  id: string;
+  expectedRevision: number;
+  choice: {
+    id: string;
+    label: string;
+    target?: string;
+  };
+  question: string;
+  askedAt: string;
+  askedBy: string;
+  rationale: string | null;
+  response: {
+    operation: 'answer';
+  };
+}
+
 export interface RuntimeProjection {
   runId: string;
   revision: number;
@@ -207,6 +253,10 @@ export interface RuntimeProjection {
   observations: Array<{ name: string; type: string }>;
   /** Present exactly when status is awaiting-human. */
   escalation: RuntimeEscalation | null;
+  /** Present exactly when status is awaiting-elicitation. */
+  elicitation: RuntimeElicitation | null;
+  /** Most recent @ask answer when it is the context that entered this phase. */
+  clarification?: Brief['clarification'];
   variables?: Record<string, Value>;
   progress?: { steps: number; nodesVisited: number; nodesTotal: number; path: string[] };
   truncated: boolean;
@@ -367,6 +417,41 @@ export function parseRuntimeRequest(input: unknown): RuntimeRequest {
         profile: parseProfile(input['profile'], id),
         budget: parseBudget(input['budget'], id),
         evidence: input['evidence'] as Ref[] | undefined,
+      };
+    }
+    case 'ask': {
+      assertOnlyKeys(input, [
+        'protocol', 'id', 'op', 'choiceId', 'question', 'rationale', 'expectedRevision',
+        'idempotencyKey', 'profile', 'budget', 'evidence',
+      ], id);
+      return {
+        protocol: RUNTIME_PROTOCOL_VERSION, id, op,
+        choiceId: requireString(input['choiceId'], 'choiceId', id),
+        question: requireString(input['question'], 'question', id),
+        rationale: requireString(input['rationale'], 'rationale', id),
+        expectedRevision: requireRevision(input['expectedRevision'], id),
+        idempotencyKey: input['idempotencyKey'] === undefined
+          ? undefined : requireString(input['idempotencyKey'], 'idempotencyKey', id),
+        profile: parseProfile(input['profile'], id),
+        budget: parseBudget(input['budget'], id),
+        evidence: input['evidence'] as Ref[] | undefined,
+      };
+    }
+    case 'answer': {
+      assertOnlyKeys(input, [
+        'protocol', 'id', 'op', 'answer', 'rationale', 'expectedRevision',
+        'idempotencyKey', 'profile', 'budget',
+      ], id);
+      return {
+        protocol: RUNTIME_PROTOCOL_VERSION, id, op,
+        answer: requireString(input['answer'], 'answer', id),
+        rationale: input['rationale'] === undefined
+          ? undefined : requireString(input['rationale'], 'rationale', id),
+        expectedRevision: requireRevision(input['expectedRevision'], id),
+        idempotencyKey: input['idempotencyKey'] === undefined
+          ? undefined : requireString(input['idempotencyKey'], 'idempotencyKey', id),
+        profile: parseProfile(input['profile'], id),
+        budget: parseBudget(input['budget'], id),
       };
     }
     case 'advance': {
