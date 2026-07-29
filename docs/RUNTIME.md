@@ -153,8 +153,14 @@ prerequisite for loading the Pi extension. Source imports name the real
 emitting `dist/`.
 
 You can instead bind interactively with
-`/marionette-start <plan.mar> [run-id]`. The model gets one agent-bound tool,
-`marionette_walk`. It mirrors the runtime command surface:
+`/marionette-start <plan.mar> [run-id]`. Pi also exposes `marionette_draft`,
+which compiler-checks complete DSL source before atomically writing a `.mar`
+file. Invalid drafts never touch disk; successful results include the graph
+hash, plain-language summary, and Mermaid review graph. Overwriting is opt-in
+for explicit refinement.
+
+The model gets one agent-bound traversal tool, `marionette_walk`. It mirrors
+the runtime command surface:
 
 - `capabilities`, `next`, `choose`, `advance`, `observe`, `record`, `events`
 - `signal`, `work`, and `debug` projection profiles
@@ -179,7 +185,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.0.0`) with the same shape in four places:
+(`marionette.pi` / `1.1.0`) with the same shape in four places:
 
 1. `marionette_walk` tool-result `details`;
 2. `marionette-projection` custom-message `details`;
@@ -188,8 +194,10 @@ The extension publishes a versioned notification envelope
 
 Every envelope identifies its cause and current binding and may carry the
 projection, emitted runtime events, revision/event-sequence receipt, replay
-state, operation result, or a structured error. A host therefore never needs
-to parse rendered prose, widgets, or the runtime store.
+state, operation result, a structured error, or a validated draft artifact.
+Successful `marionette_draft` calls emit `plan.drafted`; runtime traversal
+continues to emit binding and runtime events. A host therefore never needs to
+parse rendered prose, widgets, or the runtime store.
 
 Trusted in-process extensions discover the typed `MarionettePiHostApi` through
 either:

@@ -16,7 +16,7 @@ import type {
 } from './runtime-protocol.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.0.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.1.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -47,8 +47,17 @@ export interface MarionettePiError {
 export type MarionettePiEventKind =
   | 'binding.bound'
   | 'binding.unbound'
+  | 'plan.drafted'
   | 'runtime.result'
   | 'integration.error';
+
+export interface MarionettePiDraft {
+  planFile: string;
+  graphHash: string;
+  summary: string;
+  mermaid: string;
+  warnings: number;
+}
 
 export interface MarionettePiEvent {
   integration: 'marionette.pi';
@@ -66,6 +75,7 @@ export interface MarionettePiEvent {
   events?: RuntimeEvent[];
   receipt?: MarionettePiReceipt;
   result?: Record<string, unknown>;
+  draft?: MarionettePiDraft;
   error?: MarionettePiError;
 }
 

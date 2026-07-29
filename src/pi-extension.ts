@@ -1,8 +1,16 @@
-import type {
-  ExtensionAPI,
-  ExtensionContext,
+import { randomUUID } from 'node:crypto';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, extname, resolve } from 'node:path';
+import {
+  withFileMutationQueue,
+  type ExtensionAPI,
+  type ExtensionContext,
 } from '@earendil-works/pi-coding-agent';
+import { Text } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
+import { compile, formatDiagnostics } from './compile.ts';
+import { renderMermaid } from './render.ts';
+import { summarize } from './summarize.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_EVENT_CHANNEL,
@@ -136,6 +144,23 @@ const budgetOf = (value: unknown): RuntimeBudget | undefined => {
 
 const refsOf = (value: unknown): Ref[] | undefined =>
   Array.isArray(value) ? value as Ref[] : undefined;
+
+const writePlan = async (planFile: string, source: string, overwrite: boolean): Promise<void> => {
+  await mkdir(dirname(planFile), { recursive: true });
+  if (!overwrite) {
+    await writeFile(planFile, source, { encoding: 'utf8', flag: 'wx' });
+    return;
+  }
+  const temporary = `${planFile}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, source, { encoding: 'utf8', flag: 'wx' });
+    await rename(temporary, planFile);
+  } finally {
+    await unlink(temporary).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    });
+  }
+};
 
 const resultWithoutProjection = (result: RuntimeCommandResult): Record<string, unknown> => {
   const output = { ...result.result };
@@ -653,6 +678,89 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         name: 'marionette-decide',
       });
       if (event.error) ctx.ui.notify(event.error.message, 'error');
+    },
+  });
+
+  pi.registerTool({
+    name: 'marionette_draft',
+    label: 'Marionette draft',
+    description:
+      'Validate and atomically write a Marionette .mar plan. Invalid plans are not written; the result includes compiler diagnostics, summary, Mermaid graph, and graph hash.',
+    parameters: Type.Object({
+      path: Type.String({ description: 'Destination .mar path, relative to the Pi working directory or absolute' }),
+      source: Type.String({ description: 'Complete Marionette DSL source' }),
+      overwrite: Type.Optional(Type.Boolean({ description: 'Replace an existing plan during explicit refinement' })),
+    }, { additionalProperties: false }),
+    async execute(toolCallId, params, _signal, _onUpdate, ctx) {
+      activeContext = ctx;
+      const planFile = resolve(ctx.cwd, params.path);
+      if (extname(planFile) !== '.mar') throw new Error('Marionette plan path must end in .mar');
+      const compiled = await compile(params.source, { file: planFile });
+      const diagnostics = formatDiagnostics(compiled.diagnostics, planFile, { source: params.source });
+      if (!compiled.ok || !compiled.trajectory) {
+        return {
+          content: [{ type: 'text', text: diagnostics || 'Plan did not produce a trajectory.' }],
+          details: { ok: false, planFile, diagnostics: compiled.diagnostics },
+        };
+      }
+
+      const summary = summarize(compiled.trajectory, {
+        diagnostics: compiled.diagnostics,
+        file: planFile,
+      });
+      const mermaid = await renderMermaid(compiled.trajectory);
+      await withFileMutationQueue(planFile, () =>
+        writePlan(planFile, params.source, params.overwrite === true));
+      const draft = {
+        planFile,
+        graphHash: compiled.trajectory.hash,
+        summary,
+        mermaid,
+        warnings: compiled.diagnostics.filter((item) => item.severity === 'warning').length,
+      };
+      const event = emit({
+        ...eventBase('plan.drafted', {
+          source: 'tool',
+          name: 'marionette_draft',
+          id: toolCallId,
+        }),
+        draft,
+        result: { diagnostics: compiled.diagnostics },
+      });
+      return {
+        content: [{ type: 'text', text: `${summary}\n\n\`\`\`mermaid\n${mermaid}\n\`\`\`` }],
+        details: { ok: true, ...draft, event },
+      };
+    },
+    renderCall(args, theme) {
+      return new Text(
+        theme.fg('toolTitle', theme.bold('marionette draft ')) +
+          theme.fg('muted', args.path) +
+          (args.overwrite ? theme.fg('warning', ' (refine)') : ''),
+        0,
+        0,
+      );
+    },
+    renderResult(result, { expanded }, theme) {
+      const details = result.details as {
+        ok?: boolean;
+        planFile?: string;
+        graphHash?: string;
+        summary?: string;
+        mermaid?: string;
+        diagnostics?: unknown[];
+      } | undefined;
+      if (!details?.ok) {
+        return new Text(theme.fg('error', 'Plan rejected by the compiler; no file written.'), 0, 0);
+      }
+      const base = `${theme.fg('success', '✓ Valid plan')} ${theme.fg('muted', details.planFile ?? '')}`;
+      return new Text(
+        expanded
+          ? `${base}\n${details.summary ?? ''}\n\n${theme.fg('dim', details.mermaid ?? '')}`
+          : `${base}\n${theme.fg('dim', details.graphHash ?? '')}`,
+        0,
+        0,
+      );
     },
   });
 

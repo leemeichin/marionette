@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -34,7 +34,7 @@ const createFakePi = (cwd: string) => {
   const notifications: Array<{ message: string; type?: string }> = [];
   let activeBranch: CustomEntry[] = [];
   let sequence = 0;
-  let tool: any;
+  const tools = new Map<string, any>();
 
   const events = {
     emit(channel: string, data: unknown) {
@@ -80,7 +80,7 @@ const createFakePi = (cwd: string) => {
       commands.set(name, definition);
     },
     registerTool(definition: any) {
-      tool = definition;
+      tools.set(definition.name, definition);
     },
     on(name: string, handler: any) {
       const values = handlers.get(name) ?? [];
@@ -114,8 +114,9 @@ const createFakePi = (cwd: string) => {
     handlers,
     messages,
     notifications,
+    tools,
     get tool() {
-      return tool;
+      return tools.get('marionette_walk');
     },
     branch: () => [...activeBranch],
     useBranch(branch: CustomEntry[]) {
@@ -154,7 +155,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.0.0');
+    assert.equal(api.protocol, '1.1.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -186,6 +187,61 @@ test('Pi extension restores bindings from the active branch and publishes a type
     const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
     assert.ok(events.some((event) => event.kind === 'binding.bound'));
     assert.ok(fake.entries.some((entry) => entry.customType === 'marionette-event'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Pi extension draft tool validates before atomically writing and emits an event', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-draft-'));
+  try {
+    const fake = createFakePi(root);
+    await fake.fire('session_start', { reason: 'startup' });
+    const draft = fake.tools.get('marionette_draft');
+    const planFile = join(root, 'plans', 'draft.mar');
+
+    const invalid = await draft.execute(
+      'draft-invalid',
+      { path: 'plans/draft.mar', source: '=== broken ===\nNo exit.\n' },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(invalid.details.ok, false);
+    assert.equal(existsSync(planFile), false);
+
+    const source = '=== start ===\nDo the work.\n* [Done] -> END\n';
+    const valid = await draft.execute(
+      'draft-valid',
+      { path: 'plans/draft.mar', source },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(valid.details.ok, true);
+    assert.equal(readFileSync(planFile, 'utf8'), source);
+    assert.match(valid.details.summary, /Plan summary/);
+    assert.match(valid.details.mermaid, /flowchart/);
+
+    await assert.rejects(() => draft.execute(
+      'draft-existing',
+      { path: 'plans/draft.mar', source },
+      undefined,
+      undefined,
+      fake.ctx,
+    ), /EEXIST/);
+
+    const revised = source.replace('Do the work.', 'Do the revised work.');
+    await draft.execute(
+      'draft-revised',
+      { path: 'plans/draft.mar', source: revised, overwrite: true },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(readFileSync(planFile, 'utf8'), revised);
+    const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
+    assert.equal(events.filter((event) => event.kind === 'plan.drafted').length, 2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

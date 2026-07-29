@@ -247,8 +247,9 @@ walker to the same behaviour. The **local runtime** has landed
 (`marionette start`/`stop`, [`docs/RUNTIME.md`](docs/RUNTIME.md)): a
 single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
-checks, idempotent writes and an append-only journal — the pi agent
-integration now consumes it through an agent-bound tool and a separate trusted
+checks, idempotent writes and an append-only journal — the Pi integration
+compiler-checks drafts through `marionette_draft`, traverses bound runs through
+an agent-bound tool, and reserves human choices for the trusted
 `/marionette-decide` path. ADR-0004 is implemented and awaits the dogfood
 plan's formal human approval (issue #4).
 Tracker integration landed connection-free: `marionette import` ingests a
