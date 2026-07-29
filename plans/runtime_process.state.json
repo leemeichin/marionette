@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "hash": "sha256:038e9db48db1f04cf45d3f5bb1a7f6a56de9a1d1712d0b187e5e0e6acd0385e4",
+  "hash": "sha256:20ce63f544d30e5ebb21dac11a47d61bf29c499e5385ea0e87fd09ee68ab7258",
   "status": "completed",
   "current": "END",
   "variables": {},
@@ -79,6 +79,17 @@
       "label": "Full verification passes",
       "rationale": "Full verification passed: TypeScript check, production build, strict plan validation, JSON parsing, git diff hygiene, compiled-bin NDJSON traversal, and all 83 tests including existing walker conformance and new runtime coverage.",
       "to": "END"
+    },
+    {
+      "at": "2026-07-29T21:06:37.884Z",
+      "actor": "agent",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:038e9db48db1… → sha256:20ce63f544d3…",
+      "to": "END",
+      "rationale": "Trajectory contract 0.5 adds @ask elicitation metadata; existing graph semantics are unchanged."
     }
-  ]
+  ],
+  "pendingElicitation": null,
+  "elicitations": []
 }

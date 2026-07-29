@@ -51,6 +51,8 @@ export type WalkErrorCode =
   | 'timed-out'
   | 'once-exhausted'
   | 'human-checkpoint'
+  | 'elicitation-required'
+  | 'elicitation-pending'
   | 'rationale-required'
   | 'no-next-step'
   | 'migration-blocked'
@@ -70,6 +72,7 @@ export interface AvailableChoice {
     | 'once-exhausted'
     | 'gate-blocked'
     | 'observation-required'
+    | 'elicitation-pending'
     | 'timeout-pending'
     | 'timed-out'
     | null;
@@ -87,6 +90,20 @@ export interface ObserveOptions {
   at?: string;
 }
 
+export interface AskOptions {
+  actor: string;
+  question: string;
+  rationale?: string;
+  at?: string;
+}
+
+export interface AnswerOptions {
+  actor: string;
+  answer: string;
+  rationale?: string;
+  at?: string;
+}
+
 export async function initState(
   trajectory: Trajectory,
   actor = 'system',
@@ -96,6 +113,8 @@ export async function initState(
   if (!result.ok) throw walkError(trajectory, result);
   const state = fromSemantic(trajectory.hash, result.state, {
     observations: [],
+    pendingElicitation: null,
+    elicitations: [],
     log: [],
   });
   state.log.push({
@@ -125,6 +144,13 @@ export async function frontier(
   bindState(trajectory, state);
   if (state.status === 'completed') return [];
   const node = nodeById(trajectory, state.current);
+  if (state.pendingElicitation) {
+    return node.choices.map((choice) => ({
+      choice,
+      blocked: `waiting for an answer to: ${state.pendingElicitation!.question}`,
+      blockedCode: 'elicitation-pending',
+    }));
+  }
   const items = await ruleWalkFrontier(
     emitFacts(trajectory),
     toSemantic(state),
@@ -151,6 +177,31 @@ export async function takeChoice(
   options: TakeOptions,
 ): Promise<PlanState> {
   bindState(trajectory, state);
+  if (state.status === 'completed') {
+    throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
+  }
+  if (state.pendingElicitation) {
+    throw new WalkError(
+      `an @ask clarification is already pending: ${state.pendingElicitation.question}`,
+      'elicitation-pending',
+    );
+  }
+  const selected = resolveChoiceRef(nodeById(trajectory, state.current), ref);
+  if (selected.ask) {
+    throw new WalkError(
+      `choice "${selected.label}" is an @ask checkpoint: open it with a focused question before advancing`,
+      'elicitation-required',
+    );
+  }
+  return applyChoice(trajectory, state, ref, options);
+}
+
+async function applyChoice(
+  trajectory: Trajectory,
+  state: PlanState,
+  ref: string,
+  options: TakeOptions,
+): Promise<PlanState> {
   const at = options.at ?? new Date().toISOString();
   const result = await ruleWalkApply(
     emitFacts(trajectory),
@@ -180,12 +231,118 @@ export async function takeChoice(
   return next;
 }
 
+/** Open an `@ask` edge without advancing it. */
+export async function ask(
+  trajectory: Trajectory,
+  state: PlanState,
+  ref: string,
+  options: AskOptions,
+): Promise<PlanState> {
+  bindState(trajectory, state);
+  if (state.status === 'completed') {
+    throw new WalkError(refusalText({ kind: 'completed' }), 'completed');
+  }
+  if (state.pendingElicitation) {
+    throw new WalkError(
+      `an @ask clarification is already pending: ${state.pendingElicitation.question}`,
+      'elicitation-pending',
+    );
+  }
+  if (!options.question.trim()) {
+    throw new WalkError('an @ask checkpoint requires a focused question', 'rationale-required');
+  }
+  const choice = resolveChoiceRef(nodeById(trajectory, state.current), ref);
+  if (!choice.ask) {
+    throw new WalkError(`choice "${choice.label}" is not an @ask checkpoint`, 'elicitation-required');
+  }
+  const available = await frontier(trajectory, state, { at: options.at });
+  const selected = available.find((item) => item.choice.id === choice.id);
+  if (!selected || selected.blocked) {
+    throw new WalkError(
+      `choice "${choice.label}" is not available: ${selected?.blocked ?? 'not in the frontier'}`,
+      selected?.blockedCode ?? 'elicitation-required',
+    );
+  }
+  const at = options.at ?? new Date().toISOString();
+  const next = structuredClone(state);
+  next.pendingElicitation = {
+    choice: choice.id,
+    target: choice.target,
+    question: options.question.trim(),
+    askedAt: at,
+    askedBy: options.actor,
+    rationale: options.rationale ?? null,
+  };
+  next.elicitations.push({
+    choice: choice.id,
+    label: choice.label,
+    target: choice.target,
+    question: options.question.trim(),
+    askedAt: at,
+    askedBy: options.actor,
+    rationale: options.rationale ?? null,
+    answer: null,
+    answeredAt: null,
+    answeredBy: null,
+  });
+  return next;
+}
+
+/** Record a human answer and advance the fixed `@ask` edge. */
+export async function answer(
+  trajectory: Trajectory,
+  state: PlanState,
+  options: AnswerOptions,
+): Promise<PlanState> {
+  bindState(trajectory, state);
+  const pending = state.pendingElicitation;
+  if (!pending) {
+    throw new WalkError('there is no @ask clarification awaiting an answer', 'elicitation-required');
+  }
+  if (options.actor === 'agent') {
+    throw new WalkError('an @ask answer must be attributed to a human', 'human-checkpoint');
+  }
+  if (!options.answer.trim()) {
+    throw new WalkError('an @ask answer cannot be empty', 'rationale-required');
+  }
+  const at = options.at ?? new Date().toISOString();
+  const rationale = `clarified by ${options.actor}: ${options.answer.trim()}` +
+    (options.rationale ? ` (${options.rationale})` : '');
+  const next = await applyChoice(trajectory, state, pending.choice, {
+    actor: 'agent',
+    rationale,
+    at,
+  });
+  next.pendingElicitation = null;
+  let exchange = undefined;
+  for (let index = next.elicitations.length - 1; index >= 0; index--) {
+    const candidate = next.elicitations[index];
+    if (candidate.choice === pending.choice && candidate.answer === null) {
+      exchange = candidate;
+      break;
+    }
+  }
+  if (!exchange) {
+    throw new WalkError('pending elicitation has no matching audit entry', 'invalid-state');
+  }
+  exchange.answer = options.answer.trim();
+  exchange.answeredAt = at;
+  exchange.answeredBy = options.actor;
+  return next;
+}
+
 export async function advance(
   trajectory: Trajectory,
   state: PlanState,
   options: TakeOptions,
 ): Promise<PlanState> {
   bindState(trajectory, state);
+  if (state.pendingElicitation) {
+    throw new WalkError(
+      `an @ask clarification is pending: ${state.pendingElicitation.question}`,
+      'elicitation-pending',
+    );
+  }
   const at = options.at ?? new Date().toISOString();
   const result = await ruleWalkApply(
     emitFacts(trajectory),
@@ -216,6 +373,12 @@ export async function observe(
   options: ObserveOptions,
 ): Promise<PlanState> {
   bindState(trajectory, state);
+  if (state.pendingElicitation) {
+    throw new WalkError(
+      `an @ask clarification is pending: ${state.pendingElicitation.question}`,
+      'elicitation-pending',
+    );
+  }
   const at = options.at ?? new Date().toISOString();
   const valueType =
     typeof value === 'number' && !Number.isFinite(value)
@@ -265,7 +428,7 @@ function toSemantic(state: PlanState): RuleSemanticState {
 function fromSemantic(
   hash: string,
   semantic: RuleSemanticState,
-  audit: Pick<PlanState, 'observations' | 'log'>,
+  audit: Pick<PlanState, 'observations' | 'pendingElicitation' | 'elicitations' | 'log'>,
 ): PlanState {
   return {
     version: PLAN_STATE_VERSION,
@@ -280,6 +443,10 @@ function fromSemantic(
         ? null
         : new Date(semantic.activationStartedAtMs).toISOString(),
     observations: audit.observations.map((entry) => ({ ...entry })),
+    pendingElicitation: audit.pendingElicitation
+      ? { ...audit.pendingElicitation }
+      : null,
+    elicitations: audit.elicitations.map((entry) => ({ ...entry })),
     taken: [...semantic.taken],
     log: audit.log.map((entry) => ({ ...entry })),
   };
@@ -297,6 +464,38 @@ function choiceById(trajectory: Trajectory, id: string): Choice {
     if (choice) return choice;
   }
   throw new WalkError(`choice "${id}" does not exist in the compiled plan`, 'unknown-choice');
+}
+
+function resolveChoiceRef(node: TrajectoryNode, ref: string): Choice {
+  const byId = node.choices.find((choice) => choice.id === ref);
+  if (byId) return byId;
+  if (/^\d+$/.test(ref)) {
+    const index = Number(ref);
+    const choice = node.choices[index];
+    if (choice) return choice;
+    throw new WalkError(
+      refusalText({ kind: 'bad-index', id: node.id, index, max: node.choices.length - 1 }),
+      'unknown-choice',
+    );
+  }
+  const matches = node.choices.filter((choice) =>
+    choice.label.toLowerCase().startsWith(ref.toLowerCase()));
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) {
+    throw new WalkError(
+      refusalText({ kind: 'ambiguous', ref, id: node.id }),
+      'ambiguous-choice',
+    );
+  }
+  throw new WalkError(
+    refusalText({
+      kind: 'no-match',
+      ref,
+      id: node.id,
+      available: node.choices.map((choice, index) => `[${index}] ${choice.label}`).join(', '),
+    }),
+    'unknown-choice',
+  );
 }
 
 function frontierBlockedText(item: RuleFrontierItem): string {
@@ -525,6 +724,10 @@ export function parseState(json: string): PlanState {
   if (parsed.version !== PLAN_STATE_VERSION) {
     throw unsupportedStateVersion(parsed.version);
   }
+  // State v2 predates @ask. Its additive audit fields default cleanly so
+  // existing runs do not need to be discarded.
+  parsed.pendingElicitation ??= null;
+  parsed.elicitations ??= [];
   if (parsed.status === 'active' && typeof parsed.activationStartedAt !== 'string') {
     throw new WalkError(
       'invalid state file: active state requires "activationStartedAt"',
@@ -592,6 +795,17 @@ export function rebindState(
   }
 
   const choiceIds = new Set(trajectory.nodes.flatMap((node) => node.choices.map((choice) => choice.id)));
+  if (state.pendingElicitation) {
+    const pendingChoice = trajectory.nodes
+      .flatMap((node) => node.choices)
+      .find((choice) => choice.id === state.pendingElicitation!.choice);
+    if (!pendingChoice?.ask || pendingChoice.target !== state.pendingElicitation.target) {
+      throw new WalkError(
+        `cannot rebind while @ask "${state.pendingElicitation.choice}" is pending and its edge changed`,
+        'migration-blocked',
+      );
+    }
+  }
   report.droppedTaken = state.taken.filter((id) => !choiceIds.has(id));
   state.taken = state.taken.filter((id) => choiceIds.has(id));
 

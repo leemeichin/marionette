@@ -58,7 +58,7 @@ bounded at 64 KiB.
 The first request initializes the connection:
 
 ```json
-{"protocol":"0.3.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
+{"protocol":"0.4.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
 ```
 
 After initialization, the host uses:
@@ -66,6 +66,8 @@ After initialization, the host uses:
 - `next` — read the current projection.
 - `choose` — take an exact choice id with rationale, expected revision and
   optional idempotency key.
+- `ask` — open an exact `@ask` choice with a focused question and rationale.
+- `answer` — supply human-authored context for the open elicitation.
 - `advance` — follow the automatic next step with the same write controls.
 - `observe` — supply a requested scalar value with its source/evidence in the
   rationale. This does not move the walker.
@@ -78,7 +80,7 @@ push handling can ignore those and use `events` by cursor.
 
 ## Compact context profiles
 
-`next`, `choose`, `advance`, and `observe` accept `profile`:
+`next`, `choose`, `ask`, `answer`, `advance`, and `observe` accept `profile`:
 
 - `signal` — status, node identity and currently available choices. It omits
   node prose, targets, variables and history.
@@ -92,12 +94,12 @@ prose. Truncated projections contain `truncated: true`, an `omitted` summary
 and a `bodyRef` that can be resolved against the archived trajectory.
 
 ```json
-{"protocol":"0.3.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
+{"protocol":"0.4.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
 ```
 
 The host should keep event traffic outside model context. Wake or prompt the
 model only for actionable states such as a new node, `observation.required`,
-`human.required`, `run.stranded`, or `run.completed`.
+`human.required`, `elicitation.required`, `run.stranded`, or `run.completed`.
 
 ## Human escalation
 
@@ -132,6 +134,26 @@ Agent-facing connections remain unable to take the listed choices. A trusted
 host records the answer through a human-bound principal, using the normal
 exact `choose` request with rationale, revision and idempotency key.
 
+## Elicitation
+
+`@ask` is a two-write exchange. An agent-bound principal opens it:
+
+```json
+{"protocol":"0.4.0","id":3,"op":"ask","choiceId":"design#1","question":"Must the release run without network access after unpacking?","rationale":"the packaging route depends on this constraint","expectedRevision":2,"idempotencyKey":"ask-42"}
+```
+
+The runtime emits `elicitation.required` and projects
+`awaiting-elicitation`. The payload has a stable activation id, the focused
+question and the already-authored edge. A human-bound principal answers:
+
+```json
+{"protocol":"0.4.0","id":4,"op":"answer","answer":"Yes; unpacking is allowed, but no runtime download.","expectedRevision":3,"idempotencyKey":"answer-42"}
+```
+
+The runtime records `elicitation.answered`, advances the fixed edge and
+resumes the agent. The answer is context rather than authority: it neither
+chooses a target nor passes an `@human` gate.
+
 ## Pi proving-ground integration
 
 The npm package is also a Pi package. Install it once, then bind a session at
@@ -162,7 +184,7 @@ for explicit refinement.
 The model gets one agent-bound traversal tool, `marionette_walk`. It mirrors
 the runtime command surface:
 
-- `capabilities`, `next`, `choose`, `advance`, `observe`, `record`, `events`
+- `capabilities`, `next`, `choose`, `ask`, `advance`, `observe`, `record`, `events`
 - `signal`, `work`, and `debug` projection profiles
 - projection budgets, evidence/refs, idempotency receipts and event cursors
 
@@ -177,6 +199,8 @@ At an escalation the agent must stop. The user answers through
 rationale, records the human-bound write, and injects the resulting projection
 so the agent can resume. A trusted embedding can instead provide an
 authenticated human principal through the host API described below.
+At an elicitation the user instead answers through `/marionette-answer`;
+the host records an `answer` write and resumes the agent.
 
 The binding is stored on the active Pi session branch and restored after
 restart or `/tree` navigation. `/marionette-stop` appends an unbound tombstone
@@ -185,7 +209,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.1.0`) with the same shape in four places:
+(`marionette.pi` / `1.2.0`) with the same shape in four places:
 
 1. `marionette_walk` tool-result `details`;
 2. `marionette-projection` custom-message `details`;
@@ -207,8 +231,9 @@ either:
   independent discovery.
 
 The API exposes `getBinding()`, `bind()`, `unbind()`, every agent-bound runtime
-operation through `execute()`, and a separate `humanChoose()` accepting a
-host-authenticated principal. Before prompting, `/marionette-decide` also asks
+operation through `execute()`, plus separate `humanChoose()` and
+`humanAnswer()` methods accepting a host-authenticated principal. Before
+prompting, `/marionette-decide` and `/marionette-answer` also ask
 `marionette:human:v1` for an optional host-configured actor identity. Channel
 names, envelope types and the host interface are exported from the package. The shared event bus is the
 notification plane; the host API or the runtime protocol remains the
@@ -224,7 +249,7 @@ run.
 A choice command is intentionally small:
 
 ```json
-{"protocol":"0.3.0","id":3,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":2,"idempotencyKey":"turn-42","profile":"signal"}
+{"protocol":"0.4.0","id":5,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":4,"idempotencyKey":"turn-42","profile":"signal"}
 ```
 
 - Choice ids must be exact; CLI label prefixes are not accepted.
@@ -237,7 +262,7 @@ A choice command is intentionally small:
 An observation command fills exactly one value requested by the projection:
 
 ```json
-{"protocol":"0.3.0","id":4,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":3,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
+{"protocol":"0.4.0","id":6,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":5,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
 ```
 
 Values are typed scalars: number, boolean, or string. An initial declaration
@@ -250,7 +275,7 @@ and is kept in a separate audit stream from branch decisions.
 `record` provides pibarm-style graph-linked decision records without advancing:
 
 ```json
-{"protocol":"0.3.0","id":5,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":4,"idempotencyKey":"adr-7"}
+{"protocol":"0.4.0","id":7,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":6,"idempotencyKey":"adr-7"}
 ```
 
 Every event carries the immutable trajectory hash, current node/choice when

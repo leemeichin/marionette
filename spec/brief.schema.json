@@ -15,6 +15,8 @@
     "frontier",
     "next",
     "escalation",
+    "elicitation",
+    "clarification",
     "progress",
     "protocol"
   ],
@@ -97,10 +99,11 @@
         "awaiting-observation",
         "waiting-timeout",
         "awaiting-human",
+        "awaiting-elicitation",
         "stranded",
         "completed"
       ],
-      "description": "active: an autonomous step is available. awaiting-observation: runtime values are required. waiting-timeout: a temporal edge will open later. awaiting-human: only @human choices are available. stranded: nothing can proceed. completed: END."
+      "description": "active: an autonomous step is available. awaiting-observation: runtime values are required. waiting-timeout: a temporal edge will open later. awaiting-human: only @human choices are available. awaiting-elicitation: an @ask question is waiting for a human answer. stranded: nothing can proceed. completed: END."
     },
     "variables": {
       "type": "object",
@@ -280,6 +283,7 @@
           "targetTitle",
           "sticky",
           "human",
+          "ask",
           "loop",
           "gate",
           "available",
@@ -318,6 +322,9 @@
           "human": {
             "type": "boolean"
           },
+          "ask": {
+            "type": "boolean"
+          },
           "loop": {
             "type": "boolean"
           },
@@ -354,6 +361,7 @@
                   "once-exhausted",
                   "gate-blocked",
                   "observation-required",
+                  "elicitation-pending",
                   "timeout-pending",
                   "timed-out"
                 ]
@@ -472,6 +480,53 @@
         }
       ]
     },
+    "elicitation": {
+      "description": "Present exactly when status is \"awaiting-elicitation\": the open @ask exchange.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": [
+            "choice",
+            "label",
+            "target",
+            "question",
+            "askedAt",
+            "askedBy",
+            "rationale",
+            "how"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "choice": { "type": "string" },
+            "label": { "type": "string" },
+            "target": { "type": "string" },
+            "question": { "type": "string", "minLength": 1 },
+            "askedAt": { "type": "string", "format": "date-time" },
+            "askedBy": { "type": "string" },
+            "rationale": { "type": ["string", "null"] },
+            "how": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "clarification": {
+      "description": "The @ask answer that advanced into the current phase, or null.",
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["choice", "question", "answer", "answeredBy"],
+          "additionalProperties": false,
+          "properties": {
+            "choice": { "type": "string" },
+            "question": { "type": "string" },
+            "answer": { "type": "string" },
+            "answeredBy": { "type": "string" }
+          }
+        }
+      ]
+    },
     "progress": {
       "type": "object",
       "required": [
@@ -506,6 +561,8 @@
       "type": "object",
       "required": [
         "choose",
+        "ask",
+        "answer",
         "advance",
         "observe",
         "rules"
@@ -513,6 +570,12 @@
       "additionalProperties": false,
       "properties": {
         "choose": {
+          "type": "string"
+        },
+        "ask": {
+          "type": "string"
+        },
+        "answer": {
           "type": "string"
         },
         "advance": {

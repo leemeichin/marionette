@@ -68,6 +68,11 @@ export interface Choice {
   gate: Gate | null;
   /** Human checkpoint: the agent must pause and escalate; it may not take this choice autonomously. */
   human: boolean;
+  /**
+   * Elicitation checkpoint: the agent may identify this route, but must ask a
+   * human for missing context before the edge can advance.
+   */
+  ask: boolean;
   /** Declared loop edge (`~loop~`): the author asserts this edge intentionally revisits earlier work. */
   loop: boolean;
   /** Temporal availability for a `timeout` edge; null for ordinary choices. */
@@ -134,7 +139,7 @@ export interface Trajectory {
   refs: Ref[];
 }
 
-export const SPEC_VERSION = '0.4.0';
+export const SPEC_VERSION = '0.5.0';
 export const PLAN_STATE_VERSION = 2;
 export const END = 'END';
 
@@ -213,6 +218,30 @@ export interface ObservationEntry {
   rationale: string | null;
 }
 
+/** One open or answered `@ask` exchange in the traversal audit trail. */
+export interface ElicitationEntry {
+  choice: string;
+  label: string;
+  target: string;
+  question: string;
+  askedAt: string;
+  askedBy: string;
+  rationale: string | null;
+  answer: string | null;
+  answeredAt: string | null;
+  answeredBy: string | null;
+}
+
+/** The `@ask` edge currently waiting for a human answer. */
+export interface PendingElicitation {
+  choice: string;
+  target: string;
+  question: string;
+  askedAt: string;
+  askedBy: string;
+  rationale: string | null;
+}
+
 /** plan.state.json — traversal state bound to a compiled trajectory by content hash. */
 export interface PlanState {
   /** Persistence contract version. Version 1 states are intentionally rejected. */
@@ -230,6 +259,10 @@ export interface PlanState {
   activationStartedAt: string | null;
   /** Runtime observations are auditable without pretending they are graph transitions. */
   observations: ObservationEntry[];
+  /** Open-ended clarification currently blocking traversal. */
+  pendingElicitation: PendingElicitation | null;
+  /** Asked and answered clarifications, kept separately from branch decisions. */
+  elicitations: ElicitationEntry[];
   /** Ids of once-only (`*`) choices already taken. */
   taken: string[];
   log: LogEntry[];

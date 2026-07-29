@@ -19,7 +19,7 @@ Phase 2 adds two sibling contracts:
 
 ```jsonc
 {
-  "spec": "0.4.0",                  // version of this document shape
+  "spec": "0.5.0",                  // version of this document shape
   "hash": "sha256:…",               // content hash — see below
   "source": { "file": "plan.mar" }, // provenance; NOT part of the hash
   "variables": {                    // typed declarations
@@ -39,7 +39,7 @@ Key concepts, mapped to the PRD's requirements:
 
 - **Nodes and choices** (P0.2): each node has prose `body`, entry `actions`
   (mutations), `choices` (edges with `label`, `sticky`, `gate`, `human`,
-  `loop`, optional `timeout`, `target`), observation checkpoints, and an
+  `ask`, `loop`, optional `timeout`, `target`), observation checkpoints, and an
   optional automatic `next` step. `"END"` is the reserved terminal target.
 - **Runtime observations:** a declaration with `initial: null` is late-bound
   and suspends initial entry until supplied. Node observations explicitly
@@ -53,6 +53,9 @@ Key concepts, mapped to the PRD's requirements:
 - **`@human` checkpoints** (choice `human: true`): the authored autonomy
   boundary. A conforming runtime must refuse to take such a choice on behalf
   of an agent and must escalate instead.
+- **`@ask` checkpoints** (choice `ask: true`): the authored ambiguity
+  boundary. An agent opens a focused question, traversal parks, and a
+  human-authored answer advances the fixed edge without selecting a route.
 - **`~loop~` edges** (choice `loop: true`): declared cycles. The compiler
   rejects undeclared cycles and loops without a satisfiable exit; the exit
   metadata lives on the sibling choices of the loop's cycle.
@@ -90,6 +93,8 @@ shape is stable:
   "observations": [
     { "at": "…", "actor": "…", "name": "remaining", "value": 7, "rationale": "queue query returned 7" }
   ],
+  "pendingElicitation": null, // or the open @ask question and fixed choice
+  "elicitations": [],         // asked/answered clarification audit entries
   "log": [                  // decision log (G4): every taken branch
     { "at": "…", "actor": "…", "from": "…", "choice": "…", "label": "…", "to": "…", "rationale": "…" }
   ]

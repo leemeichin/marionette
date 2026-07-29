@@ -1,12 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/leemeichin/marionette/spec/runtime-protocol.schema.json",
-  "title": "Marionette local runtime protocol v0.3",
+  "title": "Marionette local runtime protocol v0.4",
   "description": "Compact newline-delimited requests accepted by `marionette runtime`. The connection binds principal identity; actor fields are intentionally absent.",
   "oneOf": [
     { "$ref": "#/$defs/initialize" },
     { "$ref": "#/$defs/next" },
     { "$ref": "#/$defs/choose" },
+    { "$ref": "#/$defs/ask" },
+    { "$ref": "#/$defs/answer" },
     { "$ref": "#/$defs/advance" },
     { "$ref": "#/$defs/observe" },
     { "$ref": "#/$defs/record" },
@@ -17,7 +19,7 @@
       "type": "object",
       "required": ["protocol", "id", "op"],
       "properties": {
-        "protocol": { "const": "0.3.0" },
+        "protocol": { "const": "0.4.0" },
         "id": { "type": ["string", "number"] },
         "op": { "type": "string" }
       }
@@ -87,6 +89,40 @@
             "evidence": { "type": "array" }
           },
           "required": ["choiceId"],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "ask": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        { "$ref": "#/$defs/write" },
+        { "$ref": "#/$defs/projection" },
+        {
+          "properties": {
+            "op": { "const": "ask" },
+            "choiceId": { "type": "string", "minLength": 1 },
+            "question": { "type": "string", "minLength": 1 },
+            "evidence": { "type": "array" }
+          },
+          "required": ["choiceId", "question"],
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "answer": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        { "$ref": "#/$defs/projection" },
+        {
+          "properties": {
+            "op": { "const": "answer" },
+            "answer": { "type": "string", "minLength": 1 },
+            "rationale": { "type": "string", "minLength": 1 },
+            "expectedRevision": { "type": "integer", "minimum": 0 },
+            "idempotencyKey": { "type": "string", "minLength": 1 }
+          },
+          "required": ["answer", "expectedRevision"],
           "unevaluatedProperties": false
         }
       ]

@@ -37,6 +37,9 @@ surface; it does not change this CLI loop or the DSL.
 │      ├─ status: awaiting-human → deliver the escalation     │
 │      │     payload to the primary session and STOP          │
 │      │                                                      │
+│      ├─ status: awaiting-elicitation → present the agent's  │
+│      │     focused question; a human answers, then resume   │
+│      │                                                      │
 │      ├─ status: stranded       → report; plan needs editing │
 │      │     (then `marionette state rebind`)                 │
 │      │                                                      │
@@ -61,7 +64,7 @@ renders the same packet for humans. It contains:
   refs, and `intent` — the plan's `# summary:` and `# prompt:` metadata, so
   the executor holds the original ask, not just the current phase.
 - **status** — `active` | `awaiting-observation` | `waiting-timeout` |
-  `awaiting-human` | `stranded` | `completed`.
+  `awaiting-human` | `awaiting-elicitation` | `stranded` | `completed`.
 - **node** — the current phase: id, title (first body line), full prose body,
   raw meta, and normalised refs. The prose is the task description; it is
   the plan author's instruction to the executor.
@@ -78,6 +81,10 @@ renders the same packet for humans. It contains:
 - **automatic next step** (`next` in the JSON contract) — the
   unconditional route to follow when the stage is done.
 - **escalation** — present exactly when status is `awaiting-human` (below).
+- **elicitation** — present exactly when status is `awaiting-elicitation`;
+  carries the open `@ask` question, its fixed edge and answer instructions.
+- **clarification** — on the phase entered through an answered `@ask`, carries
+  that question and answer as immediate work context.
 - **progress** — steps taken, phases visited/total, the visited path.
 - **protocol** — the exact commands to record an outcome, plus the standing
   rules (do the work first; honest rationale; never take `@human` as agent;
@@ -105,6 +112,34 @@ places a checkpoint there. A common batch shape observes once, drains the
 captured count through a `while`, then reaches a refresh phase and observes
 again. This keeps the snapshot stable while work is in flight and avoids
 repeated lookups.
+
+## @ask elicitation
+
+An available `@ask` choice is still agent-owned: the agent identifies that
+the authored ambiguity applies and opens it with a concise, answerable
+question. It does not use ordinary `choose`, and it does not ask the human to
+approve a route.
+
+```console
+marionette state ask plan.mar <choice> \
+  --question "<the missing information>" \
+  --actor agent \
+  --rationale "<why this blocks the route>"
+```
+
+The brief then becomes `awaiting-elicitation`. Present its `elicitation`
+payload verbatim and stop. A human answer is recorded through the trusted host
+or, for the unbound CLI:
+
+```console
+marionette state answer plan.mar "<answer>" --actor <name>
+```
+
+The answer is audited separately, then the fixed `@ask` edge advances. The
+entered phase receives it as `clarification` in its work packet. It does not
+select a target. If several known answers should lead to different targets,
+the plan should author ordinary choices and use `@human` where the human owns
+that selection.
 
 ## Temporal exits
 

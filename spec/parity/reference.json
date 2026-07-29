@@ -1,7 +1,7 @@
 {
   "spec": "marionette-parity-reference/0.1",
   "packetSpec": "marionette-parity/0.1",
-  "packetSha256": "8b85df83c26a7ab081e83c223d24f52ea1a896f8cc39d3fba9b05e43cf5b5ad6",
+  "packetSha256": "f781afa20a8150de992bcd290ceb6c3a558bc3b8345831c0fdc6c2deef6388db",
   "diagnostics": [
     {
       "case": "mar006-dead-end",
@@ -51,33 +51,33 @@
   "trajectories": [
     {
       "case": "smallest-plan",
-      "sha256": "0aea9be14d11c3d4413fccc755287c75f5af9cdd5bfd3db55c63aba623eda53b"
+      "sha256": "66a10db6b106a715c866e3fadef524f257b64c2fd038b1d82f5aab268adfd581"
     },
     {
       "case": "complete-surface",
-      "sha256": "5d342ea41236909304de861e35dd4f9a7cea30925e4b473730d3c466ee4c8c41"
+      "sha256": "3c3523768ea8c741228ec7b017ec0858c851a68fe3cd533f482240bec5b59f55"
     }
   ],
   "walkers": [
     {
       "case": "baseline-full-traversal",
-      "sha256": "7bc72f35b17f90ed9d862e9a56adb4c012498e4e4b6266f99983f9b3cff6a366"
+      "sha256": "5b6980371d62e5fa5ececf1f1dce7ca7969abaac9a0aaddfd33fd0d18ba2b20e"
     },
     {
       "case": "dynamic-observation",
-      "sha256": "d463a46dc1c9e4f5fb13ef3eb44dda15da435a2e800f8e87d72f0f855a0134cd"
+      "sha256": "f0fc9c9f3e6a20cdaca5141dcceaa01f821dea4f9c5f744870e2a48180f57b15"
     },
     {
       "case": "kitchen-sink-guardrails",
-      "sha256": "e33f1c496dfe82c901cc524b38e8f00eacdae540b64dde8704a3552e077d5e80"
+      "sha256": "191af0653c5fc8e9c029c58d686564968c12a92e9c5de670040e36e0551ef3f6"
     },
     {
       "case": "resolution-and-advance",
-      "sha256": "8a7d44ae910878eb8aced8ebc3ab25f27f380be962700711f5f77adae0919592"
+      "sha256": "3a78066b9653ca57ad25edaa7f756e73e40fc94fb0f77b8abfe163ef86b616be"
     },
     {
       "case": "timeout-loop",
-      "sha256": "0ab0455f5d306d614de8c6958f330a4fa02092b5cf48f3fe72abd73764abeae8"
+      "sha256": "16eb78c5b4b9865b3e30b05bde5f3bd6f5a87aa049fad3c3c5de1e859c4f81e3"
     }
   ]
 }

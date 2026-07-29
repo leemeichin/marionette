@@ -37,6 +37,7 @@
  *    label(Id, Text)                      the choice's human-readable claim
  *    sticky(Id)                           "+" repeatable ("*" when absent)
  *    human(Id)                            @human checkpoint
+ *    ask(Id)                              @ask elicitation checkpoint
  *    loop_marked(Id)                      ~loop~ declared cycle edge
  *    gate(Id, Expr, Source)               {gate} as an AST + original text
  *    next_step(Node, Target, Line)        automatic next step
@@ -63,7 +64,7 @@
 % Facts arrive from a separate file (or load_string), so declare them
 % dynamic — and discontiguous, since the emitter groups them per phase.
 :- dynamic plan_start/1, node/3, variable/4, action/5, observation/3, choice/5,
-           label/2, sticky/1, human/1, loop_marked/1, gate/3, next_step/3,
+           label/2, sticky/1, human/1, ask/1, loop_marked/1, gate/3, next_step/3,
            timebox/2, timeout_choice/3, priority/2.
 :- discontiguous finding/2.
 
@@ -536,13 +537,16 @@ cyclic(N) :- node(N, _, _), can_reach(N, N).
 %% human_gate(?C, ?N, ?Label) — every authored human checkpoint.
 human_gate(C, N, Label) :- human(C), choice(C, N, _, _, _), label(C, Label).
 
+%% elicitation_gate(?C, ?N, ?Label) — every authored @ask checkpoint.
+elicitation_gate(C, N, Label) :- ask(C), choice(C, N, _, _, _), label(C, Label).
+
 %% speculative(?N) — a timeboxed phase (try it; abandon if the budget dries up).
 speculative(N) :- timebox(N, _).
 speculative(N) :- timeout_choice(C, _, _), choice(C, N, _, _, _).
 
 % Steps an agent may take alone: automatic next steps and non-human choices.
 agent_step(F, T) :- next_step(F, T, _).
-agent_step(F, T) :- eff_choice_edge(C, F, T), \+ human(C).
+agent_step(F, T) :- eff_choice_edge(C, F, T), \+ human(C), \+ ask(C).
 
 :- table agent_reach/2.
 agent_reach(A, B) :- agent_step(A, B).
@@ -571,6 +575,7 @@ reset_plan :-
     retractall(label(_, _)),
     retractall(sticky(_)),
     retractall(human(_)),
+    retractall(ask(_)),
     retractall(loop_marked(_)),
     retractall(gate(_, _, _)),
     retractall(next_step(_, _, _)),

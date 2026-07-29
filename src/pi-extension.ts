@@ -24,6 +24,7 @@ import {
   type MarionettePiError,
   type MarionettePiEvent,
   type MarionettePiHostApi,
+  type MarionettePiHumanAnswer,
   type MarionettePiHumanDecision,
   type MarionettePiHumanIdentityRequest,
 } from './pi-integration.ts';
@@ -46,6 +47,7 @@ const BINDING_ENTRY = 'marionette-binding';
 const EVENT_ENTRY = 'marionette-event';
 const PROJECTION_MESSAGE = 'marionette-projection';
 const HUMAN_DECISION_ENTRY = 'marionette-human-decision';
+const HUMAN_ANSWER_ENTRY = 'marionette-human-answer';
 
 interface StoredBinding {
   planFile: string;
@@ -174,6 +176,8 @@ const instructionsFor = (projection: RuntimeProjection): string => {
   switch (projection.status) {
     case 'awaiting-human':
       return 'Stop autonomous work and wait. The user must answer through /marionette-decide.';
+    case 'awaiting-elicitation':
+      return 'Stop autonomous work and wait. The user supplies context through /marionette-answer.';
     case 'awaiting-observation':
       return 'Obtain only the requested observations, then record each with marionette_walk.';
     case 'waiting-timeout':
@@ -226,18 +230,24 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     }
     const phase = projection.node?.id ?? projection.status;
     ctx.ui.setStatus('marionette', `${phase} · r${projection.revision}`);
-    if (!projection.escalation) {
+    if (projection.elicitation) {
+      ctx.ui.setWidget('marionette-escalation', [
+        `Marionette needs clarification (${projection.elicitation.id})`,
+        `  ${projection.elicitation.question}`,
+        'Use /marionette-answer to respond.',
+      ]);
+    } else if (projection.escalation) {
+      const lines = [
+        `Marionette needs a human decision (${projection.escalation.id})`,
+        ...projection.escalation.choices.map((choice) => `  ${choice.id} — ${choice.label}`),
+        ...projection.escalation.fallbacks.map((fallback) =>
+          `  fallback ${fallback.choiceId} opens ${fallback.dueAt ?? 'at its authored timeout'}`),
+        'Use /marionette-decide to respond.',
+      ];
+      ctx.ui.setWidget('marionette-escalation', lines);
+    } else {
       ctx.ui.setWidget('marionette-escalation', undefined);
-      return;
     }
-    const lines = [
-      `Marionette needs a human decision (${projection.escalation.id})`,
-      ...projection.escalation.choices.map((choice) => `  ${choice.id} — ${choice.label}`),
-      ...projection.escalation.fallbacks.map((fallback) =>
-        `  fallback ${fallback.choiceId} opens ${fallback.dueAt ?? 'at its authored timeout'}`),
-      'Use /marionette-decide to respond.',
-    ];
-    ctx.ui.setWidget('marionette-escalation', lines);
   };
 
   const emit = (event: MarionettePiEvent, persist = activeContext !== null): MarionettePiEvent => {
@@ -331,6 +341,16 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
             { budget: command.budget, evidence: command.evidence },
           );
           break;
+        case 'ask':
+          result = await bridge.ask(
+            command.choiceId,
+            command.question,
+            command.rationale,
+            command.idempotencyKey,
+            command.profile,
+            { budget: command.budget, evidence: command.evidence },
+          );
+          break;
         case 'advance':
           result = await bridge.advance(
             command.rationale,
@@ -408,6 +428,39 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       return event;
     } catch (error) {
       return failure(cause, error, 'humanChoose');
+    }
+  };
+
+  const executeHumanAnswer = async (
+    response: MarionettePiHumanAnswer,
+    cause: MarionettePiEvent['cause'],
+  ): Promise<MarionettePiEvent> => {
+    if (!bridge) {
+      return failure(cause, new PiIntegrationError(
+        'No Marionette run is bound.',
+        'not-bound',
+      ), 'humanAnswer');
+    }
+    try {
+      const result = await bridge.humanAnswer(
+        response.human,
+        response.answer,
+        response.idempotencyKey,
+        response.profile,
+        { budget: response.budget, rationale: response.rationale },
+      );
+      const event = acceptResult('humanAnswer', result, cause);
+      pi.appendEntry(HUMAN_ANSWER_ENTRY, {
+        human: response.human,
+        answer: response.answer,
+        rationale: response.rationale,
+        revision: event.projection?.revision,
+        eventSeqs: event.receipt?.eventSeqs ?? [],
+      });
+      publishProjection(event, response.triggerTurn ?? true);
+      return event;
+    } catch (error) {
+      return failure(cause, error, 'humanAnswer');
     }
   };
 
@@ -564,6 +617,10 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       source: 'host',
       name: 'humanChoose',
     }),
+    humanAnswer: (answer) => executeHumanAnswer(answer, {
+      source: 'host',
+      name: 'humanAnswer',
+    }),
   };
 
   const unsubscribeDiscovery = pi.events.on(
@@ -690,6 +747,68 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand('marionette-answer', {
+    description: 'Supply context for an open @ask checkpoint',
+    handler: async (args, ctx) => {
+      activeContext = ctx;
+      const refresh = await executeAgent(
+        { operation: 'next' },
+        { source: 'command', name: 'marionette-answer:refresh' },
+      );
+      if (refresh.error || !refresh.projection) {
+        ctx.ui.notify(refresh.error?.message ?? 'No Marionette run is bound.', 'error');
+        return;
+      }
+      const elicitation = refresh.projection.elicitation;
+      if (!elicitation) {
+        ctx.ui.notify(
+          `Run is ${refresh.projection.status}; no clarification is pending.`,
+          'warning',
+        );
+        return;
+      }
+
+      let response = args.trim();
+      if (!response && ctx.hasUI) {
+        response = (await ctx.ui.editor(elicitation.question, '') ?? '').trim();
+      }
+      if (!response) {
+        ctx.ui.notify('A clarification answer is required.', 'error');
+        return;
+      }
+
+      let humanId = pi.getFlag('marionette-human');
+      if (typeof humanId !== 'string') {
+        pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
+          respond(value: string) {
+            if (value.trim()) humanId = value.trim();
+          },
+        } satisfies MarionettePiHumanIdentityRequest);
+      }
+      if (typeof humanId !== 'string' && ctx.hasUI) {
+        humanId = await ctx.ui.input('Your name', 'recorded as the answer source');
+      }
+      if (typeof humanId !== 'string' || !humanId.trim()) {
+        ctx.ui.notify('Set --marionette-human <name> or provide a name in the prompt.', 'error');
+        return;
+      }
+
+      const event = await executeHumanAnswer({
+        human: {
+          id: humanId.trim(),
+          uri: `pi://human/${encodeURIComponent(humanId.trim())}`,
+        },
+        answer: response,
+        idempotencyKey: `human:${elicitation.id}:answer`,
+        triggerTurn: true,
+      }, {
+        source: 'command',
+        name: 'marionette-answer',
+      });
+      if (event.error) ctx.ui.notify(event.error.message, 'error');
+    },
+  });
+
   pi.registerTool({
     name: 'marionette_draft',
     label: 'Marionette draft',
@@ -785,12 +904,12 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     label: 'Marionette walk',
     description:
       'Read or advance the bound Marionette run, attach records, or inspect its event journal. ' +
-      'The tool is agent-bound and cannot take @human choices.',
+      'The tool is agent-bound, cannot take @human choices, and opens @ask choices with a focused question.',
     promptSnippet: 'marionette_walk — authoritative work packet and traversal for the bound Marionette run',
     promptGuidelines: [
       'When marionette_walk is bound, use it instead of marionette brief or marionette state commands.',
       'After each phase, call marionette_walk exactly once with choose or advance and an evidence-based rationale.',
-      'At awaiting-human, waiting-timeout, stranded, or completed status, stop autonomous traversal and follow the projection.',
+      'At awaiting-human, awaiting-elicitation, waiting-timeout, stranded, or completed status, stop autonomous traversal and follow the projection.',
     ],
     executionMode: 'sequential',
     parameters: Type.Object({
@@ -798,12 +917,14 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         Type.Literal('capabilities'),
         Type.Literal('next'),
         Type.Literal('choose'),
+        Type.Literal('ask'),
         Type.Literal('advance'),
         Type.Literal('observe'),
         Type.Literal('record'),
         Type.Literal('events'),
       ]),
       choiceId: Type.Optional(Type.String()),
+      question: Type.Optional(Type.String()),
       name: Type.Optional(Type.String()),
       value: Type.Optional(Type.Union([Type.String(), Type.Number(), Type.Boolean()])),
       rationale: Type.Optional(Type.String()),
@@ -866,6 +987,28 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
           command = {
             operation: 'choose',
             choiceId: params.choiceId,
+            rationale: params.rationale,
+            idempotencyKey: writeKey,
+            profile: profileOf(params.profile),
+            budget: budgetOf(params.budget),
+            evidence: refsOf(params.evidence),
+          };
+          break;
+        case 'ask':
+          if (!params.choiceId || !params.question || !params.rationale) {
+            return {
+              content: [{ type: 'text', text: 'ask requires choiceId, question, and rationale' }],
+              details: failure(cause, new PiIntegrationError(
+                'ask requires choiceId, question, and rationale',
+                'invalid-request',
+              ), 'ask'),
+              isError: true,
+            };
+          }
+          command = {
+            operation: 'ask',
+            choiceId: params.choiceId,
+            question: params.question,
             rationale: params.rationale,
             idempotencyKey: writeKey,
             profile: profileOf(params.profile),
@@ -971,7 +1114,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       }
       const payload = event.projection ?? event.result ?? {};
       const stop = event.projection &&
-        ['awaiting-human', 'waiting-timeout', 'stranded', 'completed']
+        ['awaiting-human', 'awaiting-elicitation', 'waiting-timeout', 'stranded', 'completed']
           .includes(event.projection.status)
         ? `\nSTOP: ${instructionsFor(event.projection)}`
         : '';

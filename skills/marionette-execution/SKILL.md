@@ -20,18 +20,20 @@ https://github.com/leemeichin/marionette/blob/main/docs/EXECUTION.md
 ## Choose the bound runtime before the CLI
 
 If `marionette_walk` is available and a run is bound, it is the authoritative
-walker for this session. Use it for `next`, `choose`, `advance`, `observe`,
-`record`, and runtime event reads. **Do not** run `marionette brief` or
+walker for this session. Use it for `next`, `choose`, `ask`, `advance`,
+`observe`, `record`, and runtime event reads. **Do not** run `marionette brief` or
 `marionette state ...` against that plan: those commands use a separate
 `<plan>.state.json` store and would fork the traversal.
 
 In a bound session, translate the loop below as follows:
 
 - re-brief → `marionette_walk` with `operation: "next"`
-- state choose/advance/observe → the matching `marionette_walk` operation
+- state choose/ask/advance/observe → the matching `marionette_walk` operation
 - attach an audit record → `marionette_walk` with `operation: "record"`
 - inspect history → `marionette_walk` with `operation: "events"` and its cursor
 - human checkpoint → `/marionette-decide`; never proxy it through the tool
+- elicitation checkpoint → agent opens it with `ask`; the human answers
+  through `/marionette-answer`
 
 The `work` projection is the full work packet. If a caller deliberately
 requests a smaller budget and receives `truncated: true`, call `next` again
@@ -92,6 +94,13 @@ Repeat until the brief says otherwise:
      Silence never selects a default. If `fallbacks` is empty, the run parks
      indefinitely; if it lists a timeout choice, schedule a wake-up for its
      `dueAt` and re-brief then. Only the frontier may open that fallback.
+   - `awaiting-elicitation` — deliver the brief's `elicitation` payload
+     verbatim: the focused question, choice label, fixed target, who asked and
+     why. Then stop. This is not approval and the human does not select a
+     route. In a bound host direct them to `/marionette-answer`; in an
+     unbound CLI traversal record their explicit answer with
+     `marionette state answer <plan> "<answer>" --actor <name>`. Never invent,
+     complete or default the answer.
    - `stranded` — report which gates are shut and the current variables; the
      plan likely needs editing (author fixes, then `marionette state rebind`).
      Stop.
@@ -143,6 +152,10 @@ the plan changed underneath the state: stop and surface the drift message;
   phase so the next traversal doesn't re-ask. Never substitute your own
   reading of under-specified work for the owner's — a wrong guess executed
   confidently is worse than a paused phase.
+- **Prefer an authored `@ask` route when it is available.** Open it with one
+  focused question and a rationale explaining the ambiguity. Do not use
+  ordinary `choose`: the runtime parks, records the human answer separately,
+  and advances the already-authored edge.
 - **Honest rationales beat optimistic ones.** If the evidence for a choice
   is thin, that is what loop edges and `@human` escapes are for.
 
@@ -256,7 +269,8 @@ carries a `# tracker:` tag — the manifest tells you exactly what to do
 ## Hard rules
 
 - Never edit the `.mar`, the trajectory JSON, or the state file by hand;
-  state changes go through `state observe|choose|advance|rebind` only.
+  state changes go through `state observe|choose|ask|answer|advance|rebind`
+  only.
 - Never pass `--actor` other than `agent` for your own steps. Recording a
   human's decision as their proxy requires their explicit in-conversation
   instruction, their name as `--actor`, and their stated rationale — a
