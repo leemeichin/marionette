@@ -14,6 +14,7 @@ import { summarize } from './summarize.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_EVENT_CHANNEL,
+  MARIONETTE_PI_HUMAN_CHANNEL,
   MARIONETTE_PI_INTEGRATION_VERSION,
   MARIONETTE_PI_READY_CHANNEL,
   type MarionettePiAgentCommand,
@@ -24,6 +25,7 @@ import {
   type MarionettePiEvent,
   type MarionettePiHostApi,
   type MarionettePiHumanDecision,
+  type MarionettePiHumanIdentityRequest,
 } from './pi-integration.ts';
 import {
   PiAgentBridge,
@@ -647,6 +649,13 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       }
 
       let humanId = pi.getFlag('marionette-human');
+      if (typeof humanId !== 'string') {
+        pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
+          respond(value: string) {
+            if (value.trim()) humanId = value.trim();
+          },
+        } satisfies MarionettePiHumanIdentityRequest);
+      }
       if (typeof humanId !== 'string' && ctx.hasUI) {
         humanId = await ctx.ui.input('Your name', 'recorded as the decision actor');
       }

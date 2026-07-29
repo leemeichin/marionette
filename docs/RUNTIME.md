@@ -208,8 +208,9 @@ either:
 
 The API exposes `getBinding()`, `bind()`, `unbind()`, every agent-bound runtime
 operation through `execute()`, and a separate `humanChoose()` accepting a
-host-authenticated principal. Channel names, envelope types and the host
-interface are exported from the package. The shared event bus is the
+host-authenticated principal. Before prompting, `/marionette-decide` also asks
+`marionette:human:v1` for an optional host-configured actor identity. Channel
+names, envelope types and the host interface are exported from the package. The shared event bus is the
 notification plane; the host API or the runtime protocol remains the
 request/response command plane.
 

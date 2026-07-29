@@ -11,6 +11,7 @@ import marionetteExtension from '../src/pi-extension.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_EVENT_CHANNEL,
+  MARIONETTE_PI_HUMAN_CHANNEL,
   type MarionettePiEvent,
   type MarionettePiHostApi,
 } from '../src/pi-integration.ts';
@@ -111,6 +112,7 @@ const createFakePi = (cwd: string) => {
     ctx,
     entries,
     emitted,
+    eventBus: events,
     handlers,
     messages,
     notifications,
@@ -324,19 +326,20 @@ Human approval required.
     assert.equal(forbidden.isError, true);
     assert.equal(forbidden.details.error.code, 'forbidden');
 
-    const current = await api.execute({ operation: 'next' });
-    const escalationId = current.projection?.escalation?.id;
-    assert.ok(escalationId);
-    const approved = await api.humanChoose({
-      human: { id: 'user-42', uri: 'pibarm://users/42' },
-      choiceId: 'approval#0',
-      rationale: 'reviewed in pibarm',
-      idempotencyKey: `human:${escalationId}:approval#0`,
-      triggerTurn: false,
+    fake.eventBus.on(MARIONETTE_PI_HUMAN_CHANNEL, (value) => {
+      (value as { respond(humanId: string): void }).respond('user-42');
     });
+    await fake.commands.get('marionette-decide')!.handler(
+      'approval#0 reviewed in pibarm',
+      fake.ctx,
+    );
+    const approved = await api.execute({ operation: 'next' });
     assert.equal(approved.projection?.status, 'completed');
-    assert.equal(approved.events?.[0].principal?.role, 'human');
-    assert.equal(approved.events?.[0].principal?.id, 'user-42');
+    const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
+    const decision = events.find((event) =>
+      event.events?.some((item) => item.kind === 'decision.committed'));
+    assert.equal(decision?.events?.[0].principal?.role, 'human');
+    assert.equal(decision?.events?.[0].principal?.id, 'user-42');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

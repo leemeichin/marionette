@@ -20,6 +20,7 @@ export const MARIONETTE_PI_INTEGRATION_VERSION = '1.1.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
+export const MARIONETTE_PI_HUMAN_CHANNEL = 'marionette:human:v1';
 
 export interface MarionettePiBinding {
   planFile: string;
@@ -158,4 +159,8 @@ export interface MarionettePiHostApi {
 
 export interface MarionettePiDiscoveryRequest {
   respond(api: MarionettePiHostApi): void;
+}
+
+export interface MarionettePiHumanIdentityRequest {
+  respond(humanId: string): void;
 }
