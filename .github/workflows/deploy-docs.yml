@@ -6,6 +6,10 @@ on:
     paths:
       - 'docs-site/**'
       - 'src/**'
+      - 'spec/rules/**'
+      - 'scripts/embed-rules.mjs'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/deploy-docs.yml'
   workflow_dispatch:
 
@@ -26,6 +30,9 @@ jobs:
       - run: npm run build        # tsc output is staged into the site's /lib
       - name: Build and gate the site
         run: npm run build && npm run check
+        working-directory: docs-site
+      - name: Exercise browser demos
+        run: npm run check:browser
         working-directory: docs-site
       - name: Load secrets from 1Password
         uses: 1password/load-secrets-action@v2

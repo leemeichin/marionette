@@ -171,9 +171,12 @@ everything: the rule base runs on `swipl-wasm` — SWI-Prolog compiled to
 WebAssembly, an ordinary npm dependency (~13 MB installed) — loaded lazily
 in-process by `src/rule-engine.ts`. The singleton bridge serializes
 facts-load/query transactions, so global plan facts cannot bleed between
-concurrent callers. `marionette validate`, walker commands, `oracle` and
-`query` therefore work on a machine with nothing but Node. No system package,
-no per-platform binaries.
+concurrent callers. `spec/rules/marionette.pl` remains the editable,
+standalone source of truth; `npm run generate:rules` embeds an exact copy in
+`src/rules-source.ts`, and `npm run check:rules` rejects drift. Engine startup
+therefore performs no filesystem read, and the compiler/walker module graph
+contains no `node:` imports. `marionette validate`, walker commands, `oracle`
+and `query` still need no system package or per-platform binary.
 
 Why wasm over the alternatives a Prolog deployment usually reaches for:
 
@@ -183,8 +186,7 @@ Why wasm over the alternatives a Prolog deployment usually reaches for:
   into a native executable, but per platform — an npm bundle would need an
   x64/arm64 × linux/macos/windows matrix and the maintenance that follows;
 - the **wasm build is that same compiled artifact, portable**: one binary
-  blob, runs wherever Node runs, and in the browser (the playground can get
-  "ask the plan" for free later, on the same code path).
+  blob used by Node and by the browser playground on the same semantics path.
 
 A native `swipl` (≥ 9, for tabling) remains the nicest way to use the
 interactive toplevel — the `.pl` files are plain Prolog and load unchanged —

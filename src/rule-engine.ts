@@ -7,9 +7,8 @@
  * dynamic Prolog predicates.
  */
 
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import type { Value } from './types.ts';
+import { MARIONETTE_RULES } from './rules-source.ts';
 
 export interface RuleGraphFinding {
   code: string;
@@ -79,7 +78,13 @@ interface SwiplModule {
   };
 }
 
-const RULES_PATH = fileURLToPath(new URL('../spec/rules/marionette.pl', import.meta.url));
+type SwiplFactory = (options?: Record<string, unknown>) => Promise<SwiplModule>;
+
+interface BrowserSwiplGlobal {
+  SWIPL?: SwiplFactory;
+}
+
+const BROWSER_SWIPL_SCRIPT = '/swipl/swipl-web.js';
 
 function stripEncodingDirective(code: string): string {
   return code.replaceAll(':- encoding(utf8).', '');
@@ -98,12 +103,49 @@ let factsLoads = 0;
 let loadedFacts: string | null = null;
 let queue: Promise<void> = Promise.resolve();
 
+function isBrowser(): boolean {
+  return typeof document !== 'undefined';
+}
+
+async function browserSwiplFactory(): Promise<SwiplFactory> {
+  const browser = globalThis as typeof globalThis & BrowserSwiplGlobal;
+  if (!browser.SWIPL) {
+    await new Promise<void>((resolve, reject) => {
+      const existing = document.querySelector<HTMLScriptElement>(
+        `script[src="${BROWSER_SWIPL_SCRIPT}"]`,
+      );
+      const script = existing ?? document.createElement('script');
+      const loaded = () => resolve();
+      const failed = () => reject(new Error(`failed to load ${BROWSER_SWIPL_SCRIPT}`));
+      script.addEventListener('load', loaded, { once: true });
+      script.addEventListener('error', failed, { once: true });
+      if (!existing) {
+        script.src = BROWSER_SWIPL_SCRIPT;
+        script.async = true;
+        document.head.append(script);
+      }
+    });
+  }
+  if (!browser.SWIPL) {
+    throw new Error(`${BROWSER_SWIPL_SCRIPT} did not expose SWIPL`);
+  }
+  return browser.SWIPL;
+}
+
 async function engine(): Promise<SwiplModule> {
   enginePromise ??= (async () => {
-    const SWIPL = (await import('swipl-wasm')).default;
-    const swipl = (await SWIPL({ arguments: ['-q'] })) as unknown as SwiplModule;
+    const SWIPL = isBrowser()
+      ? await browserSwiplFactory()
+      : (await import('swipl-wasm')).default as unknown as SwiplFactory;
+    const options = isBrowser()
+      ? {
+          arguments: ['-q'],
+          locateFile: (path: string) => `/swipl/${path}`,
+        }
+      : { arguments: ['-q'] };
+    const swipl = await SWIPL(options);
     await swipl.prolog.load_string(
-      stripEncodingDirective(readFileSync(RULES_PATH, 'utf8')),
+      stripEncodingDirective(MARIONETTE_RULES),
       'marionette_rules',
     );
     return swipl;

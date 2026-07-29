@@ -1,6 +1,6 @@
 # Marionette docs site
 
-A dependency-free static documentation site: a spacious reading layout,
+A static documentation site with a dependency-free build: a spacious reading layout,
 syntax-highlighted live editors, and interactive demos replayed from
 **verbatim captures of the real CLI**, held to WCAG AA by build-time gates.
 Design rationale and tokens: [`DESIGN.md`](DESIGN.md).
@@ -11,10 +11,12 @@ Design rationale and tokens: [`DESIGN.md`](DESIGN.md).
 $ cd docs-site
 $ npm run build      # src/pages/*.html + transcripts/ → dist/
 $ npm run check      # contrast AA + transcript fidelity + a11y structure
+$ npm run check:browser # optional; needs Chrome and Node ≥ 22
 $ npm run preview    # http://localhost:8788
 ```
 
-No dependencies to install; the build is plain Node (≥ 18).
+Run `npm run build` at the repository root before building the site. The site
+build is plain Node (≥ 18); the optional browser smoke test drives local Chrome.
 
 ## Deploy (Cloudflare)
 
@@ -52,10 +54,13 @@ from the Cloudflare dashboard afterwards if wanted.
   fails the build if rendered frames diverge from the capture by one byte.
 - The home page (`/`) compiles and walks plans **in the browser** using the
   repo's own tsc output (staged into `dist/lib` by the build — run
-  `npm run build` at the repo root first). Hashing is WebCrypto
-  (`globalThis.crypto`), the same code path on Node ≥ 20 and browsers — no
-  shims. The graph is dependency-free SVG with pan, wheel/button zoom and a
-  fit-to-view control.
+  `npm run build` at the repo root first). The production Prolog semantics are
+  embedded in that module graph and the self-hosted SWI-Prolog WASM runtime is
+  staged with it; there is no runtime filesystem read or browser-only
+  fallback. Hashing is WebCrypto
+  (`globalThis.crypto`), the same code path on Node ≥ 20 and browsers. The
+  graph is dependency-free SVG with pan, wheel/button zoom and a fit-to-view
+  control.
 - `<mini-playground src="checkout.mar" title="…">` embeds the same engine
   on the examples page as an editable two-pane widget (plan left, walk
   right), without the graph viewer — see `public/mini.js`.
@@ -70,3 +75,7 @@ Accessibility is enforced, not aspirational: `npm run check` fails on any
 AA contrast regression, unlabelled control, missing landmark/skip link, or
 transcript drift. Demos never autoplay, are fully keyboard operable, and
 collapse to an instant reveal under `prefers-reduced-motion`.
+
+`npm run check:browser` is the runtime gate: it loads the home playground and
+examples in headless Chrome, waits for the real compiler/walker, takes a step
+to `END` in each UI, and fails on browser exceptions.
