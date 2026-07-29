@@ -7,3 +7,4 @@
 (define pkg-desc
   "Learning-first seed for Marionette's human-owned Racket implementation")
 (define pkg-authors '("Lee Meichin"))
+(define test-omit-paths '("scripts"))
