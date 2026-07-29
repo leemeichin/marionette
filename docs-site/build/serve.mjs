@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 const port = Number(process.env.PORT || 8788);
+const host = process.env.HOST || '127.0.0.1';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -16,9 +17,10 @@ const TYPES = {
   '.json': 'application/json',
   '.svg': 'image/svg+xml',
   '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm',
 };
 
-createServer((req, res) => {
+const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   let path = normalize(url.pathname).replace(/^([/\\])+/, '');
   let file = join(dist, path);
@@ -33,4 +35,10 @@ createServer((req, res) => {
   }
   res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream' });
   res.end(readFileSync(file));
-}).listen(port, () => console.log(`preview: http://localhost:${port}`));
+});
+
+server.listen(port, host, () => {
+  const address = server.address();
+  const actualPort = typeof address === 'object' && address ? address.port : port;
+  console.log(`preview: http://${host}:${actualPort}`);
+});

@@ -160,8 +160,8 @@ A compiled plan is a database of facts over a graph of state machines, so
 the graph checks are *specified* as logic rules over that database
 (`spec/rules/marionette.pl` — normative, per ADR-0003) and the same rules
 answer questions no fixed subcommand covers. The engine ships with the
-package (SWI-Prolog compiled to WebAssembly), so this works wherever
-`npm install` does:
+package (SWI-Prolog compiled to WebAssembly), and the normative rules are
+embedded in the compiled module rather than read from disk at runtime:
 
 ```console
 $ marionette query plan.mar 'unattended_completion'
@@ -175,6 +175,8 @@ STRAND	line 25	once-only choice on a cycle can strand a traversal
 The rule base is the production graph validator and walker. Its structured
 results are checked against frozen conformance vectors; the former TypeScript
 implementations remain test-only for a 30-day differential confidence window.
+The compiler/walker core uses Web-standard globals and has no `node:` imports;
+the CLI and durable local stores remain explicit Node host adapters.
 
 Humans normally don't hand-write the DSL: the bundled **authoring skill**
 turns natural-language notes into a validated `.mar` draft, and `render` +

@@ -7,6 +7,7 @@
   "scripts": {
     "build": "node build/build.mjs",
     "check": "node build/check-contrast.mjs && node build/check-fidelity.mjs && node build/check-html.mjs",
+    "check:browser": "node build/check-browser.mjs",
     "preview": "node build/serve.mjs",
     "deploy": "npm run build && npm run check && npx wrangler deploy"
   }

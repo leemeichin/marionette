@@ -58,6 +58,19 @@ across process restarts.
 Engine performance is recorded by `npm run bench:engine`. It is measurement
 only: this decision establishes no latency threshold.
 
+## Portability amendment — 2026-07-28
+
+The semantics engine is an in-memory module, not a filesystem consumer.
+`spec/rules/marionette.pl` remains authoritative and independently runnable;
+`scripts/embed-rules.mjs` generates an exact TypeScript string module, with a
+drift check in every build. `src/rule-engine.ts` contains no `node:` imports.
+Browser hosts load the self-hosted WASM runtime through Web APIs, while the
+installed package lets `swipl-wasm` select its own host implementation.
+
+This boundary applies to compilation and walking. The command-line interface,
+state store and process registry are deliberately separate Node host adapters
+because their job is to read and durably mutate local files.
+
 ## Consequences
 
 - New graph diagnostics land spec-first: clause → structured finding →

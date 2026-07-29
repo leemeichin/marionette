@@ -14,6 +14,12 @@ const src = join(root, 'src');
 const dist = join(root, 'dist');
 const transcripts = join(root, 'transcripts');
 
+function relativeJsImports(source) {
+  return [...source.matchAll(
+    /\b(?:from\s*|import\s*(?:\(\s*)?)["']\.\/([\w-]+\.js)["']/g,
+  )].map((match) => match[1]);
+}
+
 export const PAGES = [
   { slug: 'index', nav: 'overview', wide: true, title: 'Marionette documentation', desc: 'Technical documentation for the Marionette trajectory compiler, validator and runtime.' },
   { slug: 'getting-started', nav: 'getting started', title: 'Getting started — Marionette', desc: 'Install the marionette CLI, write and validate your first plan, and set it up with Claude Code, Codex, or OpenCode.',
@@ -224,11 +230,44 @@ export function build() {
     staged.add(f);
     const src = join(repoDist, f);
     if (!existsSync(src)) throw new Error(`missing ${src} — run \`npm run build\` at the repo root first`);
-    for (const m of readFileSync(src, 'utf8').matchAll(/from '\.\/([\w-]+\.js)'/g)) stage(m[1]);
+    for (const dependency of relativeJsImports(readFileSync(src, 'utf8'))) {
+      stage(dependency);
+    }
   };
   for (const f of LIB) stage(f);
   mkdirSync(join(dist, 'lib'), { recursive: true });
   for (const f of staged) cpSync(join(repoDist, f), join(dist, 'lib', f));
+
+  // The production semantics engine is SWI-Prolog in both Node and the
+  // browser. Self-host its browser runtime so the playground does not depend
+  // on a CDN or silently fall back to another implementation. The normative
+  // rules are embedded in the staged module graph.
+  const swiplDist = join(root, '..', 'node_modules', 'swipl-wasm', 'dist', 'swipl');
+  const swiplAssets = ['swipl-web.js', 'swipl-web.wasm', 'swipl-web.data'];
+  mkdirSync(join(dist, 'swipl'), { recursive: true });
+  for (const file of swiplAssets) {
+    const source = join(swiplDist, file);
+    if (!existsSync(source)) {
+      throw new Error(`missing ${source} — run \`npm install\` at the repo root first`);
+    }
+    cpSync(source, join(dist, 'swipl', file));
+  }
+
+  // Refuse to emit a browser module graph with dangling relative imports.
+  for (const file of staged) {
+    const source = readFileSync(join(dist, 'lib', file), 'utf8');
+    if (/\b(?:from\s*|import\s+)["']node:/.test(source)) {
+      throw new Error(
+        `${file} statically imports a Node built-in — run \`npm run build\` at the repo root ` +
+        'and ensure the staged engine is browser-safe',
+      );
+    }
+    for (const dependency of relativeJsImports(source)) {
+      if (!existsSync(join(dist, 'lib', dependency))) {
+        throw new Error(`${file} imports unstaged browser module ${dependency}`);
+      }
+    }
+  }
   // Example plans for the playground dropdown, sourced from transcripts/.
   const EXAMPLES = [
     { file: 'hello-world.mar', label: 'hello-world — one step, then done' },
