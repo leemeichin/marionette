@@ -1,0 +1,108 @@
+// Delivery plan for the learning-first Racket port. The TypeScript/SWI
+// implementation remains the reference until a human-approved cutover.
+# project: marionette-racket-port
+# summary: Prove Racket distribution, prepare a parity lab, and hand Lee a mechanically bootstrapped 48-hour language project before any substantive port begins.
+# prompt: """
+sounds amazing, so you know what's next? using marionette to plan the delivery of this. We've decided the actual implementation is human gated but we can let AI bootstrap the racket project (give it a fresh directory to start with so we can test for parity against TS before imports are introduced), do the CI, compile the binaries for github releases, and then handle the migration work so the extensions and skills use it (do we still keep a TS package that wraps the bin?). So the first thing is to open a baseline PR with a marionette plan for all this and then work to the human gate.
+"""
+# tracker: github
+# github:repo: leemeichin/marionette
+# github:issue: 33, 32
+# delivery: single-pr
+# delivery:branch: agent/racket-port-plan
+# report: at-checkpoints
+
+-> baseline_pr
+
+=== baseline_pr ===
+Open a draft PR with this validated trajectory before adding delivery code.
+The PR keeps the TypeScript/SWI implementation authoritative and makes Lee's
+ownership of substantive Racket language work explicit.
+# github:issue: 33
+* [Draft PR is open and the autonomy boundary is reviewable] -> racket_workspace
+
+=== racket_workspace ===
+Bootstrap a fresh racket/ package with metadata, test commands, empty module
+boundaries and a trivial CLI that proves Racket, Datalog and Racklog load.
+Do not implement the Marionette reader, AST, rules or walker.
+# github:issue: 33
++ [The seed package and smoke test work locally] -> distribution_evidence
+
+=== distribution_evidence ===
+Automate reproducible release archives for supported macOS and Linux targets.
+CI must unpack and run each self-contained artifact on a clean runner, retain
+PR artifacts, and attach the same archives to tagged GitHub releases.
+# github:issue: 33
++ [The distribution evidence packet is complete] -> parity_lab
+
+=== parity_lab ===
+Freeze implementation-neutral fixtures and a differential-test interface
+which can compare Racket output with today's TypeScript/SWI reference before
+imports change either side. Cover diagnostics, trajectories and walker effects.
+# github:issue: 33
+# github:issue: 32
++ [The parity contract fails clearly until a Racket result exists] -> adapter_boundary
+
+=== adapter_boundary ===
+Record the migration topology: the Racket executable becomes the only
+interpreter, while the npm package remains temporarily as a thin Pi/Node host
+adapter that locates or installs the platform binary and speaks its protocol.
+The browser demo may remain on the frozen TypeScript implementation.
+# github:issue: 33
++ [The wrapper and cutover boundaries are explicit] -> implementation_gate
+
+=== implementation_gate ===
+Lee reviews the seed project, cross-platform artifact evidence, parity lab and
+48-hour workbook. No reader, source AST, logic rules or walker implementation
+starts until Lee chooses a route here.
+# github:issue: 33
++ [Distribution is pleasant enough — begin the workbook] @human -> vertical_slice
++ [Distribution is too brittle — reconsider the host] @human -> host_reconsideration
+
+=== host_reconsideration ===
+Record which packaging or runtime constraints made Racket unsuitable and
+choose whether to revise the distribution target or evaluate another host.
+# github:issue: 33
++ [A revised experiment is worth running] @human ~loop~ -> racket_workspace
++ [Stop the Racket port with the evidence preserved] @human -> END
+
+=== vertical_slice ===
+Lee works through the outcome-based 48-hour workbook and owns every substantive
+language decision. AI may review, explain a failing invariant, or reveal one
+requested hint level; it must not fill in the implementation.
+# github:issue: 33
+# github:issue: 32
++ [The slice proves Racket — continue the complete port] @human -> complete_port
++ [The slice exposes a fatal mismatch — stop and document it] @human -> END
+
+=== complete_port ===
+Lee ports coherent semantic families under differential tests, then implements
+the source AST, imports and rich diagnostics from issue 32 in Racket. TypeScript
+and SWI remain the reference oracle until the required parity window closes.
+# github:issue: 33
+# github:issue: 32
++ [Required parity holds — migrate consumers] @human -> migrate_consumers
++ [The port needs another human iteration] @human ~loop~ -> complete_port
++ [The complete port is no longer justified] @human -> END
+
+=== migrate_consumers ===
+Move the Pi extension, packaged skills and CLI entry points onto the Racket
+binary protocol. Keep only the smallest TypeScript adapter required by the Pi
+ecosystem; remove duplicated compiler, rule and walker semantics.
+# github:issue: 33
++ [Host adapters pass integration tests against release binaries] -> cutover_gate
+
+=== cutover_gate ===
+Lee reviews parity history, release artifacts, adapter behaviour and the
+documented treatment of the browser demo before changing the authoritative
+implementation.
+# github:issue: 33
++ [Make the Racket executable authoritative] @human -> release_cutover
++ [Extend the confidence window] @human ~loop~ -> complete_port
+
+=== release_cutover ===
+Publish the approved Racket release, switch installers and documentation to
+its artifacts, and retain or retire the TypeScript/SWI oracle exactly as the
+updated architecture decisions specify.
+# github:issue: 33
+* [Release and migration evidence are published] -> END
