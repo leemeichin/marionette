@@ -43,14 +43,14 @@ function boot(el) {
   srcEl.value = EXAMPLES[initialExample].source;
   paintEditor();
   srcEl.addEventListener('input', debounce(recompile, 250));
-  resetEl.addEventListener('click', () => {
+  resetEl.addEventListener('click', async () => {
     if (!trajectory) return;
-    state = initState(trajectory);
+    state = await initState(trajectory);
     refusal = null;
-    renderWalk();
+    await renderWalk();
   });
 
-  recompile();
+  void recompile();
 
   async function recompile() {
     const seq = ++compileSeq;
@@ -69,11 +69,12 @@ function boot(el) {
     const changed = !trajectory || trajectory.hash !== result.trajectory.hash;
     trajectory = result.trajectory;
     if (changed) {
-      state = initState(trajectory);
+      state = await initState(trajectory);
+      if (seq !== compileSeq) return;
       refusal = null;
       viz.setGraph(trajectory);
     }
-    renderWalk();
+    await renderWalk();
   }
 
   function renderDiagnostics(diagnostics) {
@@ -95,21 +96,22 @@ function boot(el) {
     diagEl.hidden = false;
   }
 
-  function step(fn) {
+  async function step(fn) {
     refusal = null;
     try {
-      fn();
+      state = await fn();
     } catch (e) {
       if (e instanceof WalkError) refusal = e;
       else throw e;
     }
-    renderWalk();
+    await renderWalk();
   }
 
-  function renderWalk() {
+  async function renderWalk() {
     if (!trajectory || !state) return;
     const node = trajectory.nodes.find((n) => n.id === state.current);
     const done = state.status === 'completed';
+    const choices = done ? [] : await frontier(trajectory, state);
 
     nodeEl.innerHTML = done
       ? `<strong>END</strong> — the plan is complete after ${state.log.length} step${state.log.length === 1 ? '' : 's'}.`
@@ -152,7 +154,7 @@ function boot(el) {
           const value = decl?.type === 'number' ? (raw.trim() === '' ? Number.NaN : Number(raw))
             : decl?.type === 'boolean' ? raw === 'true'
             : raw;
-          step(() => observe(trajectory, state, name, value, {
+          void step(() => observe(trajectory, state, name, value, {
             actor: 'agent',
             rationale: rationaleEl.value || 'observed in the playground',
           }));
@@ -161,7 +163,7 @@ function boot(el) {
         row.append(field, submit);
         choicesEl.append(row);
       }
-      for (const [i, { choice, blocked }] of frontier(trajectory, state).entries()) {
+      for (const [i, { choice, blocked }] of choices.entries()) {
         const btn = document.createElement('button');
         btn.type = 'button';
         const marks = [choice.human ? '✋ @human' : '', choice.loop ? '↻' : '', choice.gate ? `{${choice.gate.source}}` : ''].filter(Boolean).join(' ');
@@ -171,8 +173,11 @@ function boot(el) {
           btn.title = `unavailable: ${blocked}`;
           btn.textContent += `  (unavailable: ${blocked})`;
         } else {
-          btn.addEventListener('click', () => step(() =>
-            takeChoice(trajectory, state, String(i), { actor: 'agent', rationale: rationaleEl.value || undefined })));
+          btn.addEventListener('click', () => void step(() =>
+            takeChoice(trajectory, state, String(i), {
+              actor: 'agent',
+              rationale: rationaleEl.value || undefined,
+            })));
         }
         choicesEl.append(btn);
       }
@@ -180,8 +185,11 @@ function boot(el) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.textContent = `Continue automatically → ${node.next.target}`;
-        btn.addEventListener('click', () => step(() =>
-          advance(trajectory, state, { actor: 'agent', rationale: rationaleEl.value || undefined })));
+        btn.addEventListener('click', () => void step(() =>
+          advance(trajectory, state, {
+            actor: 'agent',
+            rationale: rationaleEl.value || undefined,
+          })));
         choicesEl.append(btn);
       }
     }
