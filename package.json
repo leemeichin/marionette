@@ -35,6 +35,9 @@
     "check:pi": "npm run check:rules && tsc --noEmit -p tsconfig.json",
     "check:rules": "node scripts/embed-rules.mjs --check",
     "generate:rules": "node scripts/embed-rules.mjs",
+    "parity:capture": "node --import tsx scripts/parity.ts capture",
+    "parity:check": "node --import tsx scripts/parity.ts compare",
+    "parity:reference": "node --import tsx scripts/parity.ts check-reference",
     "test": "npm run check:rules && node --import tsx --test tests/*.test.ts",
     "prepare": "node scripts/prepare.mjs"
   },

@@ -2,11 +2,11 @@
   "version": 2,
   "hash": "sha256:3c29f6ed7fecf1cd3d458799e569a4598f61813e455867b273205afb74dc3ac7",
   "status": "active",
-  "current": "distribution_evidence",
+  "current": "implementation_gate",
   "variables": {},
   "pendingObservations": [],
   "pendingEntry": false,
-  "activationStartedAt": "2026-07-29T20:52:19.952Z",
+  "activationStartedAt": "2026-07-29T21:17:30.114Z",
   "observations": [],
   "taken": [
     "baseline_pr#0"
@@ -38,6 +38,33 @@
       "label": "The seed package and smoke test work locally",
       "to": "distribution_evidence",
       "rationale": "Fresh racket/ multi-collection package created with empty human-owned module boundaries, a nine-mission workbook, and a seed CLI; Racket 9.2 on aarch64-darwin passed 2 package tests and reported datalog=yes racklog=yes."
+    },
+    {
+      "at": "2026-07-29T21:09:45.239Z",
+      "actor": "agent",
+      "from": "distribution_evidence",
+      "choice": "distribution_evidence#0",
+      "label": "The distribution evidence packet is complete",
+      "to": "parity_lab",
+      "rationale": "Actions run 30491077877 built, unpacked and ran self-contained Racket 9.2 archives for x86_64-linux, aarch64-linux and aarch64-macos; archives are 14.56–15.00 MiB with 176–286 ms seed startup. Evidence and the local Nix distribution caveat are recorded in racket/evidence/2026-07-29-bootstrap.md."
+    },
+    {
+      "at": "2026-07-29T21:16:08.963Z",
+      "actor": "agent",
+      "from": "parity_lab",
+      "choice": "parity_lab#0",
+      "label": "The parity contract fails clearly until a Racket result exists",
+      "to": "adapter_boundary",
+      "rationale": "spec/parity now freezes per-case SHA-256 references for 11 diagnostic fixtures, 2 normalized trajectories and all 5 walker vectors. npm run parity:reference passes; npm run parity:check exits 2 with an explicit human-gate message because no Racket candidate exists."
+    },
+    {
+      "at": "2026-07-29T21:17:30.114Z",
+      "actor": "agent",
+      "from": "adapter_boundary",
+      "choice": "adapter_boundary#0",
+      "label": "The wrapper and cutover boundaries are explicit",
+      "to": "implementation_gate",
+      "rationale": "ADR-0005 records one authoritative Racket interpreter with a temporary TypeScript/npm shell for Pi, binary resolution and protocol transport. It forbids compiler/walker fallback after cutover, maps the three release targets, freezes the browser demo, and sequences consumer migration."
     }
   ]
 }
