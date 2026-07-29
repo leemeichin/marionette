@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "hash": "sha256:3c29f6ed7fecf1cd3d458799e569a4598f61813e455867b273205afb74dc3ac7",
+  "hash": "sha256:f515bb0db13c3c7ceeb48b3ef71057aaf57c57cb05c5da6444b0a09229a6c058",
   "status": "active",
   "current": "implementation_gate",
   "variables": {},
@@ -65,6 +65,17 @@
       "label": "The wrapper and cutover boundaries are explicit",
       "to": "implementation_gate",
       "rationale": "ADR-0005 records one authoritative Racket interpreter with a temporary TypeScript/npm shell for Pi, binary resolution and protocol transport. It forbids compiler/walker fallback after cutover, maps the three release targets, freezes the browser demo, and sequences consumer migration."
+    },
+    {
+      "at": "2026-07-29T22:00:43.152Z",
+      "actor": "Lee",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:3c29f6ed7fec… → sha256:f515bb0db13c…",
+      "to": "implementation_gate",
+      "rationale": "Reconcile the Racket plan after merging ask elicitation to main before beginning human-owned language work."
     }
-  ]
+  ],
+  "pendingElicitation": null,
+  "elicitations": []
 }
