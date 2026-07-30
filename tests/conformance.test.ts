@@ -10,7 +10,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { PlanState, Trajectory, Value } from '../src/types.ts';
-import { compile } from '../src/compile.ts';
+import { compile, trajectoryHash } from '../src/compile.ts';
 import {
   WalkError,
   advance,
@@ -62,7 +62,11 @@ for (const file of caseFiles) {
     const result = await compile(source, { file: spec.plan });
     assert.ok(result.ok && result.trajectory,
       `${spec.plan} must compile: ` + result.diagnostics.map((diagnostic) => diagnostic.message).join('; '));
+    // Frozen conformance vectors predate the authority split. Exercise them
+    // as archived spec-0.5 epochs; spec-0.6 interactions have dedicated cases.
     const trajectory = result.trajectory!;
+    trajectory.spec = '0.5.0';
+    trajectory.hash = await trajectoryHash(trajectory);
     let production = await initState(trajectory, 'system', AT);
     const reference = shadow.initState(trajectory, 'system', AT);
 

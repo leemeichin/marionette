@@ -4,7 +4,7 @@ Everything you need to author your first trajectory and record the Phase 1
 success metric. Three pieces: the **CLI** (compiler/validator), the
 **authoring skill** (teaches Claude to draft plans that compile), and the
 **execution skill** (teaches Claude to traverse a compiled plan: ingest the
-work packet, do the work, record decisions, escalate at `@human` — see
+work packet, do the work, record decisions, ask the operator at `@ask`, and wait for external `@human` evidence — see
 [`EXECUTION.md`](EXECUTION.md)). The plugin route installs both skills; the
 copy route works the same with `marionette-execution` in place of
 `marionette-authoring`.
@@ -68,7 +68,7 @@ tracked in [#2](https://github.com/leemeichin/marionette/issues/2)):
 
 3. The skill drafts `plan.mar`, runs `marionette validate --strict`, fixes
    diagnostics (one revision loop), and shows you the Mermaid render +
-   plain-language summary with every `@human` checkpoint called out.
+   plain-language summary with every operator `@ask`, free-text `@input`, and external `@human` checkpoint called out.
 4. **Record the data point**: did the first validate pass have zero errors?
    Drop a one-line comment on
    [#2](https://github.com/leemeichin/marionette/issues/2) —
@@ -100,7 +100,7 @@ $ marionette state rebind plan.mar --actor <you> --rationale "approved"  # apply
 $ marionette render plan.mar            # Mermaid, with taken path + frontier highlighted
 ```
 
-Rules the walker enforces: `@human` choices refuse `--actor agent` (that's
+Rules the walker enforces: operator `@ask` refuses the agent, external `@human` requires another actor plus evidence, and `@input` fixes the route (that's
 the escalation boundary working); every choice requires `--rationale`;
 editing the plan after `state init` trips drift detection (exit code 3) and
 asks you to reconcile via `state rebind` — that's by design, not breakage.
@@ -110,7 +110,7 @@ legacy state created before graph archival, restore its unchanged source and
 run `marionette state baseline plan.mar` once before editing.
 To hand the traversal to an agent, use the execution skill: it loops on
 `marionette brief --json`, honours the plan's `# delivery:`/`# report:`
-config, and escalates `@human` checkpoints instead of taking them.
+config, and parks at operator/external checkpoints instead of taking them.
 
 ## 5. Run it in Pi
 
@@ -130,9 +130,10 @@ mid-run scope change, the agent proposes complete candidate source with
 `marionette_amend`; review its semantic diff and graph artifacts, then apply it
 through `/marionette-approve-amendment` with a human rationale. Completed
 phases stay bound to their archived graph and the proposal cannot be approved
-through `marionette_walk`. When the run reaches `@human`, Pi displays the exact
-choices and parks the agent; answer
-with `/marionette-decide`. See [`RUNTIME.md`](RUNTIME.md) for the wire and
+through `marionette_walk`. At `@ask`, Pi displays a complete decision packet for
+`/marionette-decide`; at external `@human`, it parks until
+`/marionette-confirm-human` records someone else's identity and evidence.
+Answer `@input` with `/marionette-answer`. See [`RUNTIME.md`](RUNTIME.md) for the wire and
 restart contract. `/marionette-stop` unbinds the session without deleting the
 runtime run.
 

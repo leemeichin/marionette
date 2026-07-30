@@ -17,7 +17,7 @@ import type {
 import type { AmendmentReport } from './amendment.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.3.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.4.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -89,7 +89,7 @@ export interface MarionettePiEvent {
     id?: string;
   };
   binding: MarionettePiBinding | null;
-  operation?: MarionettePiAgentCommand['operation'] | 'humanChoose' | 'humanAnswer' | 'humanAmend';
+  operation?: MarionettePiAgentCommand['operation'] | 'humanChoose' | 'externalConfirm' | 'humanAnswer' | 'humanAmend';
   projection?: RuntimeProjection;
   events?: RuntimeEvent[];
   receipt?: MarionettePiReceipt;
@@ -162,6 +162,16 @@ export interface MarionettePiHumanDecision extends EvidenceOptions {
   triggerTurn?: boolean;
 }
 
+export interface MarionettePiExternalConfirmation extends ProjectionOptions {
+  external: Omit<RuntimePrincipal, 'role'>;
+  choiceId: string;
+  rationale: string;
+  evidence: Ref[];
+  idempotencyKey: string;
+  /** Defaults to true so execution resumes after external evidence is recorded. */
+  triggerTurn?: boolean;
+}
+
 export interface MarionettePiHumanAnswer extends ProjectionOptions {
   human: Omit<RuntimePrincipal, 'role'>;
   answer: string;
@@ -205,6 +215,7 @@ export interface MarionettePiHostApi {
   proposeAmendment(request: MarionettePiAmendmentRequest): Promise<MarionettePiEvent>;
   approveAmendment(approval: MarionettePiAmendmentApproval): Promise<MarionettePiEvent>;
   humanChoose(decision: MarionettePiHumanDecision): Promise<MarionettePiEvent>;
+  externalConfirm(confirmation: MarionettePiExternalConfirmation): Promise<MarionettePiEvent>;
   humanAnswer(answer: MarionettePiHumanAnswer): Promise<MarionettePiEvent>;
 }
 

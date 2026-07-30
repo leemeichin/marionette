@@ -190,8 +190,8 @@ export async function renderSvg(
     const routes = [
       ...node.choices.map((choice) => ({
         target: choice.target,
-        label: `${choice.human ? '✋ ' : ''}${choice.ask ? '‽ ' : ''}${choice.loop ? '↻ ' : ''}${choice.label}`,
-        kind: choice.human ? 'human' : choice.ask ? 'ask' : choice.loop ? 'loop' : 'normal',
+        label: `${choice.human ? '✋ ' : ''}${choice.ask ? '? ' : ''}${choice.input ? '‽ ' : ''}${choice.loop ? '↻ ' : ''}${choice.label}`,
+        kind: choice.human ? 'human' : choice.ask || choice.input ? 'ask' : choice.loop ? 'loop' : 'normal',
       })),
       ...(node.next ? [{ target: node.next.target, label: '', kind: 'normal' }] : []),
     ];

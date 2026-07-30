@@ -73,6 +73,30 @@ test('graph references bind node and choice to one immutable trajectory', async 
   });
 });
 
+test('runtime protocol requires evidence for external confirmation', () => {
+  const evidence = [{ provider: 'github', kind: 'review', id: 'repo#1', url: 'https://example.test/review' }];
+  const parsed = parseRuntimeRequest({
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 'confirm-1',
+    op: 'confirm',
+    choiceId: 'approval#0',
+    rationale: 'maintainer approved',
+    expectedRevision: 2,
+    evidence,
+  });
+  assert.equal(parsed.op, 'confirm');
+  assert.deepEqual((parsed as { evidence: unknown }).evidence, evidence);
+  assert.throws(() => parseRuntimeRequest({
+    protocol: RUNTIME_PROTOCOL_VERSION,
+    id: 'confirm-2',
+    op: 'confirm',
+    choiceId: 'approval#0',
+    rationale: 'claimed without evidence',
+    expectedRevision: 2,
+    evidence: [],
+  }), (error: unknown) => error instanceof ProtocolError && error.code === 'invalid-request');
+});
+
 test('runtime protocol accepts typed observation writes and rejects structured values', async () => {
   const request = parseRuntimeRequest({
     protocol: RUNTIME_PROTOCOL_VERSION,

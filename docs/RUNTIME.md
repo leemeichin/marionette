@@ -58,15 +58,17 @@ bounded at 64 KiB.
 The first request initializes the connection:
 
 ```json
-{"protocol":"0.4.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
+{"protocol":"0.5.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
 ```
 
 After initialization, the host uses:
 
 - `next` — read the current projection.
-- `choose` — take an exact choice id with rationale, expected revision and
-  optional idempotency key.
-- `ask` — open an exact `@ask` choice with a focused question and rationale.
+- `choose` — take an autonomous choice or trusted operator `@ask` route with
+  rationale, expected revision and optional idempotency key.
+- `confirm` — attest an external `@human` action with an external-human
+  principal and at least one durable evidence reference.
+- `ask` — open an exact `@input` choice with a focused question and rationale.
 - `answer` — supply human-authored context for the open elicitation.
 - `advance` — follow the automatic next step with the same write controls.
 - `observe` — supply a requested scalar value with its source/evidence in the
@@ -94,52 +96,41 @@ prose. Truncated projections contain `truncated: true`, an `omitted` summary
 and a `bodyRef` that can be resolved against the archived trajectory.
 
 ```json
-{"protocol":"0.4.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
+{"protocol":"0.5.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
 ```
 
 The host should keep event traffic outside model context. Wake or prompt the
 model only for actionable states such as a new node, `observation.required`,
-`human.required`, `elicitation.required`, `run.stranded`, or `run.completed`.
+`operator.required`, `external.required`, `elicitation.required`,
+`run.stranded`, or `run.completed`.
 
-## Human escalation
+## Operator and external-human checkpoints
 
-`human.required` is a durable wake signal for one activation of an `@human`
-checkpoint. Its data contains:
+`operator.required` wakes the trusted host when `@ask` routes require its
+current operator. `external.required` parks for somebody outside that session.
+Both project a stable escalation id and a complete decision packet: plan
+intent, full phase body, refs, variables, progress, exact choices,
+target titles/effects, expected revision, response operation, evidence
+requirement, and graph-authored fallbacks.
+
+The operator resolves `@ask` with an exact `choose` under a human-bound
+principal. External `@human` instead requires `confirm` under an
+`external-human` principal:
 
 ```json
-{
-  "id": "marionette://run/implementation/escalation/7",
-  "expectedRevision": 3,
-  "reason": "every choice at this phase is an @human checkpoint",
-  "choices": [
-    { "id": "approval#0", "label": "Approve", "target": "rollout" }
-  ],
-  "fallbacks": [],
-  "response": { "operation": "choose" }
-}
+{"protocol":"0.5.0","id":3,"op":"confirm","choiceId":"approval#0","rationale":"maintainer approved PR #12","expectedRevision":2,"evidence":[{"provider":"github","kind":"review","id":"acme/repo#12","url":"https://github.com/acme/repo/pull/12#pullrequestreview-1"}]}
 ```
 
-The id survives journal replay and remains stable until the run leaves and
-later re-enters the checkpoint. Before presenting or resolving it, call
-`next`: that projection carries the current revision, phase context and the
-same escalation id. A graph-linked `record` can change the revision without
-changing the escalation activation.
+Success emits `external.confirmed` with the actual external actor and evidence.
+Agent tools cannot issue either trusted response. Silence parks the run; only
+a graph-authored timeout fallback may end the wait.
 
-There is no protocol-level deadline or default. Silence parks the run. If the
-plan authors a `timeout` choice, `fallbacks` contains its id and `dueAt`; the
-host may schedule a wake-up, but only the Prolog frontier decides when that
-choice becomes available.
+## Input elicitation
 
-Agent-facing connections remain unable to take the listed choices. A trusted
-host records the answer through a human-bound principal, using the normal
-exact `choose` request with rationale, revision and idempotency key.
-
-## Elicitation
-
-`@ask` is a two-write exchange. An agent-bound principal opens it:
+`@input` is a two-write exchange. An agent-bound principal opens it:
 
 ```json
-{"protocol":"0.4.0","id":3,"op":"ask","choiceId":"design#1","question":"Must the release run without network access after unpacking?","rationale":"the packaging route depends on this constraint","expectedRevision":2,"idempotencyKey":"ask-42"}
+{"protocol":"0.5.0","id":3,"op":"ask","choiceId":"design#1","question":"Must the release run without network access after unpacking?","rationale":"the packaging route depends on this constraint","expectedRevision":2,"idempotencyKey":"ask-42"}
 ```
 
 The runtime emits `elicitation.required` and projects
@@ -147,12 +138,12 @@ The runtime emits `elicitation.required` and projects
 question and the already-authored edge. A human-bound principal answers:
 
 ```json
-{"protocol":"0.4.0","id":4,"op":"answer","answer":"Yes; unpacking is allowed, but no runtime download.","expectedRevision":3,"idempotencyKey":"answer-42"}
+{"protocol":"0.5.0","id":4,"op":"answer","answer":"Yes; unpacking is allowed, but no runtime download.","expectedRevision":3,"idempotencyKey":"answer-42"}
 ```
 
 The runtime records `elicitation.answered`, advances the fixed edge and
 resumes the agent. The answer is context rather than authority: it neither
-chooses a target nor passes an `@human` gate.
+chooses a target nor confirms an external `@human` action.
 
 ## Graph epochs and live amendments
 
@@ -176,7 +167,8 @@ leaves the accepted epoch active.
 
 Amendment approval is intentionally not an agent runtime request. A trusted
 host uses `RuntimeRunController.amend` (the Pi host API wraps it), while the
-model-facing command plane remains `next|choose|ask|answer|advance|observe|record|events`.
+model-facing command plane remains `next|choose|ask|answer|advance|observe|record|events`;
+trusted hosts additionally expose external `confirm`.
 This keeps graph authority at the same trust boundary as human checkpoints.
 
 ## Pi proving-ground integration
@@ -236,7 +228,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.3.0`) with the same shape in four places:
+(`marionette.pi` / `1.4.0`) with the same shape in four places:
 
 1. `marionette_walk` tool-result `details`;
 2. `marionette-projection` custom-message `details`;
@@ -278,7 +270,7 @@ run.
 A choice command is intentionally small:
 
 ```json
-{"protocol":"0.4.0","id":5,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":4,"idempotencyKey":"turn-42","profile":"signal"}
+{"protocol":"0.5.0","id":5,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":4,"idempotencyKey":"turn-42","profile":"signal"}
 ```
 
 - Choice ids must be exact; CLI label prefixes are not accepted.
@@ -291,7 +283,7 @@ A choice command is intentionally small:
 An observation command fills exactly one value requested by the projection:
 
 ```json
-{"protocol":"0.4.0","id":6,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":5,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
+{"protocol":"0.5.0","id":6,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":5,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
 ```
 
 Values are typed scalars: number, boolean, or string. An initial declaration
@@ -304,7 +296,7 @@ and is kept in a separate audit stream from branch decisions.
 `record` provides pibarm-style graph-linked decision records without advancing:
 
 ```json
-{"protocol":"0.4.0","id":7,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":6,"idempotencyKey":"adr-7"}
+{"protocol":"0.5.0","id":7,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":6,"idempotencyKey":"adr-7"}
 ```
 
 Every event carries the immutable trajectory hash, current node/choice when

@@ -68,7 +68,7 @@ test('P0.8 CLI exit codes are CI-suitable', async () => {
   // @human refusal for agents → 1
   const humanRefusal = cli(['state', 'choose', 'plan.mar', 'Metrics', '--actor', 'agent', '--rationale', 'x'], dir);
   assert.equal(humanRefusal.code, 1);
-  assert.match(humanRefusal.stderr, /@human/);
+  assert.match(humanRefusal.stderr, /external human/);
   // mutate the plan → drift → 3
   const source = readFileSync(join(dir, 'plan.mar'), 'utf8');
   writeFileSync(join(dir, 'plan.mar'), source.replace('iteration < 3', 'iteration < 4'));
@@ -137,6 +137,36 @@ test('state baseline recovers an unchanged legacy state before editing', () => {
   assert.equal(existsSync(join(dir, '.marionette', 'graphs')), true);
 });
 
+test('CLI separates operator ask decisions from evidenced external confirmations', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'marionette-gates-cli-'));
+  writeFileSync(join(dir, 'plan.mar'), [
+    '=== review ===',
+    '* [Proceed] @ask -> external',
+    '* [Stop] @ask -> END',
+    '=== external ===',
+    '* [Maintainer approved] @human -> END',
+    '',
+  ].join('\n'));
+  assert.equal(cli(['state', 'init', 'plan.mar'], dir).code, 0);
+  const agent = cli(['state', 'choose', 'plan.mar', 'review#0', '--actor', 'agent', '--rationale', 'self'], dir);
+  assert.equal(agent.code, 1);
+  assert.match(agent.stderr, /trusted operator/);
+  assert.equal(cli([
+    'state', 'choose', 'plan.mar', 'review#0', '--actor', 'lee', '--rationale', 'reviewed options',
+  ], dir).code, 0);
+  const missing = cli([
+    'state', 'confirm', 'plan.mar', 'external#0', '--actor', 'maintainer', '--rationale', 'approved',
+  ], dir);
+  assert.equal(missing.code, 2);
+  assert.match(missing.stderr, /--evidence/);
+  assert.equal(cli([
+    'state', 'confirm', 'plan.mar', 'external#0', '--actor', 'maintainer',
+    '--evidence', 'https://github.com/acme/repo/pull/12#pullrequestreview-1',
+    '--rationale', 'approved in GitHub',
+  ], dir).code, 0);
+  assert.equal(JSON.parse(readFileSync(join(dir, 'plan.state.json'), 'utf8')).status, 'completed');
+});
+
 test('runtime CLI exposes a clean NDJSON process surface', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'marionette-runtime-cli-'));
   writeFileSync(join(dir, 'plan.mar'), [
@@ -147,12 +177,12 @@ test('runtime CLI exposes a clean NDJSON process surface', async () => {
   ].join('\n'));
   const input = [
     JSON.stringify({
-      protocol: '0.4.0',
+      protocol: '0.5.0',
       id: 1,
       op: 'initialize',
       client: { name: 'cli-test', version: '1' },
     }),
-    JSON.stringify({ protocol: '0.4.0', id: 2, op: 'next', profile: 'signal' }),
+    JSON.stringify({ protocol: '0.5.0', id: 2, op: 'next', profile: 'signal' }),
     '',
   ].join('\n');
   const result = spawnSync(
@@ -217,7 +247,7 @@ test('state ask and answer keep clarification distinct from choosing', () => {
   const dir = mkdtempSync(join(tmpdir(), 'marionette-ask-cli-'));
   writeFileSync(join(dir, 'ask.mar'), [
     '=== decide ===',
-    '* [I am not sure] @ask -> reconsider',
+    '* [I am not sure] @input -> reconsider',
     '=== reconsider ===',
     'Use the supplied context.',
     '-> END',
@@ -230,7 +260,7 @@ test('state ask and answer keep clarification distinct from choosing', () => {
     '--actor', 'agent', '--rationale', 'uncertain',
   ], dir);
   assert.equal(chose.code, 1);
-  assert.match(chose.stderr, /@ask/);
+  assert.match(chose.stderr, /@input/);
 
   const opened = cli([
     'state', 'ask', 'ask.mar', '0',

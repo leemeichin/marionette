@@ -108,7 +108,7 @@ Alpha rewritten during the second activation.
 test('an open elicitation keeps its exact ask edge and target', async () => {
   const previous = await compiled(`
 === a ===
-* [Clarify] @ask -> b
+* [Clarify] @input -> b
 === b ===
 Beta.
 -> END
@@ -119,7 +119,7 @@ Beta.
   });
   const candidate = await compiled(`
 === a ===
-* [Clarify] @ask -> c
+* [Clarify] @input -> c
 === b ===
 Beta.
 -> END

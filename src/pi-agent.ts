@@ -336,6 +336,29 @@ export class PiAgentBridge {
     });
   }
 
+  externalConfirm(
+    external: Omit<RuntimePrincipal, 'role'>,
+    choiceId: string,
+    rationale: string,
+    evidence: Ref[],
+    idempotencyKey: string,
+    profile: ProjectionProfile = 'work',
+    options: { budget?: RuntimeBudget } = {},
+  ): Promise<RuntimeCommandResult> {
+    return this.write(idempotencyKey, (expectedRevision) => ({
+      protocol: RUNTIME_PROTOCOL_VERSION,
+      id: this.requestId(),
+      op: 'confirm',
+      choiceId,
+      rationale,
+      evidence,
+      expectedRevision,
+      idempotencyKey,
+      profile,
+      budget: options.budget,
+    }), { ...external, role: 'external-human' });
+  }
+
   humanChoose(
     human: Omit<RuntimePrincipal, 'role'>,
     choiceId: string,

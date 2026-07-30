@@ -9,12 +9,16 @@
 import type {
   Choice,
   PlanState,
+  Ref,
   Trajectory,
   TrajectoryNode,
   Value,
 } from './types.ts';
 import { END, PLAN_STATE_VERSION } from './types.ts';
 import { analyzeAmendment, type AmendmentReport } from './amendment.ts';
+import {
+  interactionKind, isExternalHumanChoice, isInputChoice,
+} from './gates.ts';
 import { emitFacts } from './facts.ts';
 import { blockedText, refusalText } from './diagnostics.ts';
 import {
@@ -54,6 +58,9 @@ export type WalkErrorCode =
   | 'human-checkpoint'
   | 'elicitation-required'
   | 'elicitation-pending'
+  | 'operator-checkpoint'
+  | 'external-confirmation-required'
+  | 'external-evidence-required'
   | 'rationale-required'
   | 'no-next-step'
   | 'migration-blocked'
@@ -103,6 +110,10 @@ export interface AnswerOptions {
   answer: string;
   rationale?: string;
   at?: string;
+}
+
+export interface ExternalConfirmOptions extends TakeOptions {
+  evidence: Ref[];
 }
 
 export async function initState(
@@ -183,15 +194,54 @@ export async function takeChoice(
   }
   if (state.pendingElicitation) {
     throw new WalkError(
-      `an @ask clarification is already pending: ${state.pendingElicitation.question}`,
+      `an @input request is already pending: ${state.pendingElicitation.question}`,
       'elicitation-pending',
     );
   }
   const selected = resolveChoiceRef(nodeById(trajectory, state.current), ref);
-  if (selected.ask) {
+  const interaction = interactionKind(trajectory, selected);
+  if (interaction === 'input') {
     throw new WalkError(
-      `choice "${selected.label}" is an @ask checkpoint: open it with a focused question before advancing`,
+      `choice "${selected.label}" is an @input checkpoint: open it with a focused question before advancing`,
       'elicitation-required',
+    );
+  }
+  if (interaction === 'ask' && options.actor === 'agent') {
+    throw new WalkError(
+      `choice "${selected.label}" asks the trusted operator to decide`,
+      'operator-checkpoint',
+    );
+  }
+  if (interaction === 'external-human') {
+    throw new WalkError(
+      `choice "${selected.label}" waits for an external human action and must be confirmed with evidence`,
+      'external-confirmation-required',
+    );
+  }
+  return applyChoice(trajectory, state, ref, options);
+}
+
+export async function confirmExternal(
+  trajectory: Trajectory,
+  state: PlanState,
+  ref: string,
+  options: ExternalConfirmOptions,
+): Promise<PlanState> {
+  bindState(trajectory, state);
+  if (options.actor === 'agent') {
+    throw new WalkError('external action cannot be attributed to the agent', 'human-checkpoint');
+  }
+  const selected = resolveChoiceRef(nodeById(trajectory, state.current), ref);
+  if (!isExternalHumanChoice(trajectory, selected)) {
+    throw new WalkError(
+      `choice "${selected.label}" is not an external @human checkpoint`,
+      'external-confirmation-required',
+    );
+  }
+  if (options.evidence.length === 0) {
+    throw new WalkError(
+      `external @human choice "${selected.label}" requires durable evidence`,
+      'external-evidence-required',
     );
   }
   return applyChoice(trajectory, state, ref, options);
@@ -232,7 +282,7 @@ async function applyChoice(
   return next;
 }
 
-/** Open an `@ask` edge without advancing it. */
+/** Open an `@input` edge (or a legacy spec-0.5 `@ask`) without advancing it. */
 export async function ask(
   trajectory: Trajectory,
   state: PlanState,
@@ -245,16 +295,16 @@ export async function ask(
   }
   if (state.pendingElicitation) {
     throw new WalkError(
-      `an @ask clarification is already pending: ${state.pendingElicitation.question}`,
+      `an @input request is already pending: ${state.pendingElicitation.question}`,
       'elicitation-pending',
     );
   }
   if (!options.question.trim()) {
-    throw new WalkError('an @ask checkpoint requires a focused question', 'rationale-required');
+    throw new WalkError('an @input checkpoint requires a focused question', 'rationale-required');
   }
   const choice = resolveChoiceRef(nodeById(trajectory, state.current), ref);
-  if (!choice.ask) {
-    throw new WalkError(`choice "${choice.label}" is not an @ask checkpoint`, 'elicitation-required');
+  if (!isInputChoice(trajectory, choice)) {
+    throw new WalkError(`choice "${choice.label}" is not an @input checkpoint`, 'elicitation-required');
   }
   const available = await frontier(trajectory, state, { at: options.at });
   const selected = available.find((item) => item.choice.id === choice.id);
@@ -289,7 +339,7 @@ export async function ask(
   return next;
 }
 
-/** Record a human answer and advance the fixed `@ask` edge. */
+/** Record a human answer and advance the fixed `@input` edge. */
 export async function answer(
   trajectory: Trajectory,
   state: PlanState,
@@ -298,13 +348,13 @@ export async function answer(
   bindState(trajectory, state);
   const pending = state.pendingElicitation;
   if (!pending) {
-    throw new WalkError('there is no @ask clarification awaiting an answer', 'elicitation-required');
+    throw new WalkError('there is no @input request awaiting an answer', 'elicitation-required');
   }
   if (options.actor === 'agent') {
-    throw new WalkError('an @ask answer must be attributed to a human', 'human-checkpoint');
+    throw new WalkError('an @input answer must be attributed to a human', 'human-checkpoint');
   }
   if (!options.answer.trim()) {
-    throw new WalkError('an @ask answer cannot be empty', 'rationale-required');
+    throw new WalkError('an @input answer cannot be empty', 'rationale-required');
   }
   const at = options.at ?? new Date().toISOString();
   const rationale = `clarified by ${options.actor}: ${options.answer.trim()}` +
@@ -340,7 +390,7 @@ export async function advance(
   bindState(trajectory, state);
   if (state.pendingElicitation) {
     throw new WalkError(
-      `an @ask clarification is pending: ${state.pendingElicitation.question}`,
+      `an @input request is pending: ${state.pendingElicitation.question}`,
       'elicitation-pending',
     );
   }
@@ -376,7 +426,7 @@ export async function observe(
   bindState(trajectory, state);
   if (state.pendingElicitation) {
     throw new WalkError(
-      `an @ask clarification is pending: ${state.pendingElicitation.question}`,
+      `an @input request is pending: ${state.pendingElicitation.question}`,
       'elicitation-pending',
     );
   }
@@ -725,7 +775,7 @@ export function parseState(json: string): PlanState {
   if (parsed.version !== PLAN_STATE_VERSION) {
     throw unsupportedStateVersion(parsed.version);
   }
-  // State v2 predates @ask. Its additive audit fields default cleanly so
+  // State v2 predates @input. Its additive audit fields default cleanly so
   // existing runs do not need to be discarded.
   parsed.pendingElicitation ??= null;
   parsed.elicitations ??= [];
@@ -819,9 +869,10 @@ export function rebindState(
     const pendingChoice = trajectory.nodes
       .flatMap((node) => node.choices)
       .find((choice) => choice.id === state.pendingElicitation!.choice);
-    if (!pendingChoice?.ask || pendingChoice.target !== state.pendingElicitation.target) {
+    if (!pendingChoice || !isInputChoice(trajectory, pendingChoice) ||
+        pendingChoice.target !== state.pendingElicitation.target) {
       throw new WalkError(
-        `cannot rebind while @ask "${state.pendingElicitation.choice}" is pending and its edge changed`,
+        `cannot rebind while input "${state.pendingElicitation.choice}" is pending and its edge changed`,
         'migration-blocked',
       );
     }

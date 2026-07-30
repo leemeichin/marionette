@@ -2,9 +2,9 @@ import type { Ref, Value } from './types.ts';
 import type { Brief, BriefStatus } from './brief.ts';
 import type { WalkErrorCode } from './state.ts';
 
-export const RUNTIME_PROTOCOL_VERSION = '0.4.0';
+export const RUNTIME_PROTOCOL_VERSION = '0.5.0';
 
-export type RuntimeRole = 'agent' | 'human' | 'system';
+export type RuntimeRole = 'agent' | 'human' | 'external-human' | 'system';
 export type ProjectionProfile = 'signal' | 'work' | 'debug';
 
 export interface RuntimePrincipal {
@@ -46,6 +46,17 @@ export interface ChooseRequest extends RequestBase {
   profile?: ProjectionProfile;
   budget?: RuntimeBudget;
   evidence?: Ref[];
+}
+
+export interface ConfirmRequest extends RequestBase {
+  op: 'confirm';
+  choiceId: string;
+  rationale: string;
+  expectedRevision: number;
+  idempotencyKey?: string;
+  profile?: ProjectionProfile;
+  budget?: RuntimeBudget;
+  evidence: Ref[];
 }
 
 export interface AskRequest extends RequestBase {
@@ -112,6 +123,7 @@ export type RuntimeRequest =
   | InitializeRequest
   | NextRequest
   | ChooseRequest
+  | ConfirmRequest
   | AskRequest
   | AnswerRequest
   | AdvanceRequest
@@ -127,6 +139,9 @@ export type RuntimeEventKind =
   | 'observation.required'
   | 'observation.recorded'
   | 'record.attached'
+  | 'operator.required'
+  | 'external.required'
+  | 'external.confirmed'
   | 'human.required'
   | 'elicitation.required'
   | 'elicitation.answered'
@@ -180,7 +195,23 @@ export interface RuntimeChoiceProjection {
 }
 
 export interface RuntimeEscalation {
-  /** Stable for one activation of an @human checkpoint. */
+  kind: 'operator' | 'external' | 'legacy-human';
+  context: {
+    planSummary: string | null;
+    planPrompt: string | null;
+    phaseId: string;
+    phaseBody: string;
+    refs: Ref[];
+    recentRecords: Array<{
+      kind: string;
+      summary: string;
+      refs: Ref[];
+      at: string;
+    }>;
+    progress: RuntimeProjection['progress'];
+    variables: Record<string, Value>;
+  };
+  /** Stable for one activation of an interactive checkpoint. */
   id: string;
   /**
    * Revision a human response must claim. Hosts should fetch `next` before
@@ -193,6 +224,9 @@ export interface RuntimeEscalation {
     id: string;
     label: string;
     target?: string;
+    targetTitle?: string | null;
+    gate?: string | null;
+    timeout?: { source: string; seconds: number } | null;
   }>;
   /**
    * Only graph-authored timeout choices can end a silent escalation. Empty
@@ -205,12 +239,13 @@ export interface RuntimeEscalation {
     dueAt: string | null;
   }>;
   response: {
-    operation: 'choose';
+    operation: 'choose' | 'confirm';
+    requiresEvidence: boolean;
   };
 }
 
 export interface RuntimeElicitation {
-  /** Stable for one activation of an @ask checkpoint. */
+  /** Stable for one activation of an @input checkpoint. */
   id: string;
   expectedRevision: number;
   choice: {
@@ -251,11 +286,11 @@ export interface RuntimeProjection {
   choices: RuntimeChoiceProjection[];
   next: { target: string; targetTitle?: string | null } | null;
   observations: Array<{ name: string; type: string }>;
-  /** Present exactly when status is awaiting-human. */
+  /** Present for awaiting-operator, awaiting-external, and legacy awaiting-human. */
   escalation: RuntimeEscalation | null;
   /** Present exactly when status is awaiting-elicitation. */
   elicitation: RuntimeElicitation | null;
-  /** Most recent @ask answer when it is the context that entered this phase. */
+  /** Most recent @input answer when it is the context that entered this phase. */
   clarification?: Brief['clarification'];
   variables?: Record<string, Value>;
   progress?: { steps: number; nodesVisited: number; nodesTotal: number; path: string[] };
@@ -417,6 +452,26 @@ export function parseRuntimeRequest(input: unknown): RuntimeRequest {
         profile: parseProfile(input['profile'], id),
         budget: parseBudget(input['budget'], id),
         evidence: input['evidence'] as Ref[] | undefined,
+      };
+    }
+    case 'confirm': {
+      assertOnlyKeys(input, [
+        'protocol', 'id', 'op', 'choiceId', 'rationale', 'expectedRevision',
+        'idempotencyKey', 'profile', 'budget', 'evidence',
+      ], id);
+      if (!Array.isArray(input['evidence']) || input['evidence'].length === 0) {
+        throw new ProtocolError('"evidence" must contain at least one durable reference', 'invalid-request', id);
+      }
+      return {
+        protocol: RUNTIME_PROTOCOL_VERSION, id, op,
+        choiceId: requireString(input['choiceId'], 'choiceId', id),
+        rationale: requireString(input['rationale'], 'rationale', id),
+        expectedRevision: requireRevision(input['expectedRevision'], id),
+        idempotencyKey: input['idempotencyKey'] === undefined
+          ? undefined : requireString(input['idempotencyKey'], 'idempotencyKey', id),
+        profile: parseProfile(input['profile'], id),
+        budget: parseBudget(input['budget'], id),
+        evidence: input['evidence'] as Ref[],
       };
     }
     case 'ask': {

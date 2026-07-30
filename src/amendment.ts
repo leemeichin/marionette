@@ -2,6 +2,7 @@ import type {
   Expr, PlanState, Ref, Trajectory, TrajectoryNode, VariableDecl,
 } from './types.ts';
 import { END } from './types.ts';
+import { isInputChoice } from './gates.ts';
 
 export type AmendmentChangeKind =
   | 'phase-added'
@@ -66,6 +67,7 @@ const semanticNode = (node: TrajectoryNode) => ({
     gate: choice.gate && { source: choice.gate.source, ast: choice.gate.ast },
     human: choice.human,
     ask: choice.ask,
+    input: choice.input ?? false,
     loop: choice.loop,
     timeout: choice.timeout && {
       source: choice.timeout.source,
@@ -238,12 +240,13 @@ export function analyzeAmendment(
     const pending = candidate.nodes
       .flatMap((node) => node.choices)
       .find((choice) => choice.id === state.pendingElicitation!.choice);
-    if (!pending?.ask || pending.target !== state.pendingElicitation.target) {
+    if (!pending || !isInputChoice(candidate, pending) ||
+        pending.target !== state.pendingElicitation.target) {
       violations.push({
         code: 'pending-elicitation-changed',
         subject: state.pendingElicitation.choice,
-        fields: ['ask', 'target'],
-        message: `pending @ask "${state.pendingElicitation.choice}" must keep its marker and target`,
+        fields: ['input', 'target'],
+        message: `pending input "${state.pendingElicitation.choice}" must keep its marker and target`,
       });
     }
   }

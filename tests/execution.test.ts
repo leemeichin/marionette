@@ -129,7 +129,7 @@ test('brief: awaiting-human when every available choice is @human, with escalati
   state = await takeChoice(trajectory!, state, 'Done', { actor: 'agent', rationale: 'n reached 2', at: AT });
   const brief = await buildBrief(trajectory!, state, { file: 'plan.mar' });
 
-  assert.equal(brief.status, 'awaiting-human');
+  assert.equal(brief.status, 'awaiting-external');
   assert.ok(brief.escalation);
   assert.deepEqual(brief.escalation!.choices, ['b#0']);
   assert.deepEqual(brief.escalation!.fallbacks, []);
@@ -150,7 +150,7 @@ timeout 1h [Expire safely] -> END
     at: '2026-01-01T00:30:00.000Z',
   });
 
-  assert.equal(brief.status, 'awaiting-human');
+  assert.equal(brief.status, 'awaiting-external');
   assert.deepEqual(brief.escalation?.fallbacks, [{
     choice: 'approval#1',
     label: 'Expire safely',

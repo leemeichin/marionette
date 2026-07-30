@@ -196,6 +196,7 @@ export function buildSyncManifest(
             const marks = [
               c.human ? '@human' : null,
               c.ask ? '@ask' : null,
+              c.input ? '@input' : null,
               c.gate ? `{${c.gate.source}}` : null,
             ]
               .filter(Boolean).join(' ');

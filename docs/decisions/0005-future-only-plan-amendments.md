@@ -34,17 +34,19 @@ a restart and safe when a phase id is revisited by a loop.
    type, and initializer cannot change or disappear. Other declarations may be
    added, changed, or removed; migration preserves compatible live values and
    reports additions, removals, resets, and required observations.
-5. **An open elicitation is an active external contract.** Its exact choice id,
-   `@ask` marker, and target must survive until answered. Amendments that alter
+5. **An open input request is an active interaction contract.** Its exact choice id,
+   `@input` marker, and target must survive until answered. Amendments that alter
    it are refused even when its phase is otherwise editable.
 6. **History resolves through graph epochs.** Every historical record keeps its
    original graph hash. Applying an amendment archives the new trajectory and
    appends one attributed `plan.rebound` event linking old and new hashes; no
    prior event or archived graph is rewritten.
 7. **Approval is a trust-boundary operation.** Agents may compile and propose a
-   candidate. A local CLI user or trusted host may inspect and apply it with an
-   actor and rationale. The model-facing traversal tool cannot approve an
-   amendment.
+   candidate. A local CLI user or trusted host may inspect the complete
+   decision packet—semantic diff, proposal rationale, and graph artifacts—and
+   apply it with an actor and rationale. This is an operator `@ask`-class
+   decision, not evidence that an external `@human` acted. The model-facing
+   traversal tool cannot approve an amendment.
 8. **Validation is pure and application is atomic.** Comparison produces a
    structured allowed-change/violation report without mutating state. A
    refusal leaves the source, state, snapshot, journal, and active graph
@@ -61,7 +63,7 @@ variable rules above.
 - reject any semantic change to a completed phase or its choices;
 - reject deleting the current phase;
 - reject changing a variable referenced by a completed phase;
-- preserve an open `@ask` edge exactly;
+- preserve an open `@input` edge exactly (and replay legacy spec-0.5 `@ask` inputs);
 - freeze a phase id after one loop activation has completed it;
 - preserve old graph references through amendment, replay, and restart;
 - reject stale or concurrent amendment writes without partial persistence.

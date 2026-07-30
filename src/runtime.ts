@@ -1,10 +1,11 @@
 import { buildBrief, type Brief } from './brief.ts';
 import { sha256Hex } from './hash.ts';
 import {
-  advance, answer, ask, initState, observe, rebindState, takeChoice, WalkError,
+  advance, answer, ask, confirmExternal, initState, observe, rebindState, takeChoice, WalkError,
   type MigrationReport,
 } from './state.ts';
 import type { PlanState, Ref, Trajectory } from './types.ts';
+import { interactionKind } from './gates.ts';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference,
   type ProjectionProfile, type RuntimeBudget, type RuntimeEvent,
@@ -57,8 +58,8 @@ const requestFingerprint = async (request: RuntimeRequest): Promise<string> => {
 };
 
 const isWrite = (request: RuntimeRequest): request is Extract<RuntimeRequest, {
-  op: 'choose' | 'ask' | 'answer' | 'advance' | 'observe' | 'record';
-}> => request.op === 'choose' || request.op === 'ask' || request.op === 'answer' ||
+  op: 'choose' | 'confirm' | 'ask' | 'answer' | 'advance' | 'observe' | 'record';
+}> => request.op === 'choose' || request.op === 'confirm' || request.op === 'ask' || request.op === 'answer' ||
   request.op === 'advance' || request.op === 'observe' || request.op === 'record';
 
 const event = (
@@ -100,6 +101,26 @@ function escalationPayload(
   if (!brief.escalation) return null;
   const byId = new Map(brief.frontier.map((choice) => [choice.id, choice]));
   return {
+    kind: brief.escalation.kind,
+    context: {
+      planSummary: brief.plan.intent.summary,
+      planPrompt: brief.plan.intent.prompt,
+      phaseId: brief.node?.id ?? snapshot.state.current,
+      phaseBody: brief.node?.body ?? '',
+      refs: brief.node?.refs ?? [],
+      recentRecords: snapshot.events
+        .filter((item) => item.kind === 'record.attached' &&
+          (!item.graph.nodeId || item.graph.nodeId === brief.node?.id))
+        .slice(-5)
+        .map((item) => ({
+          kind: String(item.data['recordKind'] ?? 'record'),
+          summary: String(item.data['summary'] ?? ''),
+          refs: Array.isArray(item.data['refs']) ? item.data['refs'] as Ref[] : [],
+          at: item.at,
+        })),
+      progress: brief.progress,
+      variables: brief.variables,
+    },
     id: escalationUri(snapshot.runId, eventSeq),
     expectedRevision,
     reason: brief.escalation.reason,
@@ -109,6 +130,9 @@ function escalationPayload(
         id,
         label: choice?.label ?? id,
         target: includeTargets ? choice?.target : undefined,
+        targetTitle: includeTargets ? choice?.targetTitle : undefined,
+        gate: choice?.gate,
+        timeout: choice?.timeout,
       };
     }),
     fallbacks: brief.escalation.fallbacks.map((fallback) => ({
@@ -117,7 +141,10 @@ function escalationPayload(
       target: includeTargets ? fallback.target : undefined,
       dueAt: fallback.dueAt,
     })),
-    response: { operation: 'choose' },
+    response: {
+      operation: brief.escalation.kind === 'external' ? 'confirm' : 'choose',
+      requiresEvidence: brief.escalation.kind === 'external',
+    },
   };
 }
 
@@ -157,8 +184,14 @@ async function statusEvent(
   if (brief.status === 'completed') {
     return event(snapshot, trajectory, 'run.completed', at, {}, { nodeId, offset });
   }
-  if (brief.status === 'awaiting-human') {
-    const required = event(snapshot, trajectory, 'human.required', at, {}, { nodeId, offset });
+  if (brief.status === 'awaiting-operator' || brief.status === 'awaiting-external' ||
+      brief.status === 'awaiting-human') {
+    const kind = brief.status === 'awaiting-operator'
+      ? 'operator.required'
+      : brief.status === 'awaiting-external'
+        ? 'external.required'
+        : 'human.required';
+    const required = event(snapshot, trajectory, kind, at, {}, { nodeId, offset });
     required.data = escalationPayload(
       brief,
       snapshot,
@@ -271,7 +304,8 @@ export async function buildRuntimeProjection(
 
   const escalationEvent = brief.escalation
     ? [...snapshot.events].reverse().find((item) =>
-        item.kind === 'human.required' && item.graph.nodeId === brief.node?.id)
+        (item.kind === 'operator.required' || item.kind === 'external.required' ||
+         item.kind === 'human.required') && item.graph.nodeId === brief.node?.id)
     : undefined;
   const escalation = brief.escalation
     ? escalationPayload(
@@ -415,7 +449,7 @@ export async function amendRuntimeSnapshot(
 async function checkIdempotency(
   snapshot: RuntimeSnapshot,
   request: Extract<RuntimeRequest, {
-    op: 'choose' | 'ask' | 'answer' | 'advance' | 'observe' | 'record'
+    op: 'choose' | 'confirm' | 'ask' | 'answer' | 'advance' | 'observe' | 'record'
   }>,
 ): Promise<RuntimeIdempotencyRecord | null> {
   if (!request.idempotencyKey) return null;
@@ -462,7 +496,7 @@ export async function executeRuntimeRequest(
       result: {
         protocol: RUNTIME_PROTOCOL_VERSION,
         capabilities: {
-          operations: ['next', 'choose', 'ask', 'answer', 'advance', 'observe', 'record', 'events'],
+          operations: ['next', 'choose', 'confirm', 'ask', 'answer', 'advance', 'observe', 'record', 'events'],
           projections: ['signal', 'work', 'debug'],
           idempotency: true,
           eventCursor: true,
@@ -529,17 +563,32 @@ export async function executeRuntimeRequest(
   try {
     if (request.op === 'choose') {
       const { node, choice } = exactChoice(trajectory, snapshot.state, request.choiceId);
-      if (choice.human && principal.role !== 'human') {
+      const interaction = interactionKind(trajectory, choice);
+      if (interaction === 'legacy-human' && principal.role !== 'human') {
         throw new ProtocolError(
-          `choice "${choice.label}" is an @human checkpoint; connection principal is ${principal.role}`,
+          `choice "${choice.label}" is a legacy @human checkpoint; connection principal is ${principal.role}`,
           'forbidden',
           request.id,
         );
       }
-      if (choice.ask) {
+      if (interaction === 'ask' && principal.role !== 'human') {
         throw new ProtocolError(
-          `choice "${choice.label}" is an @ask checkpoint; open it with the ask operation`,
+          `choice "${choice.label}" asks the trusted operator to decide`,
+          'forbidden',
+          request.id,
+        );
+      }
+      if (interaction === 'input') {
+        throw new ProtocolError(
+          `choice "${choice.label}" is an @input checkpoint; open it with the ask operation`,
           'elicitation-required',
+          request.id,
+        );
+      }
+      if (interaction === 'external-human') {
+        throw new ProtocolError(
+          `choice "${choice.label}" waits for external human evidence; use confirm`,
+          'external-confirmation-required',
           request.id,
         );
       }
@@ -558,10 +607,35 @@ export async function executeRuntimeRequest(
         idempotencyKey: request.idempotencyKey ?? null,
         commandFingerprint: await requestFingerprint(request),
       }, { principal, nodeId: node.id, choiceId: choice.id }));
+    } else if (request.op === 'confirm') {
+      const { node, choice } = exactChoice(trajectory, snapshot.state, request.choiceId);
+      if (principal.role !== 'external-human') {
+        throw new ProtocolError(
+          'external @human confirmations require an external-human principal',
+          'forbidden',
+          request.id,
+        );
+      }
+      snapshot.state = await confirmExternal(trajectory, snapshot.state, choice.id, {
+        actor: principal.id,
+        rationale: request.rationale,
+        evidence: request.evidence,
+        at,
+      });
+      emitted.push(event(snapshot, trajectory, 'external.confirmed', at, {
+        from: node.id,
+        to: choice.target,
+        label: choice.label,
+        rationale: request.rationale,
+        evidence: request.evidence,
+        expectedRevision: request.expectedRevision,
+        idempotencyKey: request.idempotencyKey ?? null,
+        commandFingerprint: await requestFingerprint(request),
+      }, { principal, nodeId: node.id, choiceId: choice.id }));
     } else if (request.op === 'ask') {
       const { node, choice } = exactChoice(trajectory, snapshot.state, request.choiceId);
       if (principal.role !== 'agent') {
-        throw new ProtocolError('@ask checkpoints are opened by an agent', 'forbidden', request.id);
+        throw new ProtocolError('@input checkpoints are opened by an agent', 'forbidden', request.id);
       }
       snapshot.state = await ask(trajectory, snapshot.state, choice.id, {
         actor: bindWalkActor(principal),
@@ -584,11 +658,11 @@ export async function executeRuntimeRequest(
       emitted.push(required);
     } else if (request.op === 'answer') {
       if (principal.role !== 'human') {
-        throw new ProtocolError('@ask answers require a human-bound principal', 'forbidden', request.id);
+        throw new ProtocolError('@input answers require a human-bound principal', 'forbidden', request.id);
       }
       const pending = snapshot.state.pendingElicitation;
       if (!pending) {
-        throw new ProtocolError('there is no @ask clarification awaiting an answer',
+        throw new ProtocolError('there is no @input request awaiting an answer',
           'elicitation-required', request.id);
       }
       const { node, choice } = exactChoice(trajectory, snapshot.state, pending.choice);
@@ -665,7 +739,7 @@ export async function executeRuntimeRequest(
   }
 
   if (request.op !== 'record' && request.op !== 'ask') {
-    if ((request.op === 'choose' || request.op === 'answer' || request.op === 'advance') &&
+    if ((request.op === 'choose' || request.op === 'confirm' || request.op === 'answer' || request.op === 'advance') &&
         snapshot.state.status === 'active') {
       emitted.push(event(snapshot, trajectory, 'node.entered', at, {
         from: input.state.current,

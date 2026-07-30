@@ -34,11 +34,12 @@ surface; it does not change this CLI loop or the DSL.
 │      ├─ status: waiting-timeout → park until the temporal   │
 │      │     exit is due; the host may arrange the wake-up    │
 │      │                                                      │
-│      ├─ status: awaiting-human → deliver the escalation     │
-│      │     payload to the primary session and STOP          │
-│      │                                                      │
+│      ├─ status: awaiting-operator → show full @ask packet;  │
+│      │     trusted operator chooses and agent STOPS         │
+│      ├─ status: awaiting-external → wait for another human; │
+│      │     require their identity + evidence and STOP       │
 │      ├─ status: awaiting-elicitation → present the agent's  │
-│      │     focused question; a human answers, then resume   │
+│      │     @input question; operator answers, then resume   │
 │      │                                                      │
 │      ├─ status: stranded       → report; plan needs editing │
 │      │     (then `marionette state rebind`)                 │
@@ -64,7 +65,8 @@ renders the same packet for humans. It contains:
   refs, and `intent` — the plan's `# summary:` and `# prompt:` metadata, so
   the executor holds the original ask, not just the current phase.
 - **status** — `active` | `awaiting-observation` | `waiting-timeout` |
-  `awaiting-human` | `awaiting-elicitation` | `stranded` | `completed`.
+  `awaiting-operator` | `awaiting-external` | legacy `awaiting-human` |
+  `awaiting-elicitation` | `stranded` | `completed`.
 - **node** — the current phase: id, title (first body line), full prose body,
   raw meta, and normalised refs. The prose is the task description; it is
   the plan author's instruction to the executor.
@@ -80,14 +82,15 @@ renders the same packet for humans. It contains:
   isn't taking them.
 - **automatic next step** (`next` in the JSON contract) — the
   unconditional route to follow when the stage is done.
-- **escalation** — present exactly when status is `awaiting-human` (below).
+- **escalation** — present for operator/external/legacy human checkpoints;
+  carries the complete decision packet and trusted response requirements.
 - **elicitation** — present exactly when status is `awaiting-elicitation`;
-  carries the open `@ask` question, its fixed edge and answer instructions.
-- **clarification** — on the phase entered through an answered `@ask`, carries
+  carries the open `@input` question, its fixed edge and answer instructions.
+- **clarification** — on the phase entered through an answered `@input`, carries
   that question and answer as immediate work context.
 - **progress** — steps taken, phases visited/total, the visited path.
 - **protocol** — the exact commands to record an outcome, plus the standing
-  rules (do the work first; honest rationale; never take `@human` as agent;
+  rules (do the work first; honest rationale; never choose `@ask` or confirm `@human` as agent;
   re-brief after every step).
 
 ## Runtime observations
@@ -113,12 +116,12 @@ captured count through a `while`, then reaches a refresh phase and observes
 again. This keeps the snapshot stable while work is in flight and avoids
 repeated lookups.
 
-## @ask elicitation
+## @input elicitation
 
-An available `@ask` choice is still agent-owned: the agent identifies that
-the authored ambiguity applies and opens it with a concise, answerable
-question. It does not use ordinary `choose`, and it does not ask the human to
-approve a route.
+An available `@input` choice is agent-opened: the agent identifies that the
+authored ambiguity applies and opens it with a concise, answerable question.
+It does not use ordinary `choose`, and it does not ask the operator to approve
+a route.
 
 ```console
 marionette state ask plan.mar <choice> \
@@ -135,11 +138,11 @@ or, for the unbound CLI:
 marionette state answer plan.mar "<answer>" --actor <name>
 ```
 
-The answer is audited separately, then the fixed `@ask` edge advances. The
+The answer is audited separately, then the fixed `@input` edge advances. The
 entered phase receives it as `clarification` in its work packet. It does not
 select a target. If several known answers should lead to different targets,
-the plan should author ordinary choices and use `@human` where the human owns
-that selection.
+the plan should author `@ask` choices for the trusted operator. Use `@human`
+only when somebody external must act and provide evidence.
 
 ## Temporal exits
 
@@ -220,52 +223,31 @@ manifest the executor applies with its own tracker tools, and
 `marionette import` scaffolds a plan *from* an existing backlog. See
 [`SYNC.md`](SYNC.md).
 
-## @human escalation (OQ2 implementation pending human approval)
+## Operator decisions and external human actions
 
-When every available choice at the current node is `@human`, the brief's
-status becomes `awaiting-human` and it carries a structured escalation:
+When available routes are operator `@ask` choices, status is
+`awaiting-operator`. When they require external `@human` action, status is
+`awaiting-external`. Both carry a complete decision packet: plan summary and
+prompt, full phase body, refs, variables, progress, reason, exact choices,
+target titles/effects, revision, response operation, evidence requirements,
+and graph-authored timeout fallbacks.
 
-```json
-"escalation": {
-  "reason": "every choice at this phase is an @human checkpoint",
-  "choices": ["dogfood_gate#0", "dogfood_gate#1"],
-  "fallbacks": [],
-  "how": "pause and escalate: present this phase and its choices to a human; a human records the decision with `marionette state choose <plan> <choice> --actor <name> --rationale <text>`. Do not take these choices autonomously. There is no implicit timeout or fallback; silence leaves the run parked."
-}
-```
+The operator resolves `@ask` through `/marionette-decide` or `state choose`
+with their rationale. External `@human` is deliberately different: the
+operator waits for somebody else, then records that person's identity and a
+durable evidence reference through `/marionette-confirm-human`, the host API,
+or `state confirm`. The agent-facing tool can do neither. A spec-0.5 archived
+`@human` epoch retains its legacy human-choice behavior during replay.
 
-The *channel* is executor-specific (a chat message to the primary session, a
-PR comment, a Slack ping); the *payload* is this escalation object plus the
-node body and frontier — everything a human needs to decide without opening
-the repo. There is no **implicit** timeout/fallback: an unanswered escalation
-simply leaves the plan parked at the checkpoint, visible in
-`brief`/`render`/`summarize`. A plan that needs a deadline authors a normal
-`timeout` choice. While it is pending, the escalation's `fallbacks` array
-names that choice and its `dueAt`; after expiry, the Prolog frontier—not the
-host—makes it available and blocks the superseded choices.
-(The walker separately refuses `--actor agent` on `@human` choices with the
-`human-checkpoint` error code, so escalation is enforced, not advisory.)
+There is no implicit timeout or default. Silence parks the run. If the plan
+authors a timeout edge, its id and due time appear in the packet and only the
+walker can open it. Runtime emits durable `operator.required`,
+`external.required`, and `external.confirmed` events with graph hash,
+revision, actor, rationale, and evidence.
 
-The human's answer can come back through the same channel: when they state
-an explicit, unambiguous decision in-session, the executor records it **as
-their proxy** — `state choose <plan> <choice> --actor <their-name>
---rationale "<their stated reasoning>"` — instead of making them leave the
-conversation for a terminal. The contract at an `@human` gate is
-*attribution and evidence*, not ceremony: the walker refuses only the
-`agent` actor, and the log must carry the human's name and their words.
-Proxy recording is forbidden for inferred intent, ambiguous replies, or
-silence — the executor asks instead. (This is how the
-`marionette-execution` skill implements OQ2's escalation loop end to end.)
-
-The local runtime wraps this material in a durable `human.required` event with
-an escalation URI and expected revision. Hosts treat that event as a wake
-signal and fetch `next` before displaying or resolving it, so attached records
-or a restart cannot leave the human acting on a stale revision.
-
-The complete proposal and consequences are recorded in
-[`ADR-0004`](decisions/0004-human-escalation-protocol.md). Its implementation
-is ready for the formal `@human` decision in the dogfood plan
-(`escalation_protocol`, issue #4).
+See [`ADR-0006`](decisions/0006-interactive-and-external-human-gates.md) for
+the authority split and [`ADR-0004`](decisions/0004-human-escalation-protocol.md)
+for the underlying host-mediated escalation principles.
 
 ## Editing a live plan: immutable past, editable future
 

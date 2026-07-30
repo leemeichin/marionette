@@ -33,6 +33,7 @@ const createFakePi = (cwd: string) => {
   const entries: CustomEntry[] = [];
   const messages: unknown[] = [];
   const notifications: Array<{ message: string; type?: string }> = [];
+  const widgets = new Map<string, unknown>();
   let activeBranch: CustomEntry[] = [];
   let sequence = 0;
   const tools = new Map<string, any>();
@@ -58,7 +59,10 @@ const createFakePi = (cwd: string) => {
   };
   const ui = {
     setStatus() {},
-    setWidget() {},
+    setWidget(name: string, value: unknown) {
+      if (value === undefined) widgets.delete(name);
+      else widgets.set(name, value);
+    },
     notify(message: string, type?: string) {
       notifications.push({ message, type });
     },
@@ -117,6 +121,7 @@ const createFakePi = (cwd: string) => {
     messages,
     notifications,
     tools,
+    widgets,
     get tool() {
       return tools.get('marionette_walk');
     },
@@ -157,7 +162,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.3.0');
+    assert.equal(api.protocol, '1.4.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -312,6 +317,10 @@ test('Pi extension persists future-only proposals and applies them only through 
     assert.ok(existsSync(proposed.details.amendment.mermaidFile));
     assert.ok(existsSync(proposed.details.amendment.svgFile));
     assert.match(readFileSync(proposed.details.amendment.svgFile, 'utf8'), /<svg/);
+    const amendmentPacket = fake.widgets.get('marionette-amendment') as string[];
+    assert.match(amendmentPacket.join('\n'), /Why: new work was discovered/);
+    assert.match(amendmentPacket.join('\n'), /phase-added: c/);
+    assert.match(amendmentPacket.join('\n'), /SVG:/);
 
     const proposalBranch = fake.branch();
     fake.useBranch([]);
@@ -391,13 +400,60 @@ test('Pi extension tool exposes record/events receipts and structured failures',
   }
 });
 
+test('Pi external human checkpoints require distinct evidence and expose a full packet', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-external-'));
+  try {
+    writeFileSync(join(root, 'external.mar'), `
+# summary: Merge a reviewed pull request.
+=== approval ===
+Wait for a maintainer who is not the author to approve PR #12.
+* [Maintainer approved] @human -> END
+`, 'utf8');
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('external.mar run-external', fake.ctx);
+    const api = fake.discover();
+    const packet = fake.widgets.get('marionette-escalation') as string[];
+    assert.match(packet.join('\n'), /External human action required/);
+    assert.match(packet.join('\n'), /Merge a reviewed pull request/);
+    assert.match(packet.join('\n'), /Wait for a maintainer who is not the author/);
+    assert.match(packet.join('\n'), /identity and evidence/);
+
+    const noEvidence = await api.externalConfirm({
+      external: { id: 'maintainer' },
+      choiceId: 'approval#0',
+      rationale: 'claimed approval',
+      evidence: [],
+      idempotencyKey: 'external-empty',
+      triggerTurn: false,
+    });
+    assert.equal(noEvidence.error?.code, 'invalid-request');
+
+    const confirmed = await api.externalConfirm({
+      external: { id: 'maintainer', uri: 'github://maintainer' },
+      choiceId: 'approval#0',
+      rationale: 'approved PR #12',
+      evidence: [{
+        provider: 'github', kind: 'review', id: 'acme/repo#12',
+        url: 'https://github.com/acme/repo/pull/12#pullrequestreview-1',
+      }],
+      idempotencyKey: 'external-reviewed',
+      triggerTurn: false,
+    });
+    assert.equal(confirmed.events?.[0].kind, 'external.confirmed');
+    assert.equal(confirmed.events?.[0].principal?.role, 'external-human');
+    assert.equal(confirmed.projection?.status, 'completed');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('Pi host API keeps human authority outside the model tool surface', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-human-'));
   try {
     writeFileSync(join(root, 'approval.mar'), `
 === approval ===
 Human approval required.
-* [Approve] @human -> END
+* [Approve] @ask -> END
 `, 'utf8');
     const fake = createFakePi(root);
     await fake.commands.get('marionette-start')!.handler(
@@ -405,6 +461,10 @@ Human approval required.
       fake.ctx,
     );
     const api = fake.discover();
+    const packet = fake.widgets.get('marionette-escalation') as string[];
+    assert.match(packet.join('\n'), /Operator decision required/);
+    assert.match(packet.join('\n'), /Human approval required\./);
+    assert.match(packet.join('\n'), /approval#0 — Approve → END/);
 
     const forbidden = await fake.tool.execute(
       'tool-human',

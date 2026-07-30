@@ -22,7 +22,7 @@ import { nearest } from './suggest.ts';
 import { styleFor } from './term.ts';
 import { buildBrief, renderBrief } from './brief.ts';
 import {
-  DriftError, WalkError, advance, answer, ask, bindState, frontier, initState,
+  DriftError, WalkError, advance, answer, ask, bindState, confirmExternal, frontier, initState,
   parseState, observe, rebindState, serializeState, takeChoice,
 } from './state.ts';
 import {
@@ -45,7 +45,7 @@ const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
 const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'sync', 'import', 'start', 'stop', 'state', 'help', 'version'];
-const STATE_SUBCOMMANDS = ['init', 'baseline', 'show', 'observe', 'choose', 'ask', 'answer', 'advance', 'rebind'];
+const STATE_SUBCOMMANDS = ['init', 'baseline', 'show', 'observe', 'choose', 'confirm', 'ask', 'answer', 'advance', 'rebind'];
 const SYNC_SUBCOMMANDS = ['status', 'bind', 'link', 'mark'];
 
 function readTextFile(file: string, what = 'plan'): string {
@@ -84,13 +84,15 @@ Usage:
   marionette sync mark <plan.mar|.json> [--cursor n]            Advance the applied-audit cursor
   marionette import    <issues.json> [--mode queue|phases] [-o out.mar]   Scaffold a plan from issues
   marionette start     <plan.mar|.json> --run <id> [--store dir]
-                       [--principal id] [--role agent|human] [--principal-uri uri]
+                       [--principal id] [--role agent|human|external-human] [--principal-uri uri]
   marionette stop      <plan.mar|.json> --run <id> [--store dir]
   marionette state init    <plan.mar|.json> [--state f] [--force]
   marionette state baseline <plan.mar|.json> [--state f]        Archive a legacy state's unchanged graph
   marionette state show    <plan.mar|.json> [--state f]
   marionette state observe <plan.mar|.json> <name> <json-value> --actor <name> --rationale <text> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
+  marionette state confirm <plan.mar|.json> <choice> --actor <external-name>
+                           --evidence <url> --rationale <text> [--state f]
   marionette state ask     <plan.mar|.json> <choice> --question <text> --actor agent [--rationale <text>] [--state f]
   marionette state answer  <plan.mar|.json> <answer> --actor <name> [--rationale <text>] [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
@@ -115,7 +117,8 @@ Options:
   --store <dir>        Run store (default: <plan-dir>/.marionette)
   --create             Start a new run; error if it already exists
   --principal <id>     Connection principal id (default: agent)
-  --role <role>        Bound connection role: agent or human (default: agent)
+  --role <role>        Bound role: agent, human/operator, or external-human
+  --evidence <url>     Durable evidence for an external @human confirmation
   --principal-uri <u>  Optional provenance URI for decision records
 `;
 
@@ -128,7 +131,7 @@ function parseArgs(argv: string[]): Args {
   const positional: string[] = [];
   const flags: Record<string, string | boolean> = {};
   const takesValue = new Set([
-    '-o', '--out', '--state', '--actor', '--rationale', '--question',
+    '-o', '--out', '--state', '--actor', '--rationale', '--question', '--evidence',
     '--tracker', '--cursor', '--mode',
     '--run', '--store', '--principal', '--role', '--principal-uri',
   ]);
@@ -227,6 +230,7 @@ async function printFrontier(trajectory: Trajectory, state: PlanState): Promise<
     const marks = [
       choice.human ? out.magenta('@human') : null,
       choice.ask ? out.yellow('@ask') : null,
+      choice.input ? out.yellow('@input') : null,
       choice.loop ? out.cyan('~loop~') : null,
       choice.gate ? out.dim(`{${choice.gate.source}}`) : null,
       choice.timeout ? out.yellow(`timeout ${choice.timeout.source}`) : null,
@@ -550,8 +554,8 @@ export async function run(argv: string[]): Promise<number> {
         const runId = typeof flags['run'] === 'string' ? flags['run'] : undefined;
         if (!runId) throw new UsageError('start: missing required --run <id>');
         const role = (typeof flags['role'] === 'string' ? flags['role'] : 'agent') as RuntimeRole;
-        if (role !== 'agent' && role !== 'human') {
-          throw new UsageError('start: --role must be agent or human');
+        if (role !== 'agent' && role !== 'human' && role !== 'external-human') {
+          throw new UsageError('start: --role must be agent, human, or external-human');
         }
         const principal: RuntimePrincipal = {
           id: typeof flags['principal'] === 'string' ? flags['principal'] : role,
@@ -647,7 +651,7 @@ export async function run(argv: string[]): Promise<number> {
         const file = positional[0];
         if (!sub || !file) {
           throw new UsageError(
-            'state: expected "state <init|baseline|show|observe|choose|ask|answer|advance|rebind> <plan>"',
+            'state: expected "state <init|baseline|show|observe|choose|confirm|ask|answer|advance|rebind> <plan>"',
           );
         }
         const { trajectory, ok, diagnostics, source } = await readSource(file);
@@ -779,6 +783,26 @@ export async function run(argv: string[]): Promise<number> {
           const actor = typeof flags['actor'] === 'string' ? flags['actor'] : 'agent';
           const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
           state = await takeChoice(trajectory, state, ref, { actor, rationale });
+          writeFileSync(sf, serializeState(state));
+          await printFrontier(trajectory, state);
+          return 0;
+        }
+        if (sub === 'confirm') {
+          const ref = positional[1];
+          if (!ref) throw new UsageError('state confirm: missing <choice> (index, id, or label prefix)');
+          const actor = typeof flags['actor'] === 'string' ? flags['actor'] : undefined;
+          const rationale = typeof flags['rationale'] === 'string' ? flags['rationale'] : undefined;
+          const evidenceUrl = typeof flags['evidence'] === 'string' ? flags['evidence'] : undefined;
+          if (!actor) throw new UsageError('state confirm: missing required --actor <external-name>');
+          if (!rationale) throw new UsageError('state confirm: missing required --rationale <text>');
+          if (!evidenceUrl || !/^https?:\/\//.test(evidenceUrl)) {
+            throw new UsageError('state confirm: --evidence must be a durable http(s) URL');
+          }
+          state = await confirmExternal(trajectory, state, ref, {
+            actor,
+            rationale,
+            evidence: [{ provider: 'url', kind: 'evidence', id: evidenceUrl, url: evidenceUrl }],
+          });
           writeFileSync(sf, serializeState(state));
           await printFrontier(trajectory, state);
           return 0;

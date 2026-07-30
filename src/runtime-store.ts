@@ -4,8 +4,10 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { trajectoryHash } from './compile.ts';
-import { answer, ask, initState, takeChoice, advance, observe, rebindState } from './state.ts';
-import type { PlanState, Trajectory } from './types.ts';
+import {
+  answer, ask, confirmExternal, initState, takeChoice, advance, observe, rebindState,
+} from './state.ts';
+import type { PlanState, Ref, Trajectory } from './types.ts';
 import type {
   RuntimeEvent, RuntimePrincipal,
 } from './runtime-protocol.ts';
@@ -389,6 +391,7 @@ async function replayRuntimeEvents(
       );
     }
     if (item.kind !== 'decision.committed' &&
+        item.kind !== 'external.confirmed' &&
         item.kind !== 'elicitation.required' &&
         item.kind !== 'elicitation.answered' &&
         item.kind !== 'observation.recorded' &&
@@ -402,6 +405,21 @@ async function replayRuntimeEvents(
       } else {
         state = await advance(trajectory, state, { actor, rationale, at: item.at });
       }
+    } else if (item.kind === 'external.confirmed') {
+      const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
+      const evidence = Array.isArray(item.data['evidence']) ? item.data['evidence'] as Ref[] : [];
+      if (!item.graph.choiceId || item.principal?.role !== 'external-human') {
+        throw new RuntimeStoreError(
+          `external confirmation event ${item.seq} has no external principal or choice`,
+          'corrupt-journal',
+        );
+      }
+      state = await confirmExternal(trajectory, state, item.graph.choiceId, {
+        actor: item.principal.id,
+        rationale,
+        evidence,
+        at: item.at,
+      });
     } else if (item.kind === 'elicitation.required') {
       const question = item.data['question'];
       const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;

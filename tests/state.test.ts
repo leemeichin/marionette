@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compile, trajectoryHash } from '../src/compile.ts';
 import {
-  DriftError, WalkError, advance, bindState, frontier, initState, observe, takeChoice,
+  DriftError, WalkError, advance, bindState, confirmExternal, frontier, initState, observe, takeChoice,
   parseState,
 } from '../src/state.ts';
 
@@ -80,16 +80,23 @@ test('walker: successful transitions are immutable and legacy states are rejecte
   );
 });
 
-test('walker: @human checkpoints refuse agents and demand rationale (G4)', async () => {
+test('walker: external @human checkpoints require identity, rationale, and evidence', async () => {
   const t = await compiled();
   let state = await initState(t);
   await assert.rejects(takeChoice(t, state, '0', { actor: 'agent', rationale: 'x' }), WalkError);
-  await assert.rejects(takeChoice(t, state, '0', { actor: 'lee' }), WalkError);
+  await assert.rejects(takeChoice(t, state, '0', { actor: 'lee', rationale: 'self approval' }), WalkError);
   await assert.rejects(takeChoice(t, state, '1', { actor: 'agent' }), /rationale/);
-  state = await takeChoice(t, state, '0', { actor: 'lee', rationale: 'metrics green' });
+  await assert.rejects(confirmExternal(t, state, '0', {
+    actor: 'maintainer', rationale: 'metrics green', evidence: [],
+  }), /evidence/);
+  state = await confirmExternal(t, state, '0', {
+    actor: 'maintainer',
+    rationale: 'metrics green',
+    evidence: [{ provider: 'url', kind: 'evidence', id: 'https://example.test/review', url: 'https://example.test/review' }],
+  });
   assert.equal(state.current, 'beta_launch');
   const last = state.log.at(-1)!;
-  assert.equal(last.actor, 'lee');
+  assert.equal(last.actor, 'maintainer');
   assert.equal(last.rationale, 'metrics green');
   assert.ok(last.at);
 });
@@ -111,7 +118,11 @@ test('walker: sticky loops iterate, counters progress, gated exit opens', async 
 test('walker: automatic advance and completion', async () => {
   const t = await compiled();
   let state = await initState(t);
-  state = await takeChoice(t, state, '0', { actor: 'lee', rationale: 'green' });
+  state = await confirmExternal(t, state, '0', {
+    actor: 'maintainer',
+    rationale: 'green',
+    evidence: [{ provider: 'url', kind: 'evidence', id: 'https://example.test/review', url: 'https://example.test/review' }],
+  });
   state = await advance(t, state, { actor: 'agent' });
   assert.equal(state.status, 'completed');
   assert.equal(state.current, 'END');

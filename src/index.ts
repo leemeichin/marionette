@@ -5,6 +5,10 @@ export { emitFacts, exprTerm } from './facts.ts';
 export { compile, trajectoryHash, formatDiagnostics, type CompileResult } from './compile.ts';
 export { validatePlan, analyzePlan } from './validate.ts';
 export { renderFinding, refusalText, blockedText } from './diagnostics.ts';
+export {
+  interactionKind, isOperatorChoice, isInputChoice, isExternalHumanChoice,
+  type InteractionKind,
+} from './gates.ts';
 export { renderCompactGraph, renderMermaid, type RenderOptions } from './render.ts';
 export { renderSvg, type SvgRenderOptions } from './render-svg.ts';
 export { summarize, type SummarizeOptions } from './summarize.ts';
@@ -14,9 +18,9 @@ export {
   type AmendmentViolation, type AmendmentViolationCode,
 } from './amendment.ts';
 export {
-  initState, bindState, frontier, takeChoice, ask, answer, advance, observe, enteredAt, visitedPath,
+  initState, bindState, frontier, takeChoice, confirmExternal, ask, answer, advance, observe, enteredAt, visitedPath,
   parseState, serializeState, rebindState, type RebindOptions, DriftError, WalkError,
-  type AvailableChoice, type TakeOptions, type AskOptions, type AnswerOptions,
+  type AvailableChoice, type TakeOptions, type ExternalConfirmOptions, type AskOptions, type AnswerOptions,
   type ObserveOptions, type WalkErrorCode, type MigrationReport,
 } from './state.ts';
 export {
@@ -75,6 +79,7 @@ export {
   type MarionettePiAmendmentRequest,
   type MarionettePiAmendmentApproval,
   type MarionettePiHumanDecision,
+  type MarionettePiExternalConfirmation,
   type MarionettePiHumanAnswer,
   type MarionettePiBindRequest,
   type MarionettePiHostApi,

@@ -194,6 +194,41 @@ Beta.
   assert.equal(reopened.events.filter((event) => event.kind === 'plan.rebound').length, 1);
 }));
 
+test('runtime journal replays external human confirmation with evidence', () => withStore(async (root) => {
+  const external = (await compile(`
+=== approval ===
+* [Maintainer approved] @human -> END
+`)).trajectory!;
+  const before = await initializeRuntimeStore(root, external, {
+    runId: 'run-external', at: AT, principal: AGENT,
+  });
+  const evidence = [{
+    provider: 'github', kind: 'review', id: 'acme/repo#12',
+    url: 'https://github.com/acme/repo/pull/12',
+  }];
+  const result = await executeRuntimeRequest(
+    external,
+    before,
+    { id: 'maintainer', role: 'external-human' },
+    {
+      protocol: RUNTIME_PROTOCOL_VERSION,
+      id: 40,
+      op: 'confirm',
+      choiceId: 'approval#0',
+      rationale: 'approved on GitHub',
+      evidence,
+      expectedRevision: 0,
+    },
+    { at: AT },
+  );
+  commitRuntimeStore(root, external, before, result.snapshot, result.events);
+  const reopened = await loadRuntimeStore(root, 'run-external', external);
+  assert.equal(reopened.state.status, 'completed');
+  assert.equal(reopened.state.log.at(-1)?.actor, 'maintainer');
+  assert.equal(reopened.events.find((event) => event.kind === 'external.confirmed')?.principal?.role,
+    'external-human');
+}));
+
 test('runtime store repairs a corrupt snapshot by replaying the journal', () => withStore(async (root) => {
   await initializeRuntimeStore(root, trajectory, { runId: 'run-3', at: AT });
   const paths = runtimePaths(root, 'run-3', trajectory.hash);

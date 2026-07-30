@@ -98,12 +98,14 @@
         "active",
         "awaiting-observation",
         "waiting-timeout",
+        "awaiting-operator",
+        "awaiting-external",
         "awaiting-human",
         "awaiting-elicitation",
         "stranded",
         "completed"
       ],
-      "description": "active: an autonomous step is available. awaiting-observation: runtime values are required. waiting-timeout: a temporal edge will open later. awaiting-human: only @human choices are available. awaiting-elicitation: an @ask question is waiting for a human answer. stranded: nothing can proceed. completed: END."
+      "description": "active: an autonomous step is available. awaiting-operator: @ask requires the trusted operator. awaiting-external: @human requires external identity/evidence. awaiting-human: legacy spec-0.5 human gate. awaiting-elicitation: @input is waiting for an answer."
     },
     "variables": {
       "type": "object",
@@ -284,6 +286,8 @@
           "sticky",
           "human",
           "ask",
+          "input",
+          "interaction",
           "loop",
           "gate",
           "available",
@@ -324,6 +328,12 @@
           },
           "ask": {
             "type": "boolean"
+          },
+          "input": {
+            "type": "boolean"
+          },
+          "interaction": {
+            "enum": ["agent", "ask", "input", "legacy-human", "external-human"]
           },
           "loop": {
             "type": "boolean"
@@ -416,7 +426,7 @@
       ]
     },
     "escalation": {
-      "description": "Present exactly when status is \"awaiting-human\": the structured @human escalation (OQ2).",
+      "description": "Present for awaiting-operator, awaiting-external, or legacy awaiting-human interactions.",
       "oneOf": [
         {
           "type": "null"
@@ -424,6 +434,7 @@
         {
           "type": "object",
           "required": [
+            "kind",
             "reason",
             "choices",
             "fallbacks",
@@ -431,6 +442,9 @@
           ],
           "additionalProperties": false,
           "properties": {
+            "kind": {
+              "enum": ["operator", "external", "legacy-human"]
+            },
             "reason": {
               "type": "string"
             },
@@ -481,7 +495,7 @@
       ]
     },
     "elicitation": {
-      "description": "Present exactly when status is \"awaiting-elicitation\": the open @ask exchange.",
+      "description": "Present exactly when status is \"awaiting-elicitation\": the open @input exchange.",
       "oneOf": [
         { "type": "null" },
         {
@@ -511,7 +525,7 @@
       ]
     },
     "clarification": {
-      "description": "The @ask answer that advanced into the current phase, or null.",
+      "description": "The @input answer that advanced into the current phase, or null.",
       "oneOf": [
         { "type": "null" },
         {
@@ -561,6 +575,7 @@
       "type": "object",
       "required": [
         "choose",
+        "confirm",
         "ask",
         "answer",
         "advance",
@@ -570,6 +585,9 @@
       "additionalProperties": false,
       "properties": {
         "choose": {
+          "type": "string"
+        },
+        "confirm": {
           "type": "string"
         },
         "ask": {

@@ -1,6 +1,6 @@
 {
-  "spec": "0.5.0",
-  "hash": "sha256:d3325bb6ee1238297b595826c62a61de2056a034b4eaf3dad151a74b1044ce6d",
+  "spec": "0.6.0",
+  "hash": "sha256:dde4af5617132d5a29bb699f7d1f69dc713e30a3a082c42ac4a3e268b00754bd",
   "source": {
     "file": "tests/fixtures/kitchen_sink.mar"
   },

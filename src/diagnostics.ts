@@ -71,7 +71,7 @@ export function renderFinding(f: Finding): Diagnostic {
       case 'MAR009':
         return {
           message: `potential infinite loop: the cycle through "${s(f, 'id')}" has no exit path`,
-          suggestion: 'add a sibling choice or automatic next step that leaves the loop (e.g. a counter-gated exit or an @human decision)',
+          suggestion: 'add a sibling choice or automatic next step that leaves the loop (e.g. a counter-gated exit or an operator @ask decision)',
         };
       case 'MAR010':
         return {

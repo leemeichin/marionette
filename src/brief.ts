@@ -11,6 +11,7 @@
 
 import type { Trajectory, TrajectoryNode, Ref, Value } from './types.ts';
 import { END } from './types.ts';
+import { interactionKind, type InteractionKind } from './gates.ts';
 import { enteredAt, frontier, visitedPath, type AvailableChoice } from './state.ts';
 import type { PlanState } from './types.ts';
 import {
@@ -27,9 +28,13 @@ export type BriefStatus =
   | 'awaiting-observation'
   /** No ordinary route is open yet; a timeout edge will open later. */
   | 'waiting-timeout'
-  /** Only @human choices are available: escalate and pause. */
+  /** Only operator @ask choices are available. */
+  | 'awaiting-operator'
+  /** Only external @human actions are available. */
+  | 'awaiting-external'
+  /** Legacy spec-0.5 @human choices are available. */
   | 'awaiting-human'
-  /** An agent-opened @ask checkpoint is waiting for human context. */
+  /** An agent-opened @input checkpoint is waiting for operator context. */
   | 'awaiting-elicitation'
   /** Nothing is available and there is no automatic next step: the traversal is stuck. */
   | 'stranded'
@@ -46,6 +51,8 @@ export interface BriefChoice {
   sticky: boolean;
   human: boolean;
   ask: boolean;
+  input: boolean;
+  interaction: InteractionKind;
   loop: boolean;
   gate: string | null;
   available: boolean;
@@ -62,6 +69,7 @@ export interface BriefChoice {
 }
 
 export interface Escalation {
+  kind: 'operator' | 'external' | 'legacy-human';
   reason: string;
   /** Choice ids a human must decide between. */
   choices: string[];
@@ -133,11 +141,11 @@ export interface Brief {
   delivery: DeliveryConfig;
   frontier: BriefChoice[];
   next: { target: string; targetTitle: string | null } | null;
-  /** Present exactly when status is "awaiting-human". */
+  /** Present for operator, external-human, or legacy-human checkpoints. */
   escalation: Escalation | null;
   /** Present exactly when status is "awaiting-elicitation". */
   elicitation: Elicitation | null;
-  /** The answer that advanced into the current phase, when it came through @ask. */
+  /** The answer that advanced into the current phase through @input. */
   clarification: Clarification | null;
   progress: {
     steps: number;
@@ -148,6 +156,7 @@ export interface Brief {
   /** How to record the outcome — the executor's side of the protocol. */
   protocol: {
     choose: string;
+    confirm: string;
     ask: string;
     answer: string;
     advance: string;
@@ -193,6 +202,8 @@ export async function buildBrief(
     sticky: a.choice.sticky,
     human: a.choice.human,
     ask: a.choice.ask,
+    input: a.choice.input === true,
+    interaction: interactionKind(trajectory, a.choice),
     loop: a.choice.loop,
     gate: a.choice.gate?.source ?? null,
     available: a.blocked === null,
@@ -205,6 +216,21 @@ export async function buildBrief(
   const next = node?.next
     ? { target: node.next.target, targetTitle: node.next.target === END ? null : title(nodeById(node.next.target)) }
     : null;
+  const authoredFallbacks = choices
+    .filter((choice) => choice.blockedCode === 'timeout-pending' && choice.timeout)
+    .map((choice) => {
+      const activated = state.activationStartedAt === null
+        ? Number.NaN
+        : Date.parse(state.activationStartedAt);
+      return {
+        choice: choice.id,
+        label: choice.label,
+        target: choice.target,
+        dueAt: Number.isFinite(activated)
+          ? new Date(activated + choice.timeout!.seconds * 1_000).toISOString()
+          : null,
+      };
+    });
 
   let status: BriefStatus = 'active';
   let escalation: Escalation | null = null;
@@ -234,24 +260,37 @@ export async function buildBrief(
     status = 'waiting-timeout';
   } else if (available.length === 0 && !next) {
     status = 'stranded';
-  } else if (available.length > 0 && available.every((c) => c.human)) {
-    status = 'awaiting-human';
-    const fallbacks = choices
-      .filter((choice) => choice.blockedCode === 'timeout-pending' && choice.timeout)
-      .map((choice) => {
-        const activated = state.activationStartedAt === null
-          ? Number.NaN
-          : Date.parse(state.activationStartedAt);
-        return {
-          choice: choice.id,
-          label: choice.label,
-          target: choice.target,
-          dueAt: Number.isFinite(activated)
-            ? new Date(activated + choice.timeout!.seconds * 1_000).toISOString()
-            : null,
-        };
-      });
+  } else if (available.length > 0 && available.every((c) => c.interaction === 'ask')) {
+    status = 'awaiting-operator';
     escalation = {
+      kind: 'operator',
+      reason: 'the trusted operator must choose one of the authored @ask outcomes',
+      choices: available.map((choice) => choice.id),
+      fallbacks: authoredFallbacks,
+      how: `present the complete decision packet, then record the operator's exact choice with ` +
+        `\`marionette state choose ${file} <choice> --actor <name> --rationale <text>\`. ` +
+        (authoredFallbacks.length === 0
+          ? 'There is no implicit timeout or fallback; silence leaves the run parked.'
+          : 'Only the graph-authored timeout fallback(s) listed here may end the wait.'),
+    };
+  } else if (available.length > 0 && available.every((c) => c.interaction === 'external-human')) {
+    status = 'awaiting-external';
+    escalation = {
+      kind: 'external',
+      reason: 'an external human must act before this route can continue',
+      choices: available.map((choice) => choice.id),
+      fallbacks: authoredFallbacks,
+      how: `wait for external evidence, then record the actual external actor with ` +
+        `\`marionette state confirm ${file} <choice> --actor <name> --evidence <ref> --rationale <text>\`. ` +
+        (authoredFallbacks.length === 0
+          ? 'There is no implicit timeout or fallback; silence leaves the run parked.'
+          : 'Only the graph-authored timeout fallback(s) listed here may end the wait.'),
+    };
+  } else if (available.length > 0 && available.every((c) => c.interaction === 'legacy-human')) {
+    status = 'awaiting-human';
+    const fallbacks = authoredFallbacks;
+    escalation = {
+      kind: 'legacy-human',
       reason: available.length === choices.length
         ? 'every choice at this phase is an @human checkpoint'
         : 'every currently-available choice is an @human checkpoint',
@@ -328,6 +367,7 @@ export async function buildBrief(
     },
     protocol: {
       choose: `marionette state choose ${file} <choice> --actor <name> --rationale <text>`,
+      confirm: `marionette state confirm ${file} <choice> --actor <external-name> --evidence <url> --rationale <text>`,
       ask: `marionette state ask ${file} <choice> --question <text> --actor agent --rationale <why>`,
       answer: `marionette state answer ${file} <answer> --actor <name>`,
       advance: `marionette state advance ${file} --actor <name> --rationale <text>`,
@@ -336,8 +376,9 @@ export async function buildBrief(
         'do the work the current phase describes before recording an outcome',
         'supply only observations the brief requests, with the source in the rationale',
         'record every taken branch with an honest rationale (it is the audit trail)',
-        'never take an @human choice as the agent: escalate and wait for a human decision',
-        'open an @ask choice with one focused question; the human answer is context, not approval',
+        'never choose @ask as the agent: present the complete packet and wait for the trusted operator',
+        'never confirm @human as the agent/operator: wait for external identity and durable evidence',
+        'open an @input choice with one focused question; the operator answer is context, not approval',
         'gates are computed from the variables above: if a choice is blocked, it is not an option',
         're-run `marionette brief` after every recorded step: it is the single source of "what now"',
       ],
@@ -365,8 +406,10 @@ export function renderBrief(brief: Brief, style?: Style): string {
     brief.status === 'completed' ? s.green('completed ✓')
     : brief.status === 'awaiting-observation' ? s.yellow('awaiting runtime observation ?')
     : brief.status === 'waiting-timeout' ? s.yellow('waiting for timeout')
-    : brief.status === 'awaiting-human' ? s.magenta('awaiting human decision ✋')
-    : brief.status === 'awaiting-elicitation' ? s.yellow('awaiting clarification ‽')
+    : brief.status === 'awaiting-operator' ? s.yellow('awaiting operator decision ?')
+    : brief.status === 'awaiting-external' ? s.magenta('awaiting external human evidence ✋')
+    : brief.status === 'awaiting-human' ? s.magenta('awaiting legacy human decision ✋')
+    : brief.status === 'awaiting-elicitation' ? s.yellow('awaiting input ‽')
     : brief.status === 'stranded' ? s.red('stranded — no available step')
     : s.cyan('active');
   lines.push(`status: ${badge}   progress: ${brief.progress.nodesVisited}/${brief.progress.nodesTotal} phases, ${brief.progress.steps} steps`);
@@ -426,6 +469,7 @@ export function renderBrief(brief: Brief, style?: Style): string {
       const marks = [
         c.human ? s.magenta('@human') : null,
         c.ask ? s.yellow('@ask') : null,
+        c.input ? s.yellow('@input') : null,
         c.loop ? s.cyan('~loop~') : null,
         c.gate ? s.dim(`{${c.gate}}`) : null,
         c.timeout ? s.yellow(`timeout ${c.timeout.source}`) : null,
