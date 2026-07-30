@@ -26,7 +26,7 @@ const SOURCE = `
 === decide ===
 Choose from the available evidence.
 * [The next step is clear] -> done
-* [I'm not sure] @ask -> reconsider
+* [I'm not sure] @input -> reconsider
 
 === reconsider ===
 Re-evaluate the route with the human's answer in the elicitation audit.
@@ -42,32 +42,33 @@ async function trajectory() {
   return result.trajectory!;
 }
 
-test('@ask compiles as an elicitation edge and renders as an interrobang', async () => {
+test('@input compiles as an input edge and renders as an interrobang', async () => {
   const compiled = await trajectory();
   const choice = compiled.nodes[0].choices[1];
-  assert.equal(choice.ask, true);
+  assert.equal(choice.ask, false);
+  assert.equal(choice.input, true);
   assert.equal(choice.human, false);
   assert.match(await renderMermaid(compiled), /‽ I'm not sure/);
 
   const invalid = await compile(`
 === a ===
-* [Confused authority] @human @ask -> END
+* [Confused authority] @human @input -> END
 `);
   assert.equal(invalid.ok, false);
-  assert.match(invalid.diagnostics[0].message, /cannot be both @human and @ask/);
+  assert.match(invalid.diagnostics[0].message, /cannot combine @ask, @input, and @human/);
 });
 
-test('@ask remains a graph edge but is not unattended agent reachability', async () => {
+test('@input remains a graph edge but is not unattended agent reachability', async () => {
   const compiled = (await compile(`
 === ambiguous ===
-* [I'm not sure] @ask -> END
+* [I'm not sure] @input -> END
 `)).trajectory!;
   const facts = emitFacts(compiled);
   assert.equal((await oracleQuery(facts, 'elicitation_gate(C, N, Label)')).length, 1);
   assert.deepEqual(await oracleQuery(facts, 'unattended_completion'), []);
 });
 
-test('@ask parks traversal until a human answer advances the fixed edge', async () => {
+test('@input parks traversal until a human answer advances the fixed edge', async () => {
   const compiled = await trajectory();
   let state = await initState(compiled, 'system', '2026-07-29T20:00:00.000Z');
 
@@ -113,7 +114,7 @@ test('@ask parks traversal until a human answer advances the fixed edge', async 
   assert.deepEqual(parseState(serializeState(state)), state);
 });
 
-test('runtime separates agent ask from human answer and preserves the elicitation id', async () => {
+test('runtime separates agent input from human answer and preserves the elicitation id', async () => {
   const compiled = await trajectory();
   const agent: RuntimePrincipal = { id: 'agent-1', role: 'agent' };
   const human: RuntimePrincipal = { id: 'lee', role: 'human' };
@@ -178,7 +179,7 @@ test('runtime separates agent ask from human answer and preserves the elicitatio
   assert.equal(projection.clarification?.answer, 'macOS arm64 and x86_64 Linux');
 });
 
-test('runtime protocol parses ask and answer as distinct writes', () => {
+test('runtime protocol parses input and answer as distinct writes', () => {
   assert.equal(parseRuntimeRequest({
     protocol: RUNTIME_PROTOCOL_VERSION,
     id: 1,
@@ -197,7 +198,7 @@ test('runtime protocol parses ask and answer as distinct writes', () => {
   }).op, 'answer');
 });
 
-test('runtime journal replays an @ask exchange as one request and one answer', async () => {
+test('runtime journal replays an @input exchange as one request and one answer', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-ask-'));
   try {
     const compiled = await trajectory();

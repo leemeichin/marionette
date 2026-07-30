@@ -4,8 +4,10 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { trajectoryHash } from './compile.ts';
-import { answer, ask, initState, takeChoice, advance, observe } from './state.ts';
-import type { PlanState, Trajectory } from './types.ts';
+import {
+  answer, ask, confirmExternal, initState, takeChoice, advance, observe, rebindState,
+} from './state.ts';
+import type { PlanState, Ref, Trajectory } from './types.ts';
 import type {
   RuntimeEvent, RuntimePrincipal,
 } from './runtime-protocol.ts';
@@ -190,6 +192,40 @@ export async function resolveArchivedTrajectory(root: string, hash: string): Pro
   return trajectory;
 }
 
+/**
+ * State-file traversal shares the same content-addressed graph archive as the
+ * durable runtime. Custom state files still resolve relative to their own
+ * directory, so moving a plan and its state/archive together is sufficient.
+ */
+export function stateGraphStoreRoot(stateFile: string): string {
+  return join(dirname(stateFile), '.marionette');
+}
+
+export async function archiveStateTrajectory(
+  stateFile: string,
+  trajectory: Trajectory,
+): Promise<string> {
+  return archiveTrajectory(stateGraphStoreRoot(stateFile), trajectory);
+}
+
+export async function resolveStateTrajectory(
+  stateFile: string,
+  hash: string,
+): Promise<Trajectory> {
+  try {
+    return await resolveArchivedTrajectory(stateGraphStoreRoot(stateFile), hash);
+  } catch (error) {
+    if (error instanceof RuntimeStoreError && error.code === 'run-not-found') {
+      throw new RuntimeStoreError(
+        `no archived baseline for state graph ${hash}; restore the source that matches this state ` +
+        'and run "marionette state baseline <plan>" before editing it',
+        'graph-mismatch',
+      );
+    }
+    throw error;
+  }
+}
+
 export async function initializeRuntimeStore(
   root: string,
   trajectory: Trajectory,
@@ -303,7 +339,8 @@ export function stopRuntimeProcess(
 }
 
 async function replayRuntimeEvents(
-  trajectory: Trajectory,
+  root: string,
+  expectedTrajectory: Trajectory,
   runId: string,
   events: RuntimeEvent[],
 ): Promise<RuntimeSnapshot> {
@@ -312,16 +349,49 @@ async function replayRuntimeEvents(
   if (started.runId !== runId || events.some((item) => item.runId !== runId)) {
     throw new RuntimeStoreError('runtime journal contains events for a different run', 'corrupt-journal');
   }
-  if (events.some((item) => item.graph.trajectoryHash !== trajectory.hash)) {
-    throw new RuntimeStoreError('runtime journal references a different graph hash', 'graph-mismatch');
-  }
+  let trajectory = await resolveArchivedTrajectory(root, started.graph.trajectoryHash);
   const principal = started.principal;
   let state = await initState(trajectory, principal?.id ?? 'system', started.at);
   let revision = 0;
   const idempotency: Record<string, RuntimeIdempotencyRecord> = {};
 
   for (const item of events) {
+    if (item.kind === 'plan.rebound') {
+      const fromHash = item.data['fromHash'];
+      const toHash = item.data['toHash'];
+      const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
+      if (fromHash !== trajectory.hash || toHash !== item.graph.trajectoryHash || !item.principal) {
+        throw new RuntimeStoreError(
+          `plan.rebound event ${item.seq} does not link the active graph epoch`,
+          'corrupt-journal',
+        );
+      }
+      const candidate = await resolveArchivedTrajectory(root, item.graph.trajectoryHash);
+      try {
+        rebindState(candidate, state, {
+          previousTrajectory: trajectory,
+          actor: item.principal.id,
+          rationale,
+          at: item.at,
+        });
+      } catch (error) {
+        throw new RuntimeStoreError(
+          `plan.rebound event ${item.seq} cannot be replayed: ${(error as Error).message}`,
+          'corrupt-journal',
+        );
+      }
+      trajectory = candidate;
+      revision++;
+      continue;
+    }
+    if (item.graph.trajectoryHash !== trajectory.hash) {
+      throw new RuntimeStoreError(
+        `runtime event ${item.seq} references graph ${item.graph.trajectoryHash} outside its epoch`,
+        'graph-mismatch',
+      );
+    }
     if (item.kind !== 'decision.committed' &&
+        item.kind !== 'external.confirmed' &&
         item.kind !== 'elicitation.required' &&
         item.kind !== 'elicitation.answered' &&
         item.kind !== 'observation.recorded' &&
@@ -335,6 +405,21 @@ async function replayRuntimeEvents(
       } else {
         state = await advance(trajectory, state, { actor, rationale, at: item.at });
       }
+    } else if (item.kind === 'external.confirmed') {
+      const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
+      const evidence = Array.isArray(item.data['evidence']) ? item.data['evidence'] as Ref[] : [];
+      if (!item.graph.choiceId || item.principal?.role !== 'external-human') {
+        throw new RuntimeStoreError(
+          `human confirmation event ${item.seq} has no confirming principal or choice`,
+          'corrupt-journal',
+        );
+      }
+      state = await confirmExternal(trajectory, state, item.graph.choiceId, {
+        actor: item.principal.id,
+        rationale,
+        evidence,
+        at: item.at,
+      });
     } else if (item.kind === 'elicitation.required') {
       const question = item.data['question'];
       const rationale = typeof item.data['rationale'] === 'string' ? item.data['rationale'] : undefined;
@@ -392,6 +477,12 @@ async function replayRuntimeEvents(
     }
   }
 
+  if (trajectory.hash !== expectedTrajectory.hash) {
+    throw new RuntimeStoreError(
+      `runtime run is bound to ${trajectory.hash}; supplied graph is ${expectedTrajectory.hash}`,
+      'graph-mismatch',
+    );
+  }
   return { runId, revision, state, events, idempotency };
 }
 
@@ -405,7 +496,7 @@ export async function loadRuntimeStore(
     throw new RuntimeStoreError(`runtime run "${runId}" does not exist`, 'run-not-found');
   }
   const events = readRuntimeEvents(paths.events);
-  const snapshot = await replayRuntimeEvents(trajectory, runId, events);
+  const snapshot = await replayRuntimeEvents(root, trajectory, runId, events);
   // The journal is authoritative. Refreshing the snapshot also repairs a
   // missing or partially-written cache after an interrupted prior commit.
   writeStoredSnapshot(paths.snapshot, snapshot, trajectory.hash);

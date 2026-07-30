@@ -19,7 +19,7 @@ const withPlan = async (fn: (file: string, store: string) => Promise<void>) => {
     const choices = index === 5
       ? `* [Continue] -> ${target}\n+ [Retry once] ~loop~ -> ${id}`
       : index === 10
-        ? `* [Human approves] @human -> ${target}`
+        ? `* [Operator approves] @ask -> ${target}`
         : `* [Continue] -> ${target}`;
     nodes.push(`=== ${id} ===\nPhase ${index}.\n${choices}`);
   }
@@ -50,7 +50,7 @@ test('Pi bridge traverses a 15-phase run with a loop and durable human handoff',
     }
 
     const waiting = projectionOf(await bridge.next());
-    assert.equal(waiting.status, 'awaiting-human');
+    assert.equal(waiting.status, 'awaiting-operator');
     assert.equal(waiting.node?.id, 'phase_10');
     assert.ok(waiting.escalation?.id);
     assert.deepEqual(waiting.escalation?.fallbacks, []);
@@ -111,7 +111,7 @@ test('Pi bridge exposes protocol capabilities, records, events, and external ref
     const initialized = await first.initialize({ name: 'pibarm', version: '1' });
     assert.deepEqual(
       (initialized.result.capabilities as { operations: string[] }).operations,
-      ['next', 'choose', 'ask', 'answer', 'advance', 'observe', 'record', 'events'],
+      ['next', 'choose', 'confirm', 'ask', 'answer', 'advance', 'observe', 'record', 'events'],
     );
 
     const attached = await first.record(
@@ -152,7 +152,7 @@ test('Pi bridge opens @ask as agent and answers through the trusted human surfac
   const storeRoot = join(root, 'store');
   writeFileSync(file, [
     '=== decide ===',
-    '* [I am not sure] @ask -> reconsider',
+    '* [I am not sure] @input -> reconsider',
     '=== reconsider ===',
     'Use the clarification.',
     '-> END',

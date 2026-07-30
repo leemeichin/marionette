@@ -1,6 +1,7 @@
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, extname, resolve } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   withFileMutationQueue,
@@ -9,6 +10,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { Text } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
+import { analyzeAmendment } from './amendment.ts';
 import { compile, formatDiagnostics } from './compile.ts';
 import { renderCompactGraph, renderMermaid } from './render.ts';
 import { renderSvg } from './render-svg.ts';
@@ -20,11 +22,15 @@ import {
   MARIONETTE_PI_INTEGRATION_VERSION,
   MARIONETTE_PI_READY_CHANNEL,
   type MarionettePiAgentCommand,
+  type MarionettePiAmendment,
+  type MarionettePiAmendmentApproval,
+  type MarionettePiAmendmentRequest,
   type MarionettePiBindRequest,
   type MarionettePiBinding,
   type MarionettePiDiscoveryRequest,
   type MarionettePiError,
   type MarionettePiEvent,
+  type MarionettePiExternalConfirmation,
   type MarionettePiHostApi,
   type MarionettePiHumanAnswer,
   type MarionettePiHumanDecision,
@@ -51,6 +57,8 @@ const EVENT_ENTRY = 'marionette-event';
 const PROJECTION_MESSAGE = 'marionette-projection';
 const HUMAN_DECISION_ENTRY = 'marionette-human-decision';
 const HUMAN_ANSWER_ENTRY = 'marionette-human-answer';
+const EXTERNAL_CONFIRMATION_ENTRY = 'marionette-external-confirmation';
+const AMENDMENT_ENTRY = 'marionette-amendment';
 
 interface StoredBinding {
   planFile: string;
@@ -67,6 +75,12 @@ interface StoredUnbound {
 
 type BindingEntryData = StoredBinding | StoredUnbound;
 
+interface StoredAmendment {
+  status: 'pending' | 'applied';
+  proposal: MarionettePiAmendment;
+  source: string;
+}
+
 class PiIntegrationError extends Error {
   readonly name = 'PiIntegrationError';
 
@@ -82,6 +96,30 @@ const splitArgs = (input: string): string[] =>
 const safeRunId = (value: string): string =>
   value.replace(/[^A-Za-z0-9._-]/g, '-');
 
+interface HumanIdentity {
+  id: string;
+  uri?: string;
+}
+
+/** Resolve the identity Git would put on a commit in this repository. */
+const gitAuthorIdentity = (cwd: string): HumanIdentity | null => {
+  try {
+    const ident = execFileSync('git', ['var', 'GIT_AUTHOR_IDENT'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const match = /^(.*) <([^<>]+)> \d+ [+-]\d{4}$/.exec(ident);
+    if (!match?.[1]?.trim()) return null;
+    return {
+      id: match[1].trim(),
+      ...(match[2]?.trim() ? { uri: `mailto:${match[2].trim()}` } : {}),
+    };
+  } catch {
+    return null;
+  }
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -89,6 +127,15 @@ const storedBinding = (value: unknown): StoredBinding | null => {
   if (!isRecord(value) || value['unbound'] === true) return null;
   return typeof value['planFile'] === 'string' && typeof value['runId'] === 'string'
     ? { planFile: value['planFile'], runId: value['runId'] }
+    : null;
+};
+
+const storedAmendment = (value: unknown): StoredAmendment | null => {
+  if (!isRecord(value) || (value['status'] !== 'pending' && value['status'] !== 'applied') ||
+      typeof value['source'] !== 'string' || !isRecord(value['proposal'])) return null;
+  const proposal = value['proposal'] as unknown as MarionettePiAmendment;
+  return typeof proposal.id === 'string' && typeof proposal.candidateHash === 'string'
+    ? { status: value['status'], source: value['source'], proposal }
     : null;
 };
 
@@ -182,6 +229,13 @@ const writeArtifact = async (file: string, content: string): Promise<void> => {
   }
 };
 
+const stagePlan = async (planFile: string, source: string): Promise<string> => {
+  await mkdir(dirname(planFile), { recursive: true });
+  const temporary = `${planFile}.${process.pid}.${randomUUID()}.amend`;
+  await writeFile(temporary, source, { encoding: 'utf8', flag: 'wx' });
+  return temporary;
+};
+
 const resultWithoutProjection = (result: RuntimeCommandResult): Record<string, unknown> => {
   const output = { ...result.result };
   delete output['projection'];
@@ -190,8 +244,12 @@ const resultWithoutProjection = (result: RuntimeCommandResult): Record<string, u
 
 const instructionsFor = (projection: RuntimeProjection): string => {
   switch (projection.status) {
+    case 'awaiting-operator':
+      return 'Stop autonomous work and wait. The trusted operator must choose through /marionette-decide.';
+    case 'awaiting-external':
+      return 'Stop autonomous work and wait for an evidenced human confirmation through the trusted host.';
     case 'awaiting-human':
-      return 'Stop autonomous work and wait. The user must answer through /marionette-decide.';
+      return 'Stop autonomous work and wait. This legacy graph requires a human decision.';
     case 'awaiting-elicitation':
       return 'Stop autonomous work and wait. The user supplies context through /marionette-answer.';
     case 'awaiting-observation':
@@ -212,6 +270,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
   let lastProjection: RuntimeProjection | null = null;
   let lastCursor = 0;
   let activeContext: ExtensionContext | null = null;
+  let pendingAmendment: StoredAmendment | null = null;
 
   pi.registerFlag('marionette-plan', {
     description: 'Bind this Pi session to a Marionette .mar plan',
@@ -222,9 +281,41 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     type: 'string',
   });
   pi.registerFlag('marionette-human', {
-    description: 'Human identity recorded by /marionette-decide',
+    description: 'Human identity recorded by trusted Marionette decisions (defaults to the Git author)',
     type: 'string',
   });
+
+  const resolveHumanIdentity = async (
+    ctx: ExtensionContext,
+    prompt: string,
+    providedId?: string,
+  ): Promise<HumanIdentity | null> => {
+    if (providedId?.trim()) {
+      const id = providedId.trim();
+      return { id, uri: `pi://human/${encodeURIComponent(id)}` };
+    }
+    let humanId = pi.getFlag('marionette-human');
+    if (typeof humanId !== 'string') {
+      pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
+        respond(value: string) {
+          if (value.trim()) humanId = value.trim();
+        },
+      } satisfies MarionettePiHumanIdentityRequest);
+    }
+    if (typeof humanId === 'string' && humanId.trim()) {
+      const id = humanId.trim();
+      return { id, uri: `pi://human/${encodeURIComponent(id)}` };
+    }
+    const gitAuthor = gitAuthorIdentity(ctx.cwd);
+    if (gitAuthor) return gitAuthor;
+    if (ctx.hasUI) {
+      const id = await ctx.ui.input('Your name', prompt);
+      if (id?.trim()) {
+        return { id: id.trim(), uri: `pi://human/${encodeURIComponent(id.trim())}` };
+      }
+    }
+    return null;
+  };
 
   const currentBinding = (): MarionettePiBinding | null => {
     if (!bridge) return null;
@@ -242,27 +333,64 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     if (!projection) {
       ctx.ui.setStatus('marionette', undefined);
       ctx.ui.setWidget('marionette-escalation', undefined);
+      ctx.ui.setWidget('marionette-amendment', undefined);
       return;
     }
     const phase = projection.node?.id ?? projection.status;
     ctx.ui.setStatus('marionette', `${phase} · r${projection.revision}`);
     if (projection.elicitation) {
       ctx.ui.setWidget('marionette-escalation', [
-        `Marionette needs clarification (${projection.elicitation.id})`,
-        `  ${projection.elicitation.question}`,
+        `Marionette needs input (${projection.elicitation.id})`,
+        projection.plan?.intent.summary ? `Plan: ${projection.plan.intent.summary}` : '',
+        projection.node ? `Phase ${projection.node.id}: ${projection.node.body ?? projection.node.title}` : '',
+        `Question: ${projection.elicitation.question}`,
+        `Route after answer: ${projection.elicitation.choice.target ?? 'authored target'}`,
         'Use /marionette-answer to respond.',
-      ]);
+      ].filter(Boolean));
     } else if (projection.escalation) {
+      const packet = projection.escalation;
+      const heading = packet.kind === 'operator'
+        ? 'Operator decision required'
+        : packet.kind === 'external'
+          ? 'Human confirmation required'
+          : 'Legacy human decision required';
       const lines = [
-        `Marionette needs a human decision (${projection.escalation.id})`,
-        ...projection.escalation.choices.map((choice) => `  ${choice.id} — ${choice.label}`),
-        ...projection.escalation.fallbacks.map((fallback) =>
+        `${heading} (${packet.id})`,
+        packet.context.planSummary ? `Plan: ${packet.context.planSummary}` : '',
+        `Phase ${packet.context.phaseId} (${packet.context.progress?.nodesVisited ?? 0}/${packet.context.progress?.nodesTotal ?? 0} visited)`,
+        ...packet.context.phaseBody.split('\n').map((line) => `  ${line}`),
+        `Why waiting: ${packet.reason}`,
+        'Available outcomes:',
+        ...packet.choices.map((choice) =>
+          `  ${choice.id} — ${choice.label} → ${choice.target ?? '?'}${choice.targetTitle ? ` — ${choice.targetTitle}` : ''}` +
+          `${choice.gate ? ` {${choice.gate}}` : ''}`),
+        ...packet.context.refs.map((ref) => `  context: ${ref.url ?? `${ref.provider}:${ref.id}`}`),
+        ...packet.context.recentRecords.map((record) =>
+          `  record (${record.kind}, ${record.at}): ${record.summary}` +
+          `${record.refs.length ? ` — ${record.refs.map((ref) => ref.url ?? ref.id).join(', ')}` : ''}`),
+        ...packet.fallbacks.map((fallback) =>
           `  fallback ${fallback.choiceId} opens ${fallback.dueAt ?? 'at its authored timeout'}`),
-        'Use /marionette-decide to respond.',
-      ];
+        packet.kind === 'external'
+          ? 'Use /marionette-confirm-human with durable evidence; actor identity defaults to this repository’s Git author.'
+          : 'Use /marionette-decide to choose with your rationale.',
+      ].filter(Boolean);
       ctx.ui.setWidget('marionette-escalation', lines);
     } else {
       ctx.ui.setWidget('marionette-escalation', undefined);
+    }
+    if (pendingAmendment?.status === 'pending') {
+      ctx.ui.setWidget('marionette-amendment', [
+        `Marionette amendment ready (${pendingAmendment.proposal.id})`,
+        `Why: ${pendingAmendment.proposal.rationale}`,
+        ...pendingAmendment.proposal.report.changes.map((change) =>
+          `  ${change.kind}: ${change.subject}${change.fields.length ? ` (${change.fields.join(', ')})` : ''}`),
+        `Candidate: ${pendingAmendment.proposal.candidateFile}`,
+        `Mermaid: ${pendingAmendment.proposal.mermaidFile}`,
+        `SVG: ${pendingAmendment.proposal.svgFile}`,
+        'Use /marionette-approve-amendment with a review rationale to apply it.',
+      ]);
+    } else {
+      ctx.ui.setWidget('marionette-amendment', undefined);
     }
   };
 
@@ -298,6 +426,8 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     operation: MarionettePiEvent['operation'],
     result: RuntimeCommandResult,
     cause: MarionettePiEvent['cause'],
+    kind: MarionettePiEvent['kind'] = 'runtime.result',
+    amendment?: MarionettePiAmendment,
   ): MarionettePiEvent => {
     const projection = projectionOf(result);
     if (projection) {
@@ -314,8 +444,9 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       : result.events.map((item) => item.seq);
     const rawRevision = result.result['revision'];
     return emit({
-      ...eventBase('runtime.result', cause),
+      ...eventBase(kind, cause),
       operation,
+      amendment,
       projection,
       events: result.events,
       receipt: {
@@ -447,6 +578,48 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     }
   };
 
+  const executeExternal = async (
+    confirmation: MarionettePiExternalConfirmation,
+    cause: MarionettePiEvent['cause'],
+  ): Promise<MarionettePiEvent> => {
+    if (!bridge) {
+      return failure(cause, new PiIntegrationError(
+        'No Marionette run is bound.',
+        'not-bound',
+      ), 'externalConfirm');
+    }
+    if (confirmation.evidence.length === 0) {
+      return failure(cause, new PiIntegrationError(
+        'External confirmation requires durable evidence.',
+        'invalid-request',
+      ), 'externalConfirm');
+    }
+    try {
+      const result = await bridge.externalConfirm(
+        confirmation.external,
+        confirmation.choiceId,
+        confirmation.rationale,
+        confirmation.evidence,
+        confirmation.idempotencyKey,
+        confirmation.profile,
+        { budget: confirmation.budget },
+      );
+      const event = acceptResult('externalConfirm', result, cause);
+      pi.appendEntry(EXTERNAL_CONFIRMATION_ENTRY, {
+        choiceId: confirmation.choiceId,
+        external: confirmation.external,
+        rationale: confirmation.rationale,
+        evidence: confirmation.evidence,
+        revision: event.projection?.revision,
+        eventSeqs: event.receipt?.eventSeqs ?? [],
+      });
+      publishProjection(event, confirmation.triggerTurn ?? true);
+      return event;
+    } catch (error) {
+      return failure(cause, error, 'externalConfirm');
+    }
+  };
+
   const executeHumanAnswer = async (
     response: MarionettePiHumanAnswer,
     cause: MarionettePiEvent['cause'],
@@ -477,6 +650,153 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       return event;
     } catch (error) {
       return failure(cause, error, 'humanAnswer');
+    }
+  };
+
+  const proposeAmendment = async (
+    request: MarionettePiAmendmentRequest,
+    cause: MarionettePiEvent['cause'],
+  ): Promise<MarionettePiEvent> => {
+    if (!bridge) {
+      return failure(cause, new PiIntegrationError(
+        'No Marionette run is bound.',
+        'not-bound',
+      ));
+    }
+    if (!request.rationale.trim()) {
+      return failure(cause, new PiIntegrationError(
+        'An amendment proposal requires a rationale.',
+        'invalid-request',
+      ));
+    }
+    try {
+      await bridge.refresh();
+      const compiled = await compile(request.source, { file: bridge.planFile });
+      if (!compiled.ok || !compiled.trajectory) {
+        throw new PiIntegrationError(
+          formatDiagnostics(compiled.diagnostics, bridge.planFile, { source: request.source }) ||
+            'Amendment candidate did not produce a trajectory.',
+          'invalid-request',
+        );
+      }
+      const report = analyzeAmendment(
+        bridge.currentTrajectory(),
+        compiled.trajectory,
+        bridge.currentState(),
+      );
+      if (!report.allowed) {
+        throw new PiIntegrationError(
+          'Amendment would rewrite completed work:\n' +
+            report.violations.map((violation) => `- ${violation.message}`).join('\n'),
+          'invalid-request',
+        );
+      }
+      const id = `amend-${randomUUID()}`;
+      const directory = join(dirname(bridge.planFile), '.marionette', 'amendments', bridge.runId);
+      const candidateFile = join(directory, `${id}.mar`);
+      const mermaidFile = join(directory, `${id}.mmd`);
+      const svgFile = join(directory, `${id}.svg`);
+      const compact = renderCompactGraph(compiled.trajectory);
+      const mermaid = await renderMermaid(compiled.trajectory);
+      const svg = await renderSvg(compiled.trajectory);
+      await withFileMutationQueue(candidateFile, async () => {
+        await mkdir(directory, { recursive: true });
+        await writePlan(candidateFile, request.source, false);
+        await writeFile(mermaidFile, mermaid, 'utf8');
+        await writeFile(svgFile, svg, 'utf8');
+      });
+      const proposal: MarionettePiAmendment = {
+        id,
+        planFile: bridge.planFile,
+        candidateFile,
+        baseHash: report.fromHash,
+        candidateHash: report.toHash,
+        rationale: request.rationale,
+        report,
+        compact,
+        mermaid,
+        mermaidFile,
+        svgFile,
+        warnings: compiled.diagnostics.filter((item) => item.severity === 'warning').length,
+      };
+      pendingAmendment = { status: 'pending', proposal, source: request.source };
+      pi.appendEntry(AMENDMENT_ENTRY, pendingAmendment);
+      if (activeContext) updateUi(lastProjection, activeContext);
+      return emit({
+        ...eventBase('plan.amendment-proposed', cause),
+        amendment: proposal,
+        result: { diagnostics: compiled.diagnostics },
+      });
+    } catch (error) {
+      return failure(cause, error);
+    }
+  };
+
+  const approveAmendment = async (
+    approval: MarionettePiAmendmentApproval,
+    cause: MarionettePiEvent['cause'],
+  ): Promise<MarionettePiEvent> => {
+    if (!bridge) {
+      return failure(cause, new PiIntegrationError('No Marionette run is bound.', 'not-bound'), 'humanAmend');
+    }
+    if (!pendingAmendment || pendingAmendment.status !== 'pending' ||
+        pendingAmendment.proposal.id !== approval.proposalId) {
+      return failure(cause, new PiIntegrationError(
+        `No pending amendment "${approval.proposalId}" exists on this session branch.`,
+        'invalid-request',
+      ), 'humanAmend');
+    }
+    if (!approval.rationale.trim()) {
+      return failure(cause, new PiIntegrationError(
+        'Human approval requires a rationale.',
+        'invalid-request',
+      ), 'humanAmend');
+    }
+    try {
+      const stored = pendingAmendment;
+      await bridge.refresh();
+      const compiled = await compile(stored.source, { file: bridge.planFile });
+      if (!compiled.ok || !compiled.trajectory || compiled.trajectory.hash !== stored.proposal.candidateHash) {
+        throw new PiIntegrationError('The pending amendment artifact no longer compiles to its reviewed hash.', 'invalid-request');
+      }
+      const report = analyzeAmendment(
+        bridge.currentTrajectory(),
+        compiled.trajectory,
+        bridge.currentState(),
+      );
+      if (!report.allowed) {
+        throw new PiIntegrationError(
+          'The run advanced after proposal and the amendment is no longer safe:\n' +
+            report.violations.map((violation) => `- ${violation.message}`).join('\n'),
+          'invalid-request',
+        );
+      }
+      let result: RuntimeCommandResult;
+      await withFileMutationQueue(bridge.planFile, async () => {
+        const staged = await stagePlan(bridge!.planFile, stored.source);
+        try {
+          result = await bridge!.humanAmend(approval.human, compiled.trajectory!, approval.rationale);
+          await rename(staged, bridge!.planFile);
+        } catch (error) {
+          await unlink(staged).catch(() => undefined);
+          throw error;
+        }
+      });
+      pendingAmendment = { ...stored, status: 'applied' };
+      pi.appendEntry(AMENDMENT_ENTRY, pendingAmendment);
+      pi.appendEntry(BINDING_ENTRY, {
+        planFile: bridge.planFile,
+        runId: bridge.runId,
+        integrationVersion: MARIONETTE_PI_INTEGRATION_VERSION,
+        graphHash: bridge.graphHash,
+        runtimeProtocol: RUNTIME_PROTOCOL_VERSION,
+      } satisfies StoredBinding);
+      const event = acceptResult('humanAmend', result!, cause, 'plan.rebound', stored.proposal);
+      if (activeContext) updateUi(event.projection ?? null, activeContext);
+      publishProjection(event, approval.triggerTurn ?? true);
+      return event;
+    } catch (error) {
+      return failure(cause, error, 'humanAmend');
     }
   };
 
@@ -538,6 +858,13 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     return entry?.type === 'custom' ? storedBinding(entry.data) : null;
   };
 
+  const configuredAmendment = (ctx: ExtensionContext): StoredAmendment | null => {
+    const entry = [...ctx.sessionManager.getBranch()].reverse().find((candidate) =>
+      candidate.type === 'custom' && candidate.customType === AMENDMENT_ENTRY);
+    const amendment = entry?.type === 'custom' ? storedAmendment(entry.data) : null;
+    return amendment?.status === 'pending' ? amendment : null;
+  };
+
   const unbind = (
     ctx: ExtensionContext,
     cause: MarionettePiEvent['cause'],
@@ -546,6 +873,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     const prior = currentBinding();
     bridge = null;
     lastProjection = null;
+    pendingAmendment = null;
     lastCursor = 0;
     updateUi(null, ctx);
     planning.refreshTools();
@@ -567,6 +895,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     cause: MarionettePiEvent['cause'],
   ): Promise<void> => {
     activeContext = ctx;
+    pendingAmendment = configuredAmendment(ctx);
     const binding = configuredBinding(ctx);
     if (!binding) {
       if (bridge) {
@@ -644,9 +973,21 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       source: 'host',
       name: command.operation,
     }),
+    proposeAmendment: (request) => proposeAmendment(request, {
+      source: 'host',
+      name: 'proposeAmendment',
+    }),
+    approveAmendment: (approval) => approveAmendment(approval, {
+      source: 'host',
+      name: 'approveAmendment',
+    }),
     humanChoose: (decision) => executeHuman(decision, {
       source: 'host',
       name: 'humanChoose',
+    }),
+    externalConfirm: (confirmation) => executeExternal(confirmation, {
+      source: 'host',
+      name: 'externalConfirm',
     }),
     humanAnswer: (answer) => executeHumanAnswer(answer, {
       source: 'host',
@@ -699,8 +1040,46 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand('marionette-approve-amendment', {
+    description: 'Approve the pending future-only plan amendment as a trusted human',
+    handler: async (args, ctx) => {
+      activeContext = ctx;
+      if (!pendingAmendment || pendingAmendment.status !== 'pending') {
+        ctx.ui.notify('No plan amendment is pending on this session branch.', 'warning');
+        return;
+      }
+      const tokens = splitArgs(args);
+      const proposalId = tokens[0] === pendingAmendment.proposal.id
+        ? tokens.shift()!
+        : pendingAmendment.proposal.id;
+      const human = await resolveHumanIdentity(ctx, 'recorded as the amendment approver');
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
+        return;
+      }
+      let rationale = tokens.join(' ').trim();
+      if (!rationale && ctx.hasUI) {
+        rationale = (await ctx.ui.editor(
+          `Approve ${pendingAmendment.proposal.report.changes.length} future-only change(s)`,
+          pendingAmendment.proposal.rationale,
+        ) ?? '').trim();
+      }
+      if (!rationale) {
+        ctx.ui.notify('A human approval rationale is required.', 'error');
+        return;
+      }
+      const event = await approveAmendment({
+        human,
+        proposalId,
+        rationale,
+        triggerTurn: true,
+      }, { source: 'command', name: 'marionette-approve-amendment' });
+      if (event.error) ctx.ui.notify(event.error.message, 'error');
+    },
+  });
+
   pi.registerCommand('marionette-decide', {
-    description: 'Record a human answer at an @human checkpoint',
+    description: 'Record the trusted operator choice at an @ask checkpoint',
     handler: async (args, ctx) => {
       activeContext = ctx;
       const refresh = await executeAgent(
@@ -715,6 +1094,13 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       if (!escalation) {
         ctx.ui.notify(
           `Run is ${refresh.projection.status}; no human decision is pending.`,
+          'warning',
+        );
+        return;
+      }
+      if (escalation.kind === 'external') {
+        ctx.ui.notify(
+          'This checkpoint requires evidenced human confirmation. Use /marionette-confirm-human.',
           'warning',
         );
         return;
@@ -736,19 +1122,9 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      let humanId = pi.getFlag('marionette-human');
-      if (typeof humanId !== 'string') {
-        pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
-          respond(value: string) {
-            if (value.trim()) humanId = value.trim();
-          },
-        } satisfies MarionettePiHumanIdentityRequest);
-      }
-      if (typeof humanId !== 'string' && ctx.hasUI) {
-        humanId = await ctx.ui.input('Your name', 'recorded as the decision actor');
-      }
-      if (typeof humanId !== 'string' || !humanId.trim()) {
-        ctx.ui.notify('Set --marionette-human <name> or provide a name in the prompt.', 'error');
+      const human = await resolveHumanIdentity(ctx, 'recorded as the decision actor');
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
         return;
       }
 
@@ -762,10 +1138,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       }
 
       const event = await executeHuman({
-        human: {
-          id: humanId.trim(),
-          uri: `pi://human/${encodeURIComponent(humanId.trim())}`,
-        },
+        human,
         choiceId: choice.id,
         rationale,
         idempotencyKey: `human:${escalation.id}:${choice.id}`,
@@ -778,8 +1151,69 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand('marionette-confirm-human', {
+    description: 'Record an evidenced human confirmation for an @human action',
+    handler: async (args, ctx) => {
+      activeContext = ctx;
+      const refresh = await executeAgent(
+        { operation: 'next' },
+        { source: 'command', name: 'marionette-confirm-human:refresh' },
+      );
+      const escalation = refresh.projection?.escalation;
+      if (refresh.error || !escalation || escalation.kind !== 'external') {
+        ctx.ui.notify(
+          refresh.error?.message ?? 'No evidenced human confirmation is currently pending.',
+          'error',
+        );
+        return;
+      }
+      const [choiceId, ...confirmationArgs] = splitArgs(args);
+      const choice = escalation.choices.find((candidate) => candidate.id === choiceId);
+      if (!choice) {
+        ctx.ui.notify(`Choose one of: ${escalation.choices.map((item) => item.id).join(', ')}`, 'error');
+        return;
+      }
+      // Current syntax is `<choice> <evidence-url> [rationale]`. Accept the
+      // former explicit-name position so existing host scripts keep working.
+      const suppliedId = /^https?:\/\//.test(confirmationArgs[0] ?? '')
+        ? undefined
+        : confirmationArgs.shift();
+      const evidenceUrl = confirmationArgs.shift();
+      if (!evidenceUrl || !/^https?:\/\//.test(evidenceUrl)) {
+        ctx.ui.notify('Provide a durable http(s) evidence URL.', 'error');
+        return;
+      }
+      const human = await resolveHumanIdentity(
+        ctx,
+        'recorded as the human confirming this action',
+        suppliedId,
+      );
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
+        return;
+      }
+      let rationale = confirmationArgs.join(' ').trim();
+      if (!rationale && ctx.hasUI) {
+        rationale = (await ctx.ui.editor('What action is being confirmed?', '') ?? '').trim();
+      }
+      if (!rationale) {
+        ctx.ui.notify('An evidence rationale is required.', 'error');
+        return;
+      }
+      const event = await executeExternal({
+        external: human,
+        choiceId: choice.id,
+        rationale,
+        evidence: [{ provider: 'url', kind: 'evidence', id: evidenceUrl, url: evidenceUrl }],
+        idempotencyKey: `external:${escalation.id}:${choice.id}:${evidenceUrl}`,
+        triggerTurn: true,
+      }, { source: 'command', name: 'marionette-confirm-human' });
+      if (event.error) ctx.ui.notify(event.error.message, 'error');
+    },
+  });
+
   pi.registerCommand('marionette-answer', {
-    description: 'Supply context for an open @ask checkpoint',
+    description: 'Supply context for an open @input checkpoint',
     handler: async (args, ctx) => {
       activeContext = ctx;
       const refresh = await executeAgent(
@@ -808,27 +1242,14 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      let humanId = pi.getFlag('marionette-human');
-      if (typeof humanId !== 'string') {
-        pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
-          respond(value: string) {
-            if (value.trim()) humanId = value.trim();
-          },
-        } satisfies MarionettePiHumanIdentityRequest);
-      }
-      if (typeof humanId !== 'string' && ctx.hasUI) {
-        humanId = await ctx.ui.input('Your name', 'recorded as the answer source');
-      }
-      if (typeof humanId !== 'string' || !humanId.trim()) {
-        ctx.ui.notify('Set --marionette-human <name> or provide a name in the prompt.', 'error');
+      const human = await resolveHumanIdentity(ctx, 'recorded as the answer source');
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
         return;
       }
 
       const event = await executeHumanAnswer({
-        human: {
-          id: humanId.trim(),
-          uri: `pi://human/${encodeURIComponent(humanId.trim())}`,
-        },
+        human,
         answer: response,
         idempotencyKey: `human:${elicitation.id}:answer`,
         triggerTurn: true,
@@ -837,6 +1258,58 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         name: 'marionette-answer',
       });
       if (event.error) ctx.ui.notify(event.error.message, 'error');
+    },
+  });
+
+  pi.registerTool({
+    name: 'marionette_amend',
+    label: 'Marionette amendment proposal',
+    description:
+      'Compile and propose a future-only amendment to the bound run without changing its live plan. Completed phases are immutable; a human must approve through /marionette-approve-amendment or the trusted host API.',
+    parameters: Type.Object({
+      source: Type.String({ description: 'Complete candidate Marionette DSL source' }),
+      rationale: Type.String({ description: 'Why the current executable future needs to change' }),
+    }, { additionalProperties: false }),
+    async execute(toolCallId, params, _signal, _onUpdate, ctx) {
+      activeContext = ctx;
+      const event = await proposeAmendment(params, {
+        source: 'tool',
+        name: 'marionette_amend',
+        id: toolCallId,
+      });
+      if (event.error || !event.amendment) {
+        return {
+          content: [{ type: 'text', text: event.error?.message ?? 'Amendment proposal failed.' }],
+          details: event,
+          isError: true,
+        };
+      }
+      const proposal = event.amendment;
+      const changes = proposal.report.changes.map((change) =>
+        `- ${change.kind}: ${change.subject}${change.fields.length ? ` (${change.fields.join(', ')})` : ''}`,
+      ).join('\n');
+      return {
+        content: [{
+          type: 'text',
+          text: [
+            `Amendment ${proposal.id} is validated and awaiting trusted human approval.`,
+            `Live plan unchanged: ${proposal.planFile}`,
+            '',
+            changes || '- no semantic changes',
+            '',
+            proposal.compact,
+            '',
+            `Candidate: ${proposal.candidateFile}`,
+            `Mermaid: ${proposal.mermaidFile}`,
+            `SVG: ${proposal.svgFile}`,
+            'Use /marionette-approve-amendment to apply it.',
+          ].join('\n'),
+        }],
+        details: event,
+      };
+    },
+    renderCall(_args, theme) {
+      return new Text(theme.fg('toolTitle', theme.bold('marionette amend')), 0, 0);
     },
   });
 
@@ -964,12 +1437,12 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     label: 'Marionette walk',
     description:
       'Read or advance the bound Marionette run, attach records, or inspect its event journal. ' +
-      'The tool is agent-bound, cannot take @human choices, and opens @ask choices with a focused question.',
+      'The tool is agent-bound: it cannot choose operator @ask routes or provide evidenced @human confirmation, and opens @input with a focused question.',
     promptSnippet: 'marionette_walk — authoritative work packet and traversal for the bound Marionette run',
     promptGuidelines: [
       'When marionette_walk is bound, use it instead of marionette brief or marionette state commands.',
       'After each phase, call marionette_walk exactly once with choose or advance and an evidence-based rationale.',
-      'At awaiting-human, awaiting-elicitation, waiting-timeout, stranded, or completed status, stop autonomous traversal and follow the projection.',
+      'At awaiting-operator, awaiting-external, awaiting-elicitation, waiting-timeout, stranded, or completed status, stop autonomous traversal and follow the projection.',
     ],
     executionMode: 'sequential',
     parameters: Type.Object({
@@ -1174,7 +1647,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       }
       const payload = event.projection ?? event.result ?? {};
       const stop = event.projection &&
-        ['awaiting-human', 'awaiting-elicitation', 'waiting-timeout', 'stranded', 'completed']
+        ['awaiting-operator', 'awaiting-external', 'awaiting-human', 'awaiting-elicitation', 'waiting-timeout', 'stranded', 'completed']
           .includes(event.projection.status)
         ? `\nSTOP: ${instructionsFor(event.projection)}`
         : '';

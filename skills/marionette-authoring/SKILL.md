@@ -35,8 +35,9 @@ Below, `marionette` means whichever form resolved.
 1. **Extract the graph from the notes.** Identify: phases (states of the
    project, not tickets), the decisions that connect them, the conditions
    gating each path, where iteration genuinely happens, and — most
-   importantly — which decisions a human must make and where an agent may
-   need open-ended context through `@ask`. Ask at most one round of
+   importantly — which routes the current operator chooses through `@ask`,
+   which actions need evidenced human confirmation through `@human`, and where an agent needs
+   open-ended context through `@input`. Ask at most one round of
    clarifying questions, and only for decisions that change the graph's
    shape.
 2. **Draft the `.mar` script** (conventions below).
@@ -62,8 +63,8 @@ Below, `marionette` means whichever form resolved.
    call out why exhausting that route cannot strand the traversal.
 5. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
    contract), `render` (Mermaid), and `summarize` (plain language). Present
-   the summary and graph to the user, calling out every `@human` checkpoint,
-   every `@ask` elicitation and any "unverified gate" warnings for manual
+   the summary and graph to the user, calling out every operator `@ask`,
+   evidenced `@human`, free-text `@input`, and any "unverified gate" warnings for manual
    review.
 6. **Only if the user wants to start traversal:**
    `marionette state init <plan>.mar`.
@@ -160,18 +161,21 @@ transcribe tickets into DSL by hand — fetch and scaffold
   outcomes point to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this
   doesn't work?" deserves a phase, not a hope).
-- **`@human` marks the autonomy boundary.** Put it on: approvals and
-  go/no-go calls, spending/scope/kill decisions, anything irreversible, and
-  judgment calls the notes assign to a person. Do not put it on steps an
-  agent can verify mechanically (tests green, artifact produced). If a plan
-  has zero `@human` checkpoints, ask the user whether that's intended.
-- **`@ask` marks the ambiguity boundary.** Put it on an agent-owned route
-  which cannot continue without open-ended human context:
-  `* [I'm not sure] @ask -> reconsider`. The agent opens one focused
-  question, the answer is audited, and the fixed edge advances. Do not use it
-  when the human owns the route (`@human`) or when known answers should be
-  ordinary choices. A choice cannot carry both flags. Source uses the
-  searchable ASCII `@ask`; renders use `‽`.
+- **`@ask` asks the current operator to choose an authored route.** Use it
+  for review/accept/rework, scope, kill, and other decisions the person in
+  the trusted host owns. Usually mark every option at that phase, e.g.
+  `* [Approve] @ask -> rollout` and `+ [Request changes] @ask ~loop~ -> rework`.
+  The decision packet must contain enough phase context to choose honestly.
+- **`@human` requires evidenced human confirmation.** Use it for actions such
+  as a maintainer approving a PR or a security reviewer signing off. Continuing
+  requires the confirming person's identity plus durable evidence. In Pi, the
+  identity defaults to the repository Git author and may be the current
+  operator; the agent still cannot confirm it.
+- **`@input` marks missing open-ended context on a fixed route.** Example:
+  `* [Need target platforms] @input -> reconsider`. The agent opens one
+  focused question, the operator's answer is audited, and the fixed edge
+  advances. It is not route approval. A choice cannot combine `@ask`,
+  `@input`, and `@human`; renders use `?`, `‽`, and `✋` respectively.
 - **Choose the loop form that matches the stopping condition.** Fixed retry
   budgets still use a monotonic counter, explicit gates and `~loop~`:
 

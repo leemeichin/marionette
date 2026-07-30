@@ -12,7 +12,8 @@
  *   ~ name (=|+=|-=) expr                     mutation, applied on node entry
  *   ? name                                    refresh a runtime value after phase work
  *   * {gate} [Label] @human ~loop~ -> target  once-only choice
- *   * [I'm not sure] @ask -> target           open an elicitation before advancing
+ *   * [Choose this route] @ask -> target      ask the trusted operator to decide
+ *   * [I'm not sure] @input -> target          collect free text before advancing
  *   + {gate} [Label] -> target                sticky (repeatable) choice
  *   while {gate} [Label] -> target             repeat while true; paired with else
  *   until {gate} [Label] -> target             exit when true; paired with else
@@ -438,17 +439,18 @@ function parseChoice(
   const label = take(/\[([^\]]*)\]/);
   const human = take(/@human\b/) !== null;
   const ask = take(/@ask\b/) !== null;
+  const input = take(/@input\b/) !== null;
   const loop = take(/~loop~/) !== null;
   const target = take(/->\s*([A-Za-z_][A-Za-z0-9_]*)\s*$/);
 
   if (remaining.length > 0) {
     error(lineNo, CODES.PARSE, `unexpected content in choice: "${remaining}"`,
-      'expected: * {gate} [Label] @human|@ask ~loop~ -> target (flags optional)');
+      'expected: * {gate} [Label] @ask|@input|@human ~loop~ -> target (flags optional)');
     return null;
   }
-  if (human && ask) {
-    error(lineNo, CODES.PARSE, 'a choice cannot be both @human and @ask',
-      'use @human when the person owns the route; use @ask when the agent only needs clarification');
+  if ([human, ask, input].filter(Boolean).length > 1) {
+    error(lineNo, CODES.PARSE, 'a choice cannot combine @ask, @input, and @human',
+      'use @ask for the operator\'s route decision, @input for fixed-target text, or @human for evidenced human confirmation');
     return null;
   }
   if (label === null || label.trim().length === 0) {
@@ -485,6 +487,7 @@ function parseChoice(
     gate,
     human,
     ask,
+    input: input || undefined,
     loop,
     timeout: null,
     target,

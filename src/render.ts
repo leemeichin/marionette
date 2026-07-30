@@ -20,7 +20,9 @@ export function renderCompactGraph(trajectory: Trajectory): string {
     const title = firstLine(node.body);
     lines.push(`● ${node.id}${title ? ` — ${title}` : ''}`);
     for (const choice of node.choices) {
-      const marks = [choice.human ? '✋' : '', choice.ask ? '‽' : '', choice.loop ? '↻' : '']
+      const marks = [
+        choice.human ? '✋' : '', choice.ask ? '?' : '', choice.input ? '‽' : '', choice.loop ? '↻' : '',
+      ]
         .filter(Boolean)
         .join(' ');
       lines.push(`  ${marks ? `${marks} ` : '→ '}${choice.label} → ${choice.target}`);
@@ -88,7 +90,8 @@ export async function renderMermaid(
     for (const choice of node.choices) {
       const parts: string[] = [];
       if (choice.human) parts.push('✋');
-      if (choice.ask) parts.push('‽');
+      if (choice.ask) parts.push('?');
+      if (choice.input) parts.push('‽');
       if (choice.loop) parts.push('↻');
       parts.push(choice.label);
       if (choice.gate) parts.push(`{${choice.gate.source}}`);
@@ -97,7 +100,7 @@ export async function renderMermaid(
       const arrow = choice.loop ? `-. "${text}" .->` : `-- "${text}" -->`;
       lines.push(`  ${node.id} ${arrow} ${choice.target}`);
       if (choice.human) humanEdges.push(edgeIndex);
-      if (choice.ask) askEdges.push(edgeIndex);
+      if (choice.ask || choice.input) askEdges.push(edgeIndex);
       edgeIndex++;
     }
     if (node.next) {

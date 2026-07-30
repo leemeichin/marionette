@@ -1,4 +1,4 @@
-# Trajectory JSON — the contract (v0.4.0)
+# Trajectory JSON — the contract (v0.5.0)
 
 The compiled contract between Phase 1 (authoring/validation) and Phase 2 (agent
 ingestion). `marionette compile plan.mar` produces a document conforming to
@@ -50,12 +50,14 @@ Key concepts, mapped to the PRD's requirements:
 - **Gates** (P0.4): stored both as `source` text (legibility) and as an
   expression `ast` (evaluation). The compiler statically verifies only what is
   trivially decidable and warns about the rest.
-- **`@human` checkpoints** (choice `human: true`): the authored autonomy
-  boundary. A conforming runtime must refuse to take such a choice on behalf
-  of an agent and must escalate instead.
-- **`@ask` checkpoints** (choice `ask: true`): the authored ambiguity
-  boundary. An agent opens a focused question, traversal parks, and a
-  human-authored answer advances the fixed edge without selecting a route.
+- **`@ask` operator decisions** (choice `ask: true`, spec 0.6+): the trusted
+  operator selects one authored route with rationale; an agent cannot choose.
+- **`@input` checkpoints** (choice `input: true`): an agent opens a focused
+  question and the operator's answer advances the fixed edge.
+- **`@human` confirmations** (choice `human: true`, spec 0.6+): execution
+  waits for a human identity and durable evidence through `confirm`; the
+  authority is outside the agent but need not be a different operator.
+  Archived spec-0.5 ask/human bits retain their original runtime meaning.
 - **`~loop~` edges** (choice `loop: true`): declared cycles. The compiler
   rejects undeclared cycles and loops without a satisfiable exit; the exit
   metadata lives on the sibling choices of the loop's cycle.
@@ -93,7 +95,7 @@ shape is stable:
   "observations": [
     { "at": "…", "actor": "…", "name": "remaining", "value": 7, "rationale": "queue query returned 7" }
   ],
-  "pendingElicitation": null, // or the open @ask question and fixed choice
+  "pendingElicitation": null, // or the open @input question and fixed choice
   "elicitations": [],         // asked/answered clarification audit entries
   "log": [                  // decision log (G4): every taken branch
     { "at": "…", "actor": "…", "from": "…", "choice": "…", "label": "…", "to": "…", "rationale": "…" }

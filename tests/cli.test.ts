@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, cpSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, readFileSync, cpSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,13 +70,103 @@ test('P0.8 CLI exit codes are CI-suitable', async () => {
   // @human refusal for agents → 1
   const humanRefusal = cli(['state', 'choose', 'plan.mar', 'Metrics', '--actor', 'agent', '--rationale', 'x'], dir);
   assert.equal(humanRefusal.code, 1);
-  assert.match(humanRefusal.stderr, /@human/);
+  assert.match(humanRefusal.stderr, /evidenced human confirmation/);
   // mutate the plan → drift → 3
   const source = readFileSync(join(dir, 'plan.mar'), 'utf8');
   writeFileSync(join(dir, 'plan.mar'), source.replace('iteration < 3', 'iteration < 4'));
   const drifted = cli(['state', 'show', 'plan.mar'], dir);
   assert.equal(drifted.code, 3);
   assert.match(drifted.stderr, /drift/);
+});
+
+test('state rebind dry-runs and applies only future changes with JSON reports', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'marionette-amend-cli-'));
+  const file = join(dir, 'plan.mar');
+  writeFileSync(file, '=== a ===\nAlpha.\n* [Go] -> b\n=== b ===\nBeta.\n-> END\n');
+  assert.equal(cli(['state', 'init', 'plan.mar'], dir).code, 0);
+  assert.equal(cli(['state', 'choose', 'plan.mar', 'a#0', '--actor', 'agent', '--rationale', 'alpha done'], dir).code, 0);
+  const stateFile = join(dir, 'plan.state.json');
+  const oldHash = JSON.parse(readFileSync(stateFile, 'utf8')).hash;
+
+  writeFileSync(file, [
+    '=== a ===',
+    'Alpha.',
+    '* [Go] -> b',
+    '=== b ===',
+    'Beta updated before completion.',
+    '-> c',
+    '=== c ===',
+    'New future phase.',
+    '-> END',
+    '',
+  ].join('\n'));
+  const dryRun = cli(['state', 'rebind', 'plan.mar', '--dry-run', '--json'], dir);
+  assert.equal(dryRun.code, 0, dryRun.stderr);
+  const dryReport = JSON.parse(dryRun.stdout);
+  assert.equal(dryReport.amendment.allowed, true);
+  assert.equal(JSON.parse(readFileSync(stateFile, 'utf8')).hash, oldHash, 'dry-run does not persist');
+
+  const applied = cli([
+    'state', 'rebind', 'plan.mar', '--json', '--actor', 'lee', '--rationale', 'approved future work',
+  ], dir);
+  assert.equal(applied.code, 0, applied.stderr);
+  const appliedReport = JSON.parse(applied.stdout);
+  assert.equal(appliedReport.amendment.allowed, true);
+  const appliedState = JSON.parse(readFileSync(stateFile, 'utf8'));
+  assert.equal(appliedState.hash, appliedReport.toHash);
+  assert.equal(appliedState.log.at(-1).actor, 'lee');
+
+  const acceptedStateText = readFileSync(stateFile, 'utf8');
+  writeFileSync(file, readFileSync(file, 'utf8').replace('Alpha.', 'Alpha rewritten after completion.'));
+  const refused = cli(['state', 'rebind', 'plan.mar', '--json'], dir);
+  assert.equal(refused.code, 1);
+  const refusal = JSON.parse(refused.stdout);
+  assert.equal(refusal.allowed, false);
+  assert.ok(refusal.violations.some((violation: { code: string }) =>
+    violation.code === 'completed-phase-changed'));
+  assert.equal(readFileSync(stateFile, 'utf8'), acceptedStateText, 'refusal leaves state untouched');
+});
+
+test('state baseline recovers an unchanged legacy state before editing', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'marionette-baseline-cli-'));
+  writeFileSync(join(dir, 'plan.mar'), '=== a ===\nAlpha.\n-> END\n');
+  assert.equal(cli(['state', 'init', 'plan.mar'], dir).code, 0);
+  rmSync(join(dir, '.marionette'), { recursive: true, force: true });
+  assert.equal(existsSync(join(dir, '.marionette')), false);
+  const baseline = cli(['state', 'baseline', 'plan.mar', '--json'], dir);
+  assert.equal(baseline.code, 0, baseline.stderr);
+  assert.equal(JSON.parse(baseline.stdout).hash, JSON.parse(readFileSync(join(dir, 'plan.state.json'), 'utf8')).hash);
+  assert.equal(existsSync(join(dir, '.marionette', 'graphs')), true);
+});
+
+test('CLI separates operator ask decisions from evidenced human confirmations', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'marionette-gates-cli-'));
+  writeFileSync(join(dir, 'plan.mar'), [
+    '=== review ===',
+    '* [Proceed] @ask -> external',
+    '* [Stop] @ask -> END',
+    '=== external ===',
+    '* [Maintainer approved] @human -> END',
+    '',
+  ].join('\n'));
+  assert.equal(cli(['state', 'init', 'plan.mar'], dir).code, 0);
+  const agent = cli(['state', 'choose', 'plan.mar', 'review#0', '--actor', 'agent', '--rationale', 'self'], dir);
+  assert.equal(agent.code, 1);
+  assert.match(agent.stderr, /trusted operator/);
+  assert.equal(cli([
+    'state', 'choose', 'plan.mar', 'review#0', '--actor', 'lee', '--rationale', 'reviewed options',
+  ], dir).code, 0);
+  const missing = cli([
+    'state', 'confirm', 'plan.mar', 'external#0', '--actor', 'maintainer', '--rationale', 'approved',
+  ], dir);
+  assert.equal(missing.code, 2);
+  assert.match(missing.stderr, /--evidence/);
+  assert.equal(cli([
+    'state', 'confirm', 'plan.mar', 'external#0', '--actor', 'maintainer',
+    '--evidence', 'https://github.com/acme/repo/pull/12#pullrequestreview-1',
+    '--rationale', 'approved in GitHub',
+  ], dir).code, 0);
+  assert.equal(JSON.parse(readFileSync(join(dir, 'plan.state.json'), 'utf8')).status, 'completed');
 });
 
 test('runtime CLI exposes a clean NDJSON process surface', async () => {
@@ -89,12 +179,12 @@ test('runtime CLI exposes a clean NDJSON process surface', async () => {
   ].join('\n'));
   const input = [
     JSON.stringify({
-      protocol: '0.4.0',
+      protocol: '0.5.0',
       id: 1,
       op: 'initialize',
       client: { name: 'cli-test', version: '1' },
     }),
-    JSON.stringify({ protocol: '0.4.0', id: 2, op: 'next', profile: 'signal' }),
+    JSON.stringify({ protocol: '0.5.0', id: 2, op: 'next', profile: 'signal' }),
     '',
   ].join('\n');
   const result = spawnSync(
@@ -159,7 +249,7 @@ test('state ask and answer keep clarification distinct from choosing', () => {
   const dir = mkdtempSync(join(tmpdir(), 'marionette-ask-cli-'));
   writeFileSync(join(dir, 'ask.mar'), [
     '=== decide ===',
-    '* [I am not sure] @ask -> reconsider',
+    '* [I am not sure] @input -> reconsider',
     '=== reconsider ===',
     'Use the supplied context.',
     '-> END',
@@ -172,7 +262,7 @@ test('state ask and answer keep clarification distinct from choosing', () => {
     '--actor', 'agent', '--rationale', 'uncertain',
   ], dir);
   assert.equal(chose.code, 1);
-  assert.match(chose.stderr, /@ask/);
+  assert.match(chose.stderr, /@input/);
 
   const opened = cli([
     'state', 'ask', 'ask.mar', '0',

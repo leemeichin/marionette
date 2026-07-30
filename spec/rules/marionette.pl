@@ -37,7 +37,7 @@
  *    label(Id, Text)                      the choice's human-readable claim
  *    sticky(Id)                           "+" repeatable ("*" when absent)
  *    human(Id)                            @human checkpoint
- *    ask(Id)                              @ask elicitation checkpoint
+ *    ask(Id)                              interaction requiring trusted input (spec-specific)
  *    loop_marked(Id)                      ~loop~ declared cycle edge
  *    gate(Id, Expr, Source)               {gate} as an AST + original text
  *    next_step(Node, Target, Line)        automatic next step
@@ -537,7 +537,7 @@ cyclic(N) :- node(N, _, _), can_reach(N, N).
 %% human_gate(?C, ?N, ?Label) — every authored human checkpoint.
 human_gate(C, N, Label) :- human(C), choice(C, N, _, _, _), label(C, Label).
 
-%% elicitation_gate(?C, ?N, ?Label) — every authored @ask checkpoint.
+%% elicitation_gate(?C, ?N, ?Label) — every authored trusted-interaction fact.
 elicitation_gate(C, N, Label) :- ask(C), choice(C, N, _, _, _), label(C, Label).
 
 %% speculative(?N) — a timeboxed phase (try it; abandon if the budget dries up).

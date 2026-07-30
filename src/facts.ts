@@ -112,7 +112,9 @@ export function emitFacts(plan: FactPlan): string {
       lines.push(`label(${atom(choice.id)}, ${str(choice.label)}).`);
       if (choice.sticky) lines.push(`sticky(${atom(choice.id)}).`);
       if (choice.human) lines.push(`human(${atom(choice.id)}).`);
-      if (choice.ask) lines.push(`ask(${atom(choice.id)}).`);
+      // The normative engine only needs to know that unattended traversal is
+      // forbidden. TypeScript distinguishes operator @ask from fixed @input.
+      if (choice.ask || choice.input) lines.push(`ask(${atom(choice.id)}).`);
       if (choice.loop) lines.push(`loop_marked(${atom(choice.id)}).`);
       if (choice.gate) lines.push(`gate(${atom(choice.id)}, ${exprTerm(choice.gate.ast)}, ${str(choice.gate.source)}).`);
       if (choice.timeout) {

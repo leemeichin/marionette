@@ -7,10 +7,11 @@ project moves through, the decisions that connect them, and the conditions
 under which each path opens. You write a plan as a small, legible script (or
 let an AI draft it from your notes); a compiler validates it into a canonical
 JSON graph; an AI agent then executes the project by *walking* that graph —
-controlled, auditable, and unable to route around the plan. Decisions marked
-`@human` are ones the agent cannot take: it must stop and escalate to you.
-`@ask` is the adjacent ambiguity boundary: the agent opens a focused question,
-you supply context, and the fixed edge continues. Graphs render it as `‽`.
+controlled, auditable, and unable to route around the plan. `@ask` presents
+an authored route decision to the trusted operator. `@input` collects missing
+free text on a fixed route. `@human` requires a human identity plus durable
+evidence; in Pi that identity defaults to the repository Git author. Graphs render these as `?`,
+`‽`, and `✋`.
 
 The design is borrowed from [Ink](https://github.com/inkle/ink), the
 interactive-fiction language, with the player swapped out: instead of a human
@@ -22,8 +23,8 @@ chooses its way through your project — and the human holds the gates.
 A plan is a `.mar` file: phases (`=== name ===`), choices (`*` once-only,
 `+` repeatable), gates (`{expr}`), declared loops (`~loop~`), paired
 `while`/`until` branches, runtime observations (`? value`), hard
-`timeout` exits, human checkpoints (`@human`), and elicitation checkpoints
-(`@ask`).
+`timeout` exits, operator decisions (`@ask`), free-text inputs (`@input`),
+and evidenced human confirmations (`@human`).
 
 ```
 # project: checkout-revamp
@@ -44,17 +45,17 @@ Rebuild the checkout flow behind a feature flag.
 Ship one measurable change per attempt to the flag cohort and read the
 conversion funnel after a full week; an attempt is done when its data is in.
 ~ attempts += 1
-* [Cohort converts] @human -> rollout
+* [Cohort converts] @ask -> rollout
 + {attempts < 5} [Conversion flat — iterate] ~loop~ -> build_checkout
-* {attempts >= 5} [Not converging — rethink] @human -> rethink
+* {attempts >= 5} [Not converging — rethink] @ask -> rethink
 
 === rethink ===
 # ref: https://wiki.acme.dev/checkout-usability-study
 Five iterations without lift: take the flow back to research.
 Run the checkout usability study and write up why the five attempts failed;
 that write-up is the input to whichever door is taken next.
-+ [New direction agreed] @human ~loop~ -> build_checkout
-* [Park the revamp] @human -> END
++ [New direction agreed] @ask ~loop~ -> build_checkout
+* [Park the revamp] @ask -> END
 
 === rollout ===
 # github:issue: 42
@@ -102,17 +103,17 @@ Ship one measurable change per attempt to the flag cohort and read the
 conversion funnel after a full week; an attempt is done when its data is in.
 variables: attempts=1
 choices:
-  [0] Cohort converts @human -> rollout
+  [0] Cohort converts @ask -> rollout
   [1] Conversion flat — iterate ~loop~ {attempts < 5} -> build_checkout
-  [2] Not converging — rethink @human {attempts >= 5} -> rethink  [unavailable: gate {attempts >= 5} is false]
+  [2] Not converging — rethink @ask {attempts >= 5} -> rethink  [unavailable: gate {attempts >= 5} is false]
 ```
 
-The `@human` checkpoint is enforced, not advisory — the walker refuses the
-agent and tells it to escalate:
+The operator `@ask` checkpoint is enforced, not advisory — the walker refuses the
+agent and presents the complete decision packet:
 
 ```console
 $ marionette state choose checkout.mar 0 --actor agent --rationale "metrics look good"
-error: choice "Cohort converts" is an @human checkpoint: an agent may not take it autonomously. Escalate to a human; a human records the decision with --actor <name>.
+error: choice "Cohort converts" asks the trusted operator to decide
 ```
 
 So the agent takes the path that is its to take, and the human takes the
@@ -135,9 +136,12 @@ variables: attempts=2
 automatic next step -> END (run marionette state advance)
 ```
 
-Edit the plan mid-project and the hash binding catches it: drift is an
-error (exit code 3), and `marionette state rebind` migrates the live state
-onto the new graph with a report of what changed, keeping the decision log.
+Edit the plan mid-project and the hash binding catches it: drift is an error
+(exit code 3). `marionette state rebind --dry-run --json` compares the edited
+plan with its archived baseline. Completed phase ids and the variables they
+used are immutable; unfinished phases may change and new future work may be
+added. An approved rebind keeps the decision log and records the old/new graph
+hashes, actor, rationale, and structured report.
 
 ## The command surface
 
@@ -153,7 +157,9 @@ $ marionette state init plan.mar      # → plan.state.json bound by content has
 $ marionette brief plan.mar --json    # → work packet: what an executor does next
 $ marionette state observe plan.mar remaining 7 --actor agent --rationale "queue query"
 $ marionette state choose plan.mar 1 --actor agent --rationale "metrics red, iterate"
-$ marionette state rebind plan.mar    # migrate state onto an edited plan, keeping the log
+$ marionette state baseline plan.mar  # establish a pre-edit baseline for a legacy state
+$ marionette state rebind plan.mar --dry-run --json  # inspect future-only changes
+$ marionette state rebind plan.mar --actor lee --rationale "approved"  # apply
 $ marionette start plan.mar --run agent-1  # start a local agent runtime
 $ marionette import issues.json -o plan.mar  # scaffold a plan from tracker issues
 $ marionette sync plan.mar --json     # → manifest: what your tracker should show
@@ -190,7 +196,7 @@ turns natural-language notes into a validated `.mar` draft, and `render` +
 `summarize` produce the graph and plain-English walkthrough a reviewer
 signs off on. The **execution skill** is the other half: it ingests the
 `brief` work packet, does the work each phase describes, and records every
-decision — escalating at each `@human` gate.
+decision — asking the operator at `@ask`, collecting `@input`, and waiting for evidenced `@human` confirmation.
 
 ## Getting started
 
@@ -247,18 +253,21 @@ Phase 2 (ingestion & execution) is underway: the `brief` work packet
 (`spec/brief.schema.json`) is the executor's ingestion surface; external
 refs (`github:`/`jira`/`linear`/`ref`) and delivery config (`delivery:`/
 `report:`) ride on plan metadata; the Prolog-backed walker enforces gates,
-`@human` escalation and rationale logging with machine-readable refusal
-codes; `state rebind` migrates live state across plan edits; and a
-runtime-agnostic conformance suite (`spec/conformance/`) holds any future
-walker to the same behaviour. The **local runtime** has landed
+operator/external/input authority and rationale logging with machine-readable refusal
+codes; `state rebind` applies only future-only plan amendments against an
+archived baseline; and a runtime-agnostic conformance suite
+(`spec/conformance/`) holds any future walker to the same behaviour. The **local runtime** has landed
 (`marionette start`/`stop`, [`docs/RUNTIME.md`](docs/RUNTIME.md)): a
 single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
 checks, idempotent writes and an append-only journal — the standalone Pi
-integration owns read-only `/plan` mode, shows each validated plan immediately,
-writes Mermaid and SVG review artifacts, traverses bound runs through an
-agent-bound tool, and reserves human choices for the trusted
-`/marionette-decide` path. ADR-0004 is implemented and awaits the dogfood
+integration owns read-only `/plan` mode, immediate compact/Mermaid/SVG review,
+and bound traversal. It routes operator `@ask` through `/marionette-decide`,
+evidenced `@human` confirmation through `/marionette-confirm-human`, and
+`@input` through `/marionette-answer`. Bound agents can propose future-only
+source through `marionette_amend`; only `/marionette-approve-amendment` or the
+trusted host API can append the graph-epoch `plan.rebound` event and apply it.
+ADR-0004 is implemented and awaits the dogfood
 plan's formal human approval (issue #4).
 Tracker integration landed connection-free: `marionette import` ingests a
 Jira/Linear/GitHub backlog into a plan, and `marionette sync` computes the
