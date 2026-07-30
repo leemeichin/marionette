@@ -59,6 +59,8 @@ test('P0.8 CLI exit codes are CI-suitable', async () => {
   // render and summarize work from both .mar and compiled .json
   assert.match(cli(['render', 'plan.mar'], dir).stdout, /flowchart/);
   assert.match(cli(['render', 'plan.trajectory.json'], dir).stdout, /flowchart/);
+  assert.match(cli(['render', 'plan.mar', '--format', 'svg'], dir).stdout, /<svg/);
+  assert.match(cli(['render', 'plan.mar', '--format', 'compact'], dir).stdout, /● build_mvp/);
   assert.match(cli(['summarize', 'plan.mar'], dir).stdout, /Plan summary/);
 
   // state lifecycle: init → choose → drift → 3

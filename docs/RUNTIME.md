@@ -174,12 +174,19 @@ prerequisite for loading the Pi extension. Source imports name the real
 `.ts` files; TypeScript rewrites those relative specifiers to `.js` only when
 emitting `dist/`.
 
-You can instead bind interactively with
-`/marionette-start <plan.mar> [run-id]`. Pi also exposes `marionette_draft`,
-which compiler-checks complete DSL source before atomically writing a `.mar`
-file. Invalid drafts never touch disk; successful results include the graph
-hash, plain-language summary, and Mermaid review graph. Overwriting is opt-in
-for explicit refinement.
+You can author and approve a plan entirely in this standalone package with
+`/plan <task>`, `/refine-plan`, and `/approve-plan [active|worktree <name>]`,
+or bind an existing plan with `/marionette-start <plan.mar> [run-id]`. Draft
+mode is read-only: Pi enables inspection, questions, and `marionette_draft`
+while blocking project writes and mutating shell commands.
+
+`marionette_draft` compiler-checks complete DSL source before atomically
+writing a `.mar` file. Invalid drafts never touch disk. Successful drafts are
+shown immediately as a durable review card and include a minimal terminal
+graph plus plain-language summary. The tool also writes sibling `.mmd` and
+`.svg` files and returns their paths and `file:` URIs, so another extension or
+agent can open the SVG in a browser, image viewer, tmux pane, or Zellij pane
+without parsing terminal output. Overwriting is opt-in for explicit refinement.
 
 The model gets one agent-bound traversal tool, `marionette_walk`. It mirrors
 the runtime command surface:
@@ -209,7 +216,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.2.0`) with the same shape in four places:
+(`marionette.pi` / `1.3.0`) with the same shape in four places:
 
 1. `marionette_walk` tool-result `details`;
 2. `marionette-projection` custom-message `details`;
@@ -230,9 +237,11 @@ either:
 - `marionette:discover:v1`, with `{ respond(api) { ... } }` for load-order
   independent discovery.
 
-The API exposes `getBinding()`, `bind()`, `unbind()`, every agent-bound runtime
-operation through `execute()`, plus separate `humanChoose()` and
-`humanAnswer()` methods accepting a host-authenticated principal. Before
+The API exposes draft/execution state through `getDraft()` and `getExecution()`,
+lets a thin host router call `startDraft()`, and retains `getBinding()`,
+`bind()`, `unbind()`, every agent-bound runtime operation through `execute()`,
+plus separate `humanChoose()` and `humanAnswer()` methods accepting a
+host-authenticated principal. Before
 prompting, `/marionette-decide` and `/marionette-answer` also ask
 `marionette:human:v1` for an optional host-configured actor identity. Channel
 names, envelope types and the host interface are exported from the package. The shared event bus is the

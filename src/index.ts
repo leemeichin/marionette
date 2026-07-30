@@ -5,7 +5,8 @@ export { emitFacts, exprTerm } from './facts.ts';
 export { compile, trajectoryHash, formatDiagnostics, type CompileResult } from './compile.ts';
 export { validatePlan, analyzePlan } from './validate.ts';
 export { renderFinding, refusalText, blockedText } from './diagnostics.ts';
-export { renderMermaid, type RenderOptions } from './render.ts';
+export { renderCompactGraph, renderMermaid, type RenderOptions } from './render.ts';
+export { renderSvg, type SvgRenderOptions } from './render-svg.ts';
 export { summarize, type SummarizeOptions } from './summarize.ts';
 export {
   initState, bindState, frontier, takeChoice, ask, answer, advance, observe, enteredAt, visitedPath,
@@ -58,6 +59,7 @@ export {
   MARIONETTE_PI_EVENT_CHANNEL,
   MARIONETTE_PI_READY_CHANNEL,
   MARIONETTE_PI_DISCOVER_CHANNEL,
+  MARIONETTE_PI_HUMAN_CHANNEL,
   type MarionettePiBinding,
   type MarionettePiReceipt,
   type MarionettePiError,
@@ -67,9 +69,15 @@ export {
   type MarionettePiHumanDecision,
   type MarionettePiHumanAnswer,
   type MarionettePiBindRequest,
+  type MarionettePiResource,
+  type MarionettePiDraft,
+  type MarionettePiExecution,
+  type MarionettePiStartDraftRequest,
   type MarionettePiHostApi,
   type MarionettePiDiscoveryRequest,
+  type MarionettePiHumanIdentityRequest,
 } from './pi-integration.ts';
+export { isReadOnlyPlanningCommand } from './pi-planning.ts';
 export {
   RUNTIME_STORE_VERSION, MAX_EVENT_BYTES, RuntimeStoreError, runtimePaths,
   archiveTrajectory, resolveArchivedTrajectory, initializeRuntimeStore,

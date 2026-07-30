@@ -16,7 +16,7 @@ import type {
 } from './runtime-protocol.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.2.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.3.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -52,12 +52,39 @@ export type MarionettePiEventKind =
   | 'runtime.result'
   | 'integration.error';
 
+export interface MarionettePiResource {
+  path: string;
+  uri: string;
+  mediaType: string;
+}
+
 export interface MarionettePiDraft {
   planFile: string;
   graphHash: string;
   summary: string;
+  /** Minimal terminal projection; intentionally not a full ASCII graph. */
+  compact: string;
   mermaid: string;
+  resources: {
+    plan: MarionettePiResource;
+    mermaid: MarionettePiResource;
+    svg: MarionettePiResource;
+  };
   warnings: number;
+}
+
+export interface MarionettePiExecution {
+  planFile: string;
+  graphHash: string;
+  executionRoot: string;
+  target: 'active' | 'worktree';
+}
+
+export interface MarionettePiStartDraftRequest {
+  prompt: string;
+  path?: string;
+  /** Defaults to true. Hosts set false when the original input is already entering Pi. */
+  triggerTurn?: boolean;
 }
 
 export interface MarionettePiEvent {
@@ -167,6 +194,9 @@ export interface MarionettePiBindRequest {
 export interface MarionettePiHostApi {
   readonly protocol: typeof MARIONETTE_PI_INTEGRATION_VERSION;
   getBinding(): MarionettePiBinding | null;
+  getDraft(): MarionettePiDraft | null;
+  getExecution(): MarionettePiExecution | null;
+  startDraft(request: MarionettePiStartDraftRequest): Promise<void>;
   bind(request: MarionettePiBindRequest): Promise<MarionettePiEvent>;
   unbind(): Promise<MarionettePiEvent>;
   execute(command: MarionettePiAgentCommand): Promise<MarionettePiEvent>;

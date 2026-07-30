@@ -15,7 +15,8 @@ import { compile, formatDiagnostics } from './compile.ts';
 import { parsePlan } from './parser.ts';
 import { emitFacts } from './facts.ts';
 import { oracleQuery, oracleReport } from './oracle.ts';
-import { renderMermaid } from './render.ts';
+import { renderCompactGraph, renderMermaid } from './render.ts';
+import { renderSvg } from './render-svg.ts';
 import { summarize } from './summarize.ts';
 import { nearest } from './suggest.ts';
 import { styleFor } from './term.ts';
@@ -74,7 +75,7 @@ Usage:
   marionette facts     <plan.mar> [-o out.pl]                 Prolog fact base (see spec/rules/)
   marionette oracle    <plan.mar>                             Check via the bundled rule engine
   marionette query     <plan.mar> <goal> [--limit n]          Ask the plan a Prolog question
-  marionette render    <plan.mar|.json> [--state f] [-o out.mmd] [--lr]
+  marionette render    <plan.mar|.json> [--state f] [--format mermaid|svg|compact] [-o file] [--lr]
   marionette summarize <plan.mar|.json> [--state f] [-o out.md]
   marionette brief     <plan.mar|.json> [--state f] [--json]    Work packet for the executor
   marionette sync      <plan.mar|.json> [--json]                Tracker sync manifest (see docs/SYNC.md)
@@ -101,6 +102,7 @@ Options:
   --strict            Treat warnings as errors (exit 1)
   --json              Emit the machine-readable form (brief)
   --lr                Render left-to-right instead of top-down
+  --format <format>   Graph output: mermaid (default), svg, or compact terminal text
   --force             Overwrite an existing state file on init
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
   --rationale <text>  Why the step was taken (required for choices)
@@ -125,7 +127,7 @@ function parseArgs(argv: string[]): Args {
   const flags: Record<string, string | boolean> = {};
   const takesValue = new Set([
     '-o', '--out', '--state', '--actor', '--rationale', '--question',
-    '--tracker', '--cursor', '--mode',
+    '--tracker', '--cursor', '--mode', '--format',
     '--run', '--store', '--principal', '--role', '--principal-uri',
   ]);
   for (let i = 0; i < argv.length; i++) {
@@ -369,7 +371,19 @@ export async function run(argv: string[]): Promise<number> {
           const sf = stateFileFor(file, flags);
           if (existsSync(sf)) state = loadState(trajectory, sf);
         }
-        output(flags, null, await renderMermaid(trajectory, { state, direction: flags['lr'] ? 'LR' : 'TD' }));
+        const requested = typeof flags['format'] === 'string' ? flags['format'] : undefined;
+        const outputPath = typeof flags['out'] === 'string' ? flags['out'] : '';
+        const format = requested ?? (outputPath.endsWith('.svg') ? 'svg' : 'mermaid');
+        if (!['mermaid', 'svg', 'compact'].includes(format)) {
+          throw new UsageError(`render: unknown format ${JSON.stringify(format)}; use mermaid, svg, or compact`);
+        }
+        const direction = flags['lr'] ? 'LR' : 'TD';
+        const rendered = format === 'svg'
+          ? await renderSvg(trajectory, { state, direction })
+          : format === 'compact'
+            ? `${renderCompactGraph(trajectory)}\n`
+            : await renderMermaid(trajectory, { state, direction });
+        output(flags, null, rendered);
         return 0;
       }
 

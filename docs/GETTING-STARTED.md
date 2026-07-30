@@ -97,6 +97,8 @@ $ marionette state choose plan.mar 1 --actor agent --rationale "why"
 $ marionette state advance plan.mar --actor agent   # follow an automatic next step
 $ marionette state rebind plan.mar      # after editing a live plan: migrate, keep the log
 $ marionette render plan.mar            # Mermaid, with taken path + frontier highlighted
+$ marionette render plan.mar --format svg -o plan.svg
+$ marionette render plan.mar --format compact
 ```
 
 Rules the walker enforces: `@human` choices refuse `--actor agent` (that's
@@ -109,8 +111,10 @@ config, and escalates `@human` checkpoints instead of taking them.
 
 ## 5. Run it in Pi
 
-Marionette is a Pi package: it contributes both skills and an extension with
-an agent-bound walker tool plus a trusted human decision command.
+Marionette is a Pi package: it contributes both skills and a standalone
+planning extension. It provides read-only draft mode, immediate plan review,
+worktree approval, an agent-bound walker tool, and trusted human decision
+commands.
 
 ```console
 $ pi install git:github.com/leemeichin/marionette
@@ -120,8 +124,12 @@ $ pi \
     --marionette-human <your-name>
 ```
 
-You can also bind later with `/marionette-start plan.mar first-run`. When the
-run reaches `@human`, Pi displays the exact choices and parks the agent; answer
+Start from natural language with `/plan <task>`; a validated draft appears in
+the transcript with compact terminal and plain-language views, while sibling
+`.mmd` and `.svg` artifacts are available for out-of-band viewers. Approve it
+with `/approve-plan` (isolated worktree by default), or bind an existing plan
+with `/marionette-start plan.mar first-run`. When the run reaches `@human`, Pi
+displays the exact choices and parks the agent; answer
 with `/marionette-decide`. See [`RUNTIME.md`](RUNTIME.md) for the wire and
 restart contract. `/marionette-stop` unbinds the session without deleting the
 runtime run.

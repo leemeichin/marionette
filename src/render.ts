@@ -13,6 +13,23 @@ export interface RenderOptions {
   direction?: 'TD' | 'LR';
 }
 
+/** A deliberately small terminal projection: phases and their outgoing routes. */
+export function renderCompactGraph(trajectory: Trajectory): string {
+  const lines: string[] = [];
+  for (const node of trajectory.nodes) {
+    const title = firstLine(node.body);
+    lines.push(`● ${node.id}${title ? ` — ${title}` : ''}`);
+    for (const choice of node.choices) {
+      const marks = [choice.human ? '✋' : '', choice.ask ? '‽' : '', choice.loop ? '↻' : '']
+        .filter(Boolean)
+        .join(' ');
+      lines.push(`  ${marks ? `${marks} ` : '→ '}${choice.label} → ${choice.target}`);
+    }
+    if (node.next) lines.push(`  → ${node.next.target}`);
+  }
+  return lines.join('\n');
+}
+
 function esc(text: string): string {
   return text
     .replace(/&/g, '&amp;')

@@ -146,6 +146,8 @@ $ marionette validate plan.mar        # dead ends, unreachable phases, undeclare
                                       # cycles, loops without exits → compile errors
 $ marionette compile plan.mar         # → plan.trajectory.json (the contract)
 $ marionette render plan.mar          # → Mermaid graph, human gates highlighted
+$ marionette render plan.mar --format svg -o plan.svg  # dependency-free browser artifact
+$ marionette render plan.mar --format compact          # minimal terminal projection
 $ marionette summarize plan.mar       # → plain-language review summary
 $ marionette state init plan.mar      # → plan.state.json bound by content hash
 $ marionette brief plan.mar --json    # → work packet: what an executor does next
@@ -252,9 +254,10 @@ walker to the same behaviour. The **local runtime** has landed
 (`marionette start`/`stop`, [`docs/RUNTIME.md`](docs/RUNTIME.md)): a
 single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
-checks, idempotent writes and an append-only journal — the Pi integration
-compiler-checks drafts through `marionette_draft`, traverses bound runs through
-an agent-bound tool, and reserves human choices for the trusted
+checks, idempotent writes and an append-only journal — the standalone Pi
+integration owns read-only `/plan` mode, shows each validated plan immediately,
+writes Mermaid and SVG review artifacts, traverses bound runs through an
+agent-bound tool, and reserves human choices for the trusted
 `/marionette-decide` path. ADR-0004 is implemented and awaits the dogfood
 plan's formal human approval (issue #4).
 Tracker integration landed connection-free: `marionette import` ingests a

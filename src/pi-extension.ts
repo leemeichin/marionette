@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   withFileMutationQueue,
   type ExtensionAPI,
@@ -9,7 +10,8 @@ import {
 import { Text } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 import { compile, formatDiagnostics } from './compile.ts';
-import { renderMermaid } from './render.ts';
+import { renderCompactGraph, renderMermaid } from './render.ts';
+import { renderSvg } from './render-svg.ts';
 import { summarize } from './summarize.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
@@ -28,6 +30,7 @@ import {
   type MarionettePiHumanDecision,
   type MarionettePiHumanIdentityRequest,
 } from './pi-integration.ts';
+import { registerMarionettePlanning } from './pi-planning.ts';
 import {
   PiAgentBridge,
   PiAgentBridgeError,
@@ -159,6 +162,19 @@ const writePlan = async (planFile: string, source: string, overwrite: boolean): 
   try {
     await writeFile(temporary, source, { encoding: 'utf8', flag: 'wx' });
     await rename(temporary, planFile);
+  } finally {
+    await unlink(temporary).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    });
+  }
+};
+
+const writeArtifact = async (file: string, content: string): Promise<void> => {
+  await mkdir(dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporary, content, { encoding: 'utf8', flag: 'wx' });
+    await rename(temporary, file);
   } finally {
     await unlink(temporary).catch((error) => {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -483,6 +499,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     lastProjection = projection;
     lastCursor = projection.cursor;
     updateUi(projection, ctx);
+    planning.refreshTools();
     if (persistBinding) {
       const entry: BindingEntryData = {
         planFile: candidate.planFile,
@@ -531,6 +548,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     lastProjection = null;
     lastCursor = 0;
     updateUi(null, ctx);
+    planning.refreshTools();
     if (persistBinding) {
       const entry: StoredUnbound = {
         unbound: true,
@@ -570,9 +588,22 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     }
   };
 
-  const hostApi: MarionettePiHostApi = {
+  let hostApi: MarionettePiHostApi;
+  const planning = registerMarionettePlanning(pi, {
+    getBinding: currentBinding,
+    bind: (request) => hostApi.bind(request),
+    execute: (command) => hostApi.execute(command as MarionettePiAgentCommand),
+    onEvent: (event) => {
+      if (event.error && activeContext) activeContext.ui.notify(event.error.message, 'error');
+    },
+  });
+
+  hostApi = {
     protocol: MARIONETTE_PI_INTEGRATION_VERSION,
     getBinding: currentBinding,
+    getDraft: planning.getDraft,
+    getExecution: planning.getExecution,
+    startDraft: planning.startDraft,
     bind: async (request: MarionettePiBindRequest) => {
       const cause = { source: 'host' as const, name: 'bind' };
       if (!activeContext) {
@@ -813,7 +844,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     name: 'marionette_draft',
     label: 'Marionette draft',
     description:
-      'Validate and atomically write a Marionette .mar plan. Invalid plans are not written; the result includes compiler diagnostics, summary, Mermaid graph, and graph hash.',
+      'Validate and atomically write a Marionette .mar plan. Invalid plans are not written; valid plans are shown immediately and return compiler diagnostics, summary, compact graph, graph hash, and Mermaid/SVG resource paths for out-of-band rendering.',
     parameters: Type.Object({
       path: Type.String({ description: 'Destination .mar path, relative to the Pi working directory or absolute' }),
       source: Type.String({ description: 'Complete Marionette DSL source' }),
@@ -836,16 +867,36 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         diagnostics: compiled.diagnostics,
         file: planFile,
       });
+      const compact = renderCompactGraph(compiled.trajectory);
       const mermaid = await renderMermaid(compiled.trajectory);
+      const svg = await renderSvg(compiled.trajectory);
+      const mermaidFile = planFile.replace(/\.mar$/, '.mmd');
+      const svgFile = planFile.replace(/\.mar$/, '.svg');
       await withFileMutationQueue(planFile, () =>
         writePlan(planFile, params.source, params.overwrite === true));
+      await Promise.all([
+        withFileMutationQueue(mermaidFile, () => writeArtifact(mermaidFile, mermaid)),
+        withFileMutationQueue(svgFile, () => writeArtifact(svgFile, svg)),
+      ]);
+      const resource = (path: string, mediaType: string) => ({
+        path,
+        uri: pathToFileURL(path).href,
+        mediaType,
+      });
       const draft = {
         planFile,
         graphHash: compiled.trajectory.hash,
         summary,
+        compact,
         mermaid,
+        resources: {
+          plan: resource(planFile, 'text/plain'),
+          mermaid: resource(mermaidFile, 'text/vnd.mermaid'),
+          svg: resource(svgFile, 'image/svg+xml'),
+        },
         warnings: compiled.diagnostics.filter((item) => item.severity === 'warning').length,
       };
+      planning.acceptDraft(draft, ctx);
       const event = emit({
         ...eventBase('plan.drafted', {
           source: 'tool',
@@ -856,7 +907,10 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         result: { diagnostics: compiled.diagnostics },
       });
       return {
-        content: [{ type: 'text', text: `${summary}\n\n\`\`\`mermaid\n${mermaid}\n\`\`\`` }],
+        content: [{
+          type: 'text',
+          text: `${summary}\n\nCompact graph:\n${compact}\n\nSVG graph: ${svgFile}\nMermaid source: ${mermaidFile}`,
+        }],
         details: { ok: true, ...draft, event },
       };
     },
@@ -875,17 +929,23 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         planFile?: string;
         graphHash?: string;
         summary?: string;
+        compact?: string;
         mermaid?: string;
+        resources?: { svg?: { path?: string } };
         diagnostics?: unknown[];
       } | undefined;
       if (!details?.ok) {
         return new Text(theme.fg('error', 'Plan rejected by the compiler; no file written.'), 0, 0);
       }
-      const base = `${theme.fg('success', '✓ Valid plan')} ${theme.fg('muted', details.planFile ?? '')}`;
+      const base = `${theme.fg('success', '✓ Valid plan — ready for review')} ${theme.fg('muted', details.planFile ?? '')}`;
+      const compact = details.compact ? `\n${details.compact}` : '';
+      const artifact = details.resources?.svg?.path
+        ? `\n${theme.fg('accent', 'SVG')} ${theme.fg('muted', details.resources.svg.path)}`
+        : '';
       return new Text(
         expanded
-          ? `${base}\n${details.summary ?? ''}\n\n${theme.fg('dim', details.mermaid ?? '')}`
-          : `${base}\n${theme.fg('dim', details.graphHash ?? '')}`,
+          ? `${base}${compact}${artifact}\n\n${details.summary ?? ''}\n\n${theme.fg('dim', details.mermaid ?? '')}`
+          : `${base}${compact}${artifact}`,
         0,
         0,
       );
@@ -1133,6 +1193,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       source: 'session',
       name: `session_start:${event.reason}`,
     });
+    planning.sessionStart(ctx);
   });
 
   pi.on('session_tree', async (_event, ctx) => {
@@ -1140,6 +1201,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       source: 'session',
       name: 'session_tree',
     });
+    planning.sessionTree(ctx);
   });
 
   pi.on('session_shutdown', (event, _ctx) => {
@@ -1151,6 +1213,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         }),
       } satisfies MarionettePiEvent);
     }
+    planning.shutdown();
     activeContext = null;
     bridge = null;
     lastProjection = null;
