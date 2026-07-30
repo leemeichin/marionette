@@ -153,7 +153,7 @@
         },
         "human": {
           "type": "boolean",
-          "description": "External-human checkpoint (`@human`, spec 0.6+): requires external actor identity and durable evidence. Spec 0.5 epochs retain legacy human-choice behavior."
+          "description": "Evidenced human checkpoint (`@human`, spec 0.6+): requires a human actor identity and durable evidence. The protocol role is external to agent authority, not necessarily a distinct operator. Spec 0.5 epochs retain legacy human-choice behavior."
         },
         "ask": {
           "type": "boolean",

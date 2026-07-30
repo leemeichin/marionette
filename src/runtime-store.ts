@@ -410,7 +410,7 @@ async function replayRuntimeEvents(
       const evidence = Array.isArray(item.data['evidence']) ? item.data['evidence'] as Ref[] : [];
       if (!item.graph.choiceId || item.principal?.role !== 'external-human') {
         throw new RuntimeStoreError(
-          `external confirmation event ${item.seq} has no external principal or choice`,
+          `human confirmation event ${item.seq} has no confirming principal or choice`,
           'corrupt-journal',
         );
       }

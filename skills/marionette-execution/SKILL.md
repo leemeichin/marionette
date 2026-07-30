@@ -73,12 +73,13 @@ Repeat until the brief says otherwise:
      The trusted operator chooses through `/marionette-decide` in Pi or
      `state choose --actor <operator> --rationale <their words>` unbound.
      Never infer, proxy, or default their route.
-   - `awaiting-external` — an `@human` action belongs to someone outside the
-     agent/operator session. Show the complete packet, park, and wait for
-     that person's action. Continue only through `/marionette-confirm-human`
-     or `state confirm`, recording the actual external actor, rationale, and
-     durable evidence URL. The operator cannot self-approve it and the model
-     tool has no confirmation operation.
+   - `awaiting-external` — an `@human` action requires an evidenced human
+     confirmation outside agent authority. Show the complete packet and park.
+     Continue only through `/marionette-confirm-human` or `state confirm`,
+     recording the actual human actor, rationale, and durable evidence URL.
+     In Pi, actor identity defaults to the repository Git author; it need not
+     differ from the operator or plan committer. The model tool has no
+     confirmation operation.
    - `awaiting-human` — legacy spec-0.5 graph epoch. Preserve its recorded
      human-choice semantics and follow the packet's trusted response path;
      new plans use `awaiting-operator` or `awaiting-external` instead.
@@ -143,7 +144,7 @@ the plan changed underneath the state: stop and surface the drift message;
   focused question and a rationale explaining the ambiguity. The runtime
   parks, records the operator answer separately, and advances the fixed edge.
 - **Honest rationales beat optimistic ones.** If the evidence for a choice
-  is thin, that is what loops, operator `@ask`, and external `@human` gates are for.
+  is thin, that is what loops, operator `@ask`, and evidenced `@human` gates are for.
 
 ## Proposing plan amendments
 
@@ -263,10 +264,10 @@ carries a `# tracker:` tag — the manifest tells you exactly what to do
 - Never edit the `.mar`, the trajectory JSON, or the state file by hand;
   state changes go through `state observe|choose|ask|answer|advance|rebind`
   only.
-- Never pass `--actor` other than `agent` for your own steps. Recording a
-  human's decision as their proxy requires their explicit in-conversation
-  instruction, their name as `--actor`, and their stated rationale — a
-  paraphrase of intent you inferred is not a decision.
+- Never pass `--actor` other than `agent` for your own steps. Human decisions
+  and confirmations must use the trusted host/CLI surface; Pi resolves the
+  configured identity or current repository Git author. A paraphrase of intent
+  inferred by the agent is not a decision.
 - Zero out-of-graph actions (G2): if what you did doesn't match any
   available choice, that's a finding to report, not something to force into
   the log.

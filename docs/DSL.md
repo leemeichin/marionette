@@ -47,7 +47,7 @@ Launch to the beta cohort.
 | Gate | `{expr}` before or after the label | Choice is available only while the expression is true. |
 | Operator decision | `@ask` on a choice | The trusted operator chooses an authored route with rationale. Rendered as `?`. |
 | Input checkpoint | `@input` on a choice | The agent asks for free text; the operator supplies context, then the fixed edge advances. Rendered as `‽`. |
-| External-human action | `@human` on a choice | Someone outside the session must act; confirmation requires their identity and durable evidence. Rendered as `✋`. |
+| Human confirmation | `@human` on a choice | A human must attest the action with their identity and durable evidence. Rendered as `✋`. |
 | Loop | `~loop~` on a choice | Declares an intentional cycle. A cycle is declared when **any one** of its edges carries `~loop~` (convention: the returning edge); overlapping cycles each need a marked edge. Undeclared cycles are compile errors. |
 | Conditional loop | `while {expr} -> target` · `else -> target` | An exhaustive sticky pair. `while` declares its true arm as the repeating edge. Optional `[labels]` may precede each arrow. |
 | Conditional exit | `until {expr} -> target` · `else -> target` | An exhaustive sticky pair. `until` exits on true and declares its `else` arm as the repeating edge. |
@@ -97,7 +97,7 @@ This is deliberately source-neutral. The same construct can represent a work
 count, test health, rollout capacity, a measured score or any other scalar
 fact. Marionette never assumes how the host obtains it.
 
-## Interactive and external checkpoints
+## Operator, input, and human-confirmation checkpoints
 
 Use `@ask` when the current trusted operator owns a route decision:
 
@@ -123,20 +123,26 @@ parks at `awaiting-elicitation`. The operator's `state answer` is audited, the
 fixed edge advances, and the next work packet carries the clarification. This
 is context, not approval or route selection.
 
-Use `@human` when someone outside the session must act:
+Use `@human` when progress requires an evidenced human attestation rather than only a route decision:
 
 ```
 * [Maintainer approved PR] @human -> merge
 ```
 
-Status becomes `awaiting-external`. Neither agent nor operator can choose it.
-After the external action exists, record the actual actor and durable evidence:
+Status becomes `awaiting-external`. The agent cannot choose it; a trusted
+human must confirm it rather than taking it as an ordinary route. After the
+action exists, record the confirming human and durable evidence:
 
 ```console
 marionette state confirm plan.mar 0 --actor maintainer \
   --evidence https://github.com/acme/repo/pull/12#pullrequestreview-1 \
   --rationale "approved the PR"
 ```
+
+In Pi, the confirming identity defaults to the Git author configured in the
+current repository. Marionette does not compare that identity with the plan's
+committer or with an operator identity; the boundary is human-versus-agent,
+not person-versus-person.
 
 A choice cannot combine `@ask`, `@input`, and `@human`. Archived spec-0.5
 trajectories retain their old meanings during replay; source using the former

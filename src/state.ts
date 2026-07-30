@@ -214,7 +214,7 @@ export async function takeChoice(
   }
   if (interaction === 'external-human') {
     throw new WalkError(
-      `choice "${selected.label}" waits for an external human action and must be confirmed with evidence`,
+      `choice "${selected.label}" requires evidenced human confirmation`,
       'external-confirmation-required',
     );
   }
@@ -229,18 +229,18 @@ export async function confirmExternal(
 ): Promise<PlanState> {
   bindState(trajectory, state);
   if (options.actor === 'agent') {
-    throw new WalkError('external action cannot be attributed to the agent', 'human-checkpoint');
+    throw new WalkError('human confirmation cannot be attributed to the agent', 'human-checkpoint');
   }
   const selected = resolveChoiceRef(nodeById(trajectory, state.current), ref);
   if (!isExternalHumanChoice(trajectory, selected)) {
     throw new WalkError(
-      `choice "${selected.label}" is not an external @human checkpoint`,
+      `choice "${selected.label}" is not an evidenced @human checkpoint`,
       'external-confirmation-required',
     );
   }
   if (options.evidence.length === 0) {
     throw new WalkError(
-      `external @human choice "${selected.label}" requires durable evidence`,
+      `@human choice "${selected.label}" requires durable evidence`,
       'external-evidence-required',
     );
   }

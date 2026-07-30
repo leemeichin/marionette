@@ -450,7 +450,7 @@ function parseChoice(
   }
   if ([human, ask, input].filter(Boolean).length > 1) {
     error(lineNo, CODES.PARSE, 'a choice cannot combine @ask, @input, and @human',
-      'use @ask for the operator\'s route decision, @input for fixed-target text, or @human for external action');
+      'use @ask for the operator\'s route decision, @input for fixed-target text, or @human for evidenced human confirmation');
     return null;
   }
   if (label === null || label.trim().length === 0) {

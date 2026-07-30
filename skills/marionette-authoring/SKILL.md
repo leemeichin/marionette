@@ -36,7 +36,7 @@ Below, `marionette` means whichever form resolved.
    project, not tickets), the decisions that connect them, the conditions
    gating each path, where iteration genuinely happens, and — most
    importantly — which routes the current operator chooses through `@ask`,
-   which external people must act through `@human`, and where an agent needs
+   which actions need evidenced human confirmation through `@human`, and where an agent needs
    open-ended context through `@input`. Ask at most one round of
    clarifying questions, and only for decisions that change the graph's
    shape.
@@ -64,7 +64,7 @@ Below, `marionette` means whichever form resolved.
 5. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
    contract), `render` (Mermaid), and `summarize` (plain language). Present
    the summary and graph to the user, calling out every operator `@ask`,
-   external `@human`, free-text `@input`, and any "unverified gate" warnings for manual
+   evidenced `@human`, free-text `@input`, and any "unverified gate" warnings for manual
    review.
 6. **Only if the user wants to start traversal:**
    `marionette state init <plan>.mar`.
@@ -166,10 +166,11 @@ transcribe tickets into DSL by hand — fetch and scaffold
   the trusted host owns. Usually mark every option at that phase, e.g.
   `* [Approve] @ask -> rollout` and `+ [Request changes] @ask ~loop~ -> rework`.
   The decision packet must contain enough phase context to choose honestly.
-- **`@human` waits for someone external to the session.** Use it for actions
-  such as a maintainer approving a PR or a security reviewer signing off.
-  Continuing requires that external person's identity plus durable evidence;
-  neither the agent nor operator can self-confirm it.
+- **`@human` requires evidenced human confirmation.** Use it for actions such
+  as a maintainer approving a PR or a security reviewer signing off. Continuing
+  requires the confirming person's identity plus durable evidence. In Pi, the
+  identity defaults to the repository Git author and may be the current
+  operator; the agent still cannot confirm it.
 - **`@input` marks missing open-ended context on a fixed route.** Example:
   `* [Need target platforms] @input -> reconsider`. The agent opens one
   focused question, the operator's answer is audited, and the fixed edge

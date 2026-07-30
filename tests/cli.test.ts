@@ -68,7 +68,7 @@ test('P0.8 CLI exit codes are CI-suitable', async () => {
   // @human refusal for agents → 1
   const humanRefusal = cli(['state', 'choose', 'plan.mar', 'Metrics', '--actor', 'agent', '--rationale', 'x'], dir);
   assert.equal(humanRefusal.code, 1);
-  assert.match(humanRefusal.stderr, /external human/);
+  assert.match(humanRefusal.stderr, /evidenced human confirmation/);
   // mutate the plan → drift → 3
   const source = readFileSync(join(dir, 'plan.mar'), 'utf8');
   writeFileSync(join(dir, 'plan.mar'), source.replace('iteration < 3', 'iteration < 4'));
@@ -137,7 +137,7 @@ test('state baseline recovers an unchanged legacy state before editing', () => {
   assert.equal(existsSync(join(dir, '.marionette', 'graphs')), true);
 });
 
-test('CLI separates operator ask decisions from evidenced external confirmations', () => {
+test('CLI separates operator ask decisions from evidenced human confirmations', () => {
   const dir = mkdtempSync(join(tmpdir(), 'marionette-gates-cli-'));
   writeFileSync(join(dir, 'plan.mar'), [
     '=== review ===',

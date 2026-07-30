@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, extname, join, resolve } from 'node:path';
@@ -92,6 +93,30 @@ const splitArgs = (input: string): string[] =>
 
 const safeRunId = (value: string): string =>
   value.replace(/[^A-Za-z0-9._-]/g, '-');
+
+interface HumanIdentity {
+  id: string;
+  uri?: string;
+}
+
+/** Resolve the identity Git would put on a commit in this repository. */
+const gitAuthorIdentity = (cwd: string): HumanIdentity | null => {
+  try {
+    const ident = execFileSync('git', ['var', 'GIT_AUTHOR_IDENT'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const match = /^(.*) <([^<>]+)> \d+ [+-]\d{4}$/.exec(ident);
+    if (!match?.[1]?.trim()) return null;
+    return {
+      id: match[1].trim(),
+      ...(match[2]?.trim() ? { uri: `mailto:${match[2].trim()}` } : {}),
+    };
+  } catch {
+    return null;
+  }
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -207,7 +232,7 @@ const instructionsFor = (projection: RuntimeProjection): string => {
     case 'awaiting-operator':
       return 'Stop autonomous work and wait. The trusted operator must choose through /marionette-decide.';
     case 'awaiting-external':
-      return 'Stop autonomous work and wait for external human evidence; the operator cannot self-approve it.';
+      return 'Stop autonomous work and wait for an evidenced human confirmation through the trusted host.';
     case 'awaiting-human':
       return 'Stop autonomous work and wait. This legacy graph requires a human decision.';
     case 'awaiting-elicitation':
@@ -241,9 +266,41 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     type: 'string',
   });
   pi.registerFlag('marionette-human', {
-    description: 'Human identity recorded by /marionette-decide',
+    description: 'Human identity recorded by trusted Marionette decisions (defaults to the Git author)',
     type: 'string',
   });
+
+  const resolveHumanIdentity = async (
+    ctx: ExtensionContext,
+    prompt: string,
+    providedId?: string,
+  ): Promise<HumanIdentity | null> => {
+    if (providedId?.trim()) {
+      const id = providedId.trim();
+      return { id, uri: `pi://human/${encodeURIComponent(id)}` };
+    }
+    let humanId = pi.getFlag('marionette-human');
+    if (typeof humanId !== 'string') {
+      pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
+        respond(value: string) {
+          if (value.trim()) humanId = value.trim();
+        },
+      } satisfies MarionettePiHumanIdentityRequest);
+    }
+    if (typeof humanId === 'string' && humanId.trim()) {
+      const id = humanId.trim();
+      return { id, uri: `pi://human/${encodeURIComponent(id)}` };
+    }
+    const gitAuthor = gitAuthorIdentity(ctx.cwd);
+    if (gitAuthor) return gitAuthor;
+    if (ctx.hasUI) {
+      const id = await ctx.ui.input('Your name', prompt);
+      if (id?.trim()) {
+        return { id: id.trim(), uri: `pi://human/${encodeURIComponent(id.trim())}` };
+      }
+    }
+    return null;
+  };
 
   const currentBinding = (): MarionettePiBinding | null => {
     if (!bridge) return null;
@@ -280,7 +337,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       const heading = packet.kind === 'operator'
         ? 'Operator decision required'
         : packet.kind === 'external'
-          ? 'External human action required'
+          ? 'Human confirmation required'
           : 'Legacy human decision required';
       const lines = [
         `${heading} (${packet.id})`,
@@ -299,7 +356,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         ...packet.fallbacks.map((fallback) =>
           `  fallback ${fallback.choiceId} opens ${fallback.dueAt ?? 'at its authored timeout'}`),
         packet.kind === 'external'
-          ? 'Wait for someone else to act, then use /marionette-confirm-human with their identity and evidence.'
+          ? 'Use /marionette-confirm-human with durable evidence; actor identity defaults to this repository’s Git author.'
           : 'Use /marionette-decide to choose with your rationale.',
       ].filter(Boolean);
       ctx.ui.setWidget('marionette-escalation', lines);
@@ -514,13 +571,6 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       return failure(cause, new PiIntegrationError(
         'No Marionette run is bound.',
         'not-bound',
-      ), 'externalConfirm');
-    }
-    const operator = pi.getFlag('marionette-human');
-    if (typeof operator === 'string' && operator.trim() === confirmation.external.id.trim()) {
-      return failure(cause, new PiIntegrationError(
-        'The session operator cannot be recorded as the external approver.',
-        'invalid-request',
       ), 'externalConfirm');
     }
     if (confirmation.evidence.length === 0) {
@@ -972,19 +1022,9 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       const proposalId = tokens[0] === pendingAmendment.proposal.id
         ? tokens.shift()!
         : pendingAmendment.proposal.id;
-      let humanId = pi.getFlag('marionette-human');
-      if (typeof humanId !== 'string') {
-        pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
-          respond(value: string) {
-            if (value.trim()) humanId = value.trim();
-          },
-        } satisfies MarionettePiHumanIdentityRequest);
-      }
-      if (typeof humanId !== 'string' && ctx.hasUI) {
-        humanId = await ctx.ui.input('Your name', 'recorded as the amendment approver');
-      }
-      if (typeof humanId !== 'string' || !humanId.trim()) {
-        ctx.ui.notify('Set --marionette-human <name> or provide a name through the host.', 'error');
+      const human = await resolveHumanIdentity(ctx, 'recorded as the amendment approver');
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
         return;
       }
       let rationale = tokens.join(' ').trim();
@@ -999,10 +1039,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         return;
       }
       const event = await approveAmendment({
-        human: {
-          id: humanId.trim(),
-          uri: `pi://human/${encodeURIComponent(humanId.trim())}`,
-        },
+        human,
         proposalId,
         rationale,
         triggerTurn: true,
@@ -1033,7 +1070,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       }
       if (escalation.kind === 'external') {
         ctx.ui.notify(
-          'This checkpoint requires someone else to act. Use /marionette-confirm-human after external evidence exists.',
+          'This checkpoint requires evidenced human confirmation. Use /marionette-confirm-human.',
           'warning',
         );
         return;
@@ -1055,19 +1092,9 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      let humanId = pi.getFlag('marionette-human');
-      if (typeof humanId !== 'string') {
-        pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
-          respond(value: string) {
-            if (value.trim()) humanId = value.trim();
-          },
-        } satisfies MarionettePiHumanIdentityRequest);
-      }
-      if (typeof humanId !== 'string' && ctx.hasUI) {
-        humanId = await ctx.ui.input('Your name', 'recorded as the decision actor');
-      }
-      if (typeof humanId !== 'string' || !humanId.trim()) {
-        ctx.ui.notify('Set --marionette-human <name> or provide a name in the prompt.', 'error');
+      const human = await resolveHumanIdentity(ctx, 'recorded as the decision actor');
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
         return;
       }
 
@@ -1081,10 +1108,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       }
 
       const event = await executeHuman({
-        human: {
-          id: humanId.trim(),
-          uri: `pi://human/${encodeURIComponent(humanId.trim())}`,
-        },
+        human,
         choiceId: choice.id,
         rationale,
         idempotencyKey: `human:${escalation.id}:${choice.id}`,
@@ -1098,7 +1122,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand('marionette-confirm-human', {
-    description: 'Record evidence that an external human completed an @human action',
+    description: 'Record an evidenced human confirmation for an @human action',
     handler: async (args, ctx) => {
       activeContext = ctx;
       const refresh = await executeAgent(
@@ -1108,38 +1132,46 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       const escalation = refresh.projection?.escalation;
       if (refresh.error || !escalation || escalation.kind !== 'external') {
         ctx.ui.notify(
-          refresh.error?.message ?? 'No external human action is currently pending.',
+          refresh.error?.message ?? 'No evidenced human confirmation is currently pending.',
           'error',
         );
         return;
       }
-      const [choiceId, externalId, evidenceUrl, ...rationaleParts] = splitArgs(args);
+      const [choiceId, ...confirmationArgs] = splitArgs(args);
       const choice = escalation.choices.find((candidate) => candidate.id === choiceId);
       if (!choice) {
         ctx.ui.notify(`Choose one of: ${escalation.choices.map((item) => item.id).join(', ')}`, 'error');
         return;
       }
-      if (!externalId) {
-        ctx.ui.notify('Provide the external approver/action owner name.', 'error');
-        return;
-      }
+      // Current syntax is `<choice> <evidence-url> [rationale]`. Accept the
+      // former explicit-name position so existing host scripts keep working.
+      const suppliedId = /^https?:\/\//.test(confirmationArgs[0] ?? '')
+        ? undefined
+        : confirmationArgs.shift();
+      const evidenceUrl = confirmationArgs.shift();
       if (!evidenceUrl || !/^https?:\/\//.test(evidenceUrl)) {
         ctx.ui.notify('Provide a durable http(s) evidence URL.', 'error');
         return;
       }
-      let rationale = rationaleParts.join(' ').trim();
+      const human = await resolveHumanIdentity(
+        ctx,
+        'recorded as the human confirming this action',
+        suppliedId,
+      );
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
+        return;
+      }
+      let rationale = confirmationArgs.join(' ').trim();
       if (!rationale && ctx.hasUI) {
-        rationale = (await ctx.ui.editor('What did the external human do?', '') ?? '').trim();
+        rationale = (await ctx.ui.editor('What action is being confirmed?', '') ?? '').trim();
       }
       if (!rationale) {
         ctx.ui.notify('An evidence rationale is required.', 'error');
         return;
       }
       const event = await executeExternal({
-        external: {
-          id: externalId,
-          uri: `external-human://${encodeURIComponent(externalId)}`,
-        },
+        external: human,
         choiceId: choice.id,
         rationale,
         evidence: [{ provider: 'url', kind: 'evidence', id: evidenceUrl, url: evidenceUrl }],
@@ -1180,27 +1212,14 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         return;
       }
 
-      let humanId = pi.getFlag('marionette-human');
-      if (typeof humanId !== 'string') {
-        pi.events.emit(MARIONETTE_PI_HUMAN_CHANNEL, {
-          respond(value: string) {
-            if (value.trim()) humanId = value.trim();
-          },
-        } satisfies MarionettePiHumanIdentityRequest);
-      }
-      if (typeof humanId !== 'string' && ctx.hasUI) {
-        humanId = await ctx.ui.input('Your name', 'recorded as the answer source');
-      }
-      if (typeof humanId !== 'string' || !humanId.trim()) {
-        ctx.ui.notify('Set --marionette-human <name> or provide a name in the prompt.', 'error');
+      const human = await resolveHumanIdentity(ctx, 'recorded as the answer source');
+      if (!human) {
+        ctx.ui.notify('Configure a Git author, set --marionette-human <name>, or provide a name through the host.', 'error');
         return;
       }
 
       const event = await executeHumanAnswer({
-        human: {
-          id: humanId.trim(),
-          uri: `pi://human/${encodeURIComponent(humanId.trim())}`,
-        },
+        human,
         answer: response,
         idempotencyKey: `human:${elicitation.id}:answer`,
         triggerTurn: true,
@@ -1359,7 +1378,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     label: 'Marionette walk',
     description:
       'Read or advance the bound Marionette run, attach records, or inspect its event journal. ' +
-      'The tool is agent-bound: it cannot choose operator @ask routes or confirm external @human actions, and opens @input with a focused question.',
+      'The tool is agent-bound: it cannot choose operator @ask routes or provide evidenced @human confirmation, and opens @input with a focused question.',
     promptSnippet: 'marionette_walk — authoritative work packet and traversal for the bound Marionette run',
     promptGuidelines: [
       'When marionette_walk is bound, use it instead of marionette brief or marionette state commands.',

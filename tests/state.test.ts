@@ -80,7 +80,7 @@ test('walker: successful transitions are immutable and legacy states are rejecte
   );
 });
 
-test('walker: external @human checkpoints require identity, rationale, and evidence', async () => {
+test('walker: @human checkpoints require identity, rationale, and evidence', async () => {
   const t = await compiled();
   let state = await initState(t);
   await assert.rejects(takeChoice(t, state, '0', { actor: 'agent', rationale: 'x' }), WalkError);

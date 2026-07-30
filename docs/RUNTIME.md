@@ -66,8 +66,9 @@ After initialization, the host uses:
 - `next` — read the current projection.
 - `choose` — take an autonomous choice or trusted operator `@ask` route with
   rationale, expected revision and optional idempotency key.
-- `confirm` — attest an external `@human` action with an external-human
-  principal and at least one durable evidence reference.
+- `confirm` — attest an `@human` action with a human principal and at least
+  one durable evidence reference. The protocol's `external-human` role means
+  external to agent authority, not necessarily a different session operator.
 - `ask` — open an exact `@input` choice with a focused question and rationale.
 - `answer` — supply human-authored context for the open elicitation.
 - `advance` — follow the automatic next step with the same write controls.
@@ -104,24 +105,26 @@ model only for actionable states such as a new node, `observation.required`,
 `operator.required`, `external.required`, `elicitation.required`,
 `run.stranded`, or `run.completed`.
 
-## Operator and external-human checkpoints
+## Operator decisions and evidenced human confirmations
 
 `operator.required` wakes the trusted host when `@ask` routes require its
-current operator. `external.required` parks for somebody outside that session.
-Both project a stable escalation id and a complete decision packet: plan
+current operator. `external.required` parks until a human attests the action
+with durable evidence. Both project a stable escalation id and a complete decision packet: plan
 intent, full phase body, refs, variables, progress, exact choices,
 target titles/effects, expected revision, response operation, evidence
 requirement, and graph-authored fallbacks.
 
 The operator resolves `@ask` with an exact `choose` under a human-bound
-principal. External `@human` instead requires `confirm` under an
-`external-human` principal:
+principal. `@human` instead requires evidenced `confirm`. The wire role remains
+`external-human` because the authority is outside the agent; the confirmer may
+also be the current Pi operator:
 
 ```json
 {"protocol":"0.5.0","id":3,"op":"confirm","choiceId":"approval#0","rationale":"maintainer approved PR #12","expectedRevision":2,"evidence":[{"provider":"github","kind":"review","id":"acme/repo#12","url":"https://github.com/acme/repo/pull/12#pullrequestreview-1"}]}
 ```
 
-Success emits `external.confirmed` with the actual external actor and evidence.
+Success emits `external.confirmed` with the actual human actor and evidence.
+The runtime does not compare that actor with the plan committer or operator.
 Agent tools cannot issue either trusted response. Silence parks the run; only
 a graph-authored timeout fallback may end the wait.
 
@@ -143,7 +146,7 @@ question and the already-authored edge. A human-bound principal answers:
 
 The runtime records `elicitation.answered`, advances the fixed edge and
 resumes the agent. The answer is context rather than authority: it neither
-chooses a target nor confirms an external `@human` action.
+chooses a target nor confirms an evidenced `@human` action.
 
 ## Graph epochs and live amendments
 
@@ -180,9 +183,14 @@ launch:
 pi install git:github.com/leemeichin/marionette
 pi \
   --marionette-plan plans/marionette.mar \
-  --marionette-run implementation \
-  --marionette-human lee
+  --marionette-run implementation
 ```
+
+Trusted decisions default to the author identity that `git var GIT_AUTHOR_IDENT`
+resolves in the current repository. `--marionette-human lee` remains an
+explicit override. The same fallback applies to `/marionette-decide`,
+`/marionette-answer`, `/marionette-confirm-human`, and amendment approval;
+Marionette does not compare it with the author of an earlier commit.
 
 The package manifest points directly at `src/pi-extension.ts`; Pi loads that
 TypeScript source through its extension loader. The compiled `dist/` tree is
@@ -214,12 +222,14 @@ caller can deliberately bound it; `truncated`/`omitted` then tell the caller
 to fetch `next` again with a larger budget.
 
 At an escalation the agent must stop. The user answers through
-`/marionette-decide`, which selects a choice, captures the user's name and
+`/marionette-decide`, which selects a choice, resolves the user's configured
+or repository Git identity, and
 rationale, records the human-bound write, and injects the resulting projection
 so the agent can resume. A trusted embedding can instead provide an
 authenticated human principal through the host API described below.
 At an elicitation the user instead answers through `/marionette-answer`;
-the host records an `answer` write and resumes the agent.
+the host records an `answer` write and resumes the agent. Evidenced `@human`
+actions use `/marionette-confirm-human <choice> <evidence-url> [rationale]`.
 
 The binding is stored on the active Pi session branch and restored after
 restart or `/tree` navigation. `/marionette-stop` appends an unbound tombstone
@@ -254,8 +264,9 @@ The API exposes `getBinding()`, `bind()`, `unbind()`, every agent-bound runtime
 operation through `execute()`, future-only proposal/review through
 `proposeAmendment()` and trusted `approveAmendment()`, plus separate
 `humanChoose()` and `humanAnswer()` methods accepting a host-authenticated principal. Before
-prompting, `/marionette-decide` and `/marionette-answer` also ask
-`marionette:human:v1` for an optional host-configured actor identity. Channel
+prompting, trusted human commands ask `marionette:human:v1` for an optional
+host-configured actor identity, then fall back to the repository Git author.
+Channel
 names, envelope types and the host interface are exported from the package. The shared event bus is the
 notification plane; the host API or the runtime protocol remains the
 request/response command plane.

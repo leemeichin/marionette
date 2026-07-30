@@ -118,7 +118,7 @@ Options:
   --create             Start a new run; error if it already exists
   --principal <id>     Connection principal id (default: agent)
   --role <role>        Bound role: agent, human/operator, or external-human
-  --evidence <url>     Durable evidence for an external @human confirmation
+  --evidence <url>     Durable evidence for an @human confirmation
   --principal-uri <u>  Optional provenance URI for decision records
 `;
 

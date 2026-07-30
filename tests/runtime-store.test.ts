@@ -194,7 +194,7 @@ Beta.
   assert.equal(reopened.events.filter((event) => event.kind === 'plan.rebound').length, 1);
 }));
 
-test('runtime journal replays external human confirmation with evidence', () => withStore(async (root) => {
+test('runtime journal replays evidenced human confirmation', () => withStore(async (root) => {
   const external = (await compile(`
 === approval ===
 * [Maintainer approved] @human -> END

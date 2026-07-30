@@ -45,7 +45,7 @@ a restart and safe when a phase id is revisited by a loop.
    candidate. A local CLI user or trusted host may inspect the complete
    decision packet—semantic diff, proposal rationale, and graph artifacts—and
    apply it with an actor and rationale. This is an operator `@ask`-class
-   decision, not evidence that an external `@human` acted. The model-facing
+   decision, not evidence for an `@human` action. The model-facing
    traversal tool cannot approve an amendment.
 8. **Validation is pure and application is atomic.** Comparison produces a
    structured allowed-change/violation report without mutating state. A

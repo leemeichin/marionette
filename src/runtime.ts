@@ -587,7 +587,7 @@ export async function executeRuntimeRequest(
       }
       if (interaction === 'external-human') {
         throw new ProtocolError(
-          `choice "${choice.label}" waits for external human evidence; use confirm`,
+          `choice "${choice.label}" requires evidenced human confirmation; use confirm`,
           'external-confirmation-required',
           request.id,
         );
@@ -611,7 +611,7 @@ export async function executeRuntimeRequest(
       const { node, choice } = exactChoice(trajectory, snapshot.state, request.choiceId);
       if (principal.role !== 'external-human') {
         throw new ProtocolError(
-          'external @human confirmations require an external-human principal',
+          '@human confirmations require a human principal outside agent authority',
           'forbidden',
           request.id,
         );

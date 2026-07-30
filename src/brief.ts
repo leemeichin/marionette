@@ -30,7 +30,7 @@ export type BriefStatus =
   | 'waiting-timeout'
   /** Only operator @ask choices are available. */
   | 'awaiting-operator'
-  /** Only external @human actions are available. */
+  /** Only evidenced @human confirmations are available. */
   | 'awaiting-external'
   /** Legacy spec-0.5 @human choices are available. */
   | 'awaiting-human'
@@ -277,10 +277,10 @@ export async function buildBrief(
     status = 'awaiting-external';
     escalation = {
       kind: 'external',
-      reason: 'an external human must act before this route can continue',
+      reason: 'an evidenced human confirmation is required before this route can continue',
       choices: available.map((choice) => choice.id),
       fallbacks: authoredFallbacks,
-      how: `wait for external evidence, then record the actual external actor with ` +
+      how: `wait for human evidence, then record the actual confirming actor with ` +
         `\`marionette state confirm ${file} <choice> --actor <name> --evidence <ref> --rationale <text>\`. ` +
         (authoredFallbacks.length === 0
           ? 'There is no implicit timeout or fallback; silence leaves the run parked.'
@@ -377,7 +377,7 @@ export async function buildBrief(
         'supply only observations the brief requests, with the source in the rationale',
         'record every taken branch with an honest rationale (it is the audit trail)',
         'never choose @ask as the agent: present the complete packet and wait for the trusted operator',
-        'never confirm @human as the agent/operator: wait for external identity and durable evidence',
+        'never confirm @human as the agent: wait for trusted human identity and durable evidence',
         'open an @input choice with one focused question; the operator answer is context, not approval',
         'gates are computed from the variables above: if a choice is blocked, it is not an option',
         're-run `marionette brief` after every recorded step: it is the single source of "what now"',
@@ -407,7 +407,7 @@ export function renderBrief(brief: Brief, style?: Style): string {
     : brief.status === 'awaiting-observation' ? s.yellow('awaiting runtime observation ?')
     : brief.status === 'waiting-timeout' ? s.yellow('waiting for timeout')
     : brief.status === 'awaiting-operator' ? s.yellow('awaiting operator decision ?')
-    : brief.status === 'awaiting-external' ? s.magenta('awaiting external human evidence ✋')
+    : brief.status === 'awaiting-external' ? s.magenta('awaiting evidenced human confirmation ✋')
     : brief.status === 'awaiting-human' ? s.magenta('awaiting legacy human decision ✋')
     : brief.status === 'awaiting-elicitation' ? s.yellow('awaiting input ‽')
     : brief.status === 'stranded' ? s.red('stranded — no available step')

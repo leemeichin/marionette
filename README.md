@@ -9,8 +9,8 @@ let an AI draft it from your notes); a compiler validates it into a canonical
 JSON graph; an AI agent then executes the project by *walking* that graph —
 controlled, auditable, and unable to route around the plan. `@ask` presents
 an authored route decision to the trusted operator. `@input` collects missing
-free text on a fixed route. `@human` waits for somebody external to act and
-requires their identity plus durable evidence. Graphs render these as `?`,
+free text on a fixed route. `@human` requires a human identity plus durable
+evidence; in Pi that identity defaults to the repository Git author. Graphs render these as `?`,
 `‽`, and `✋`.
 
 The design is borrowed from [Ink](https://github.com/inkle/ink), the
@@ -24,7 +24,7 @@ A plan is a `.mar` file: phases (`=== name ===`), choices (`*` once-only,
 `+` repeatable), gates (`{expr}`), declared loops (`~loop~`), paired
 `while`/`until` branches, runtime observations (`? value`), hard
 `timeout` exits, operator decisions (`@ask`), free-text inputs (`@input`),
-and external-human checkpoints (`@human`).
+and evidenced human confirmations (`@human`).
 
 ```
 # project: checkout-revamp
@@ -194,7 +194,7 @@ turns natural-language notes into a validated `.mar` draft, and `render` +
 `summarize` produce the graph and plain-English walkthrough a reviewer
 signs off on. The **execution skill** is the other half: it ingests the
 `brief` work packet, does the work each phase describes, and records every
-decision — asking the operator at `@ask`, collecting `@input`, and waiting for evidenced external `@human` actions.
+decision — asking the operator at `@ask`, collecting `@input`, and waiting for evidenced `@human` confirmation.
 
 ## Getting started
 
@@ -261,7 +261,7 @@ single-writer process speaking compact NDJSON
 checks, idempotent writes and an append-only journal — the Pi integration
 compiler-checks drafts through `marionette_draft`, traverses bound runs through
 an agent-bound tool, routes operator `@ask` through `/marionette-decide`,
-external `@human` evidence through `/marionette-confirm-human`, and `@input`
+evidenced `@human` confirmation through `/marionette-confirm-human`, and `@input`
 through `/marionette-answer`. Bound agents can propose future-only source through
 `marionette_amend`; only `/marionette-approve-amendment` or the trusted host API
 can append the graph-epoch `plan.rebound` event and apply it. ADR-0004 is implemented and awaits the dogfood

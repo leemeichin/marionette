@@ -54,8 +54,9 @@ Key concepts, mapped to the PRD's requirements:
   operator selects one authored route with rationale; an agent cannot choose.
 - **`@input` checkpoints** (choice `input: true`): an agent opens a focused
   question and the operator's answer advances the fixed edge.
-- **`@human` external actions** (choice `human: true`, spec 0.6+): execution
-  waits for another person's identity and durable evidence through `confirm`.
+- **`@human` confirmations** (choice `human: true`, spec 0.6+): execution
+  waits for a human identity and durable evidence through `confirm`; the
+  authority is outside the agent but need not be a different operator.
   Archived spec-0.5 ask/human bits retain their original runtime meaning.
 - **`~loop~` edges** (choice `loop: true`): declared cycles. The compiler
   rejects undeclared cycles and loops without a satisfiable exit; the exit

@@ -105,7 +105,7 @@
         "stranded",
         "completed"
       ],
-      "description": "active: an autonomous step is available. awaiting-operator: @ask requires the trusted operator. awaiting-external: @human requires external identity/evidence. awaiting-human: legacy spec-0.5 human gate. awaiting-elicitation: @input is waiting for an answer."
+      "description": "active: an autonomous step is available. awaiting-operator: @ask requires the trusted operator. awaiting-external: @human requires evidenced human confirmation outside agent authority. awaiting-human: legacy spec-0.5 human gate. awaiting-elicitation: @input is waiting for an answer."
     },
     "variables": {
       "type": "object",

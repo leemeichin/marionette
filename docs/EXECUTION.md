@@ -36,7 +36,7 @@ surface; it does not change this CLI loop or the DSL.
 │      │                                                      │
 │      ├─ status: awaiting-operator → show full @ask packet;  │
 │      │     trusted operator chooses and agent STOPS         │
-│      ├─ status: awaiting-external → wait for another human; │
+│      ├─ status: awaiting-external → await human evidence;   │
 │      │     require their identity + evidence and STOP       │
 │      ├─ status: awaiting-elicitation → present the agent's  │
 │      │     @input question; operator answers, then resume   │
@@ -142,7 +142,7 @@ The answer is audited separately, then the fixed `@input` edge advances. The
 entered phase receives it as `clarification` in its work packet. It does not
 select a target. If several known answers should lead to different targets,
 the plan should author `@ask` choices for the trusted operator. Use `@human`
-only when somebody external must act and provide evidence.
+only when a human must attest an action and provide evidence.
 
 ## Temporal exits
 
@@ -223,20 +223,21 @@ manifest the executor applies with its own tracker tools, and
 `marionette import` scaffolds a plan *from* an existing backlog. See
 [`SYNC.md`](SYNC.md).
 
-## Operator decisions and external human actions
+## Operator decisions and evidenced human confirmations
 
 When available routes are operator `@ask` choices, status is
-`awaiting-operator`. When they require external `@human` action, status is
+`awaiting-operator`. When they require evidenced `@human` confirmation, status is
 `awaiting-external`. Both carry a complete decision packet: plan summary and
 prompt, full phase body, refs, variables, progress, reason, exact choices,
 target titles/effects, revision, response operation, evidence requirements,
 and graph-authored timeout fallbacks.
 
 The operator resolves `@ask` through `/marionette-decide` or `state choose`
-with their rationale. External `@human` is deliberately different: the
-operator waits for somebody else, then records that person's identity and a
-durable evidence reference through `/marionette-confirm-human`, the host API,
-or `state confirm`. The agent-facing tool can do neither. A spec-0.5 archived
+with their rationale. `@human` is deliberately different because it requires
+an attested identity and durable evidence through `/marionette-confirm-human`,
+the host API, or `state confirm`. In Pi, identity defaults to the repository's
+configured Git author; Marionette does not require that person to differ from
+the operator or plan committer. The agent-facing tool can do neither. A spec-0.5 archived
 `@human` epoch retains its legacy human-choice behavior during replay.
 
 There is no implicit timeout or default. Silence parks the run. If the plan

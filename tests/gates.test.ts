@@ -35,7 +35,7 @@ test('parser emits an explicit input bit without overloading ask', async () => {
   assert.equal(interactionKind(trajectory, trajectory.nodes[0].choices[0]), 'input');
 });
 
-test('spec-0.6 separates operator ask, free-text input, and external human', () => {
+test('spec-0.6 separates operator ask, free-text input, and evidenced human confirmation', () => {
   assert.equal(interactionKind({ spec: '0.6.0' }, choice({ ask: true })), 'ask');
   assert.equal(interactionKind({ spec: '0.6.0' }, choice({ input: true })), 'input');
   assert.equal(interactionKind({ spec: '0.6.0' }, choice({ human: true })), 'external-human');

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -400,23 +401,26 @@ test('Pi extension tool exposes record/events receipts and structured failures',
   }
 });
 
-test('Pi external human checkpoints require distinct evidence and expose a full packet', async () => {
+test('Pi human confirmations use the repository Git author and require evidence', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-external-'));
   try {
+    execFileSync('git', ['init', '-q'], { cwd: root });
+    execFileSync('git', ['config', 'user.name', 'Reviewing Maintainer'], { cwd: root });
+    execFileSync('git', ['config', 'user.email', 'reviewer@example.com'], { cwd: root });
     writeFileSync(join(root, 'external.mar'), `
 # summary: Merge a reviewed pull request.
 === approval ===
-Wait for a maintainer who is not the author to approve PR #12.
+Wait for a maintainer to confirm approval of PR #12.
 * [Maintainer approved] @human -> END
 `, 'utf8');
     const fake = createFakePi(root);
     await fake.commands.get('marionette-start')!.handler('external.mar run-external', fake.ctx);
     const api = fake.discover();
     const packet = fake.widgets.get('marionette-escalation') as string[];
-    assert.match(packet.join('\n'), /External human action required/);
+    assert.match(packet.join('\n'), /Human confirmation required/);
     assert.match(packet.join('\n'), /Merge a reviewed pull request/);
-    assert.match(packet.join('\n'), /Wait for a maintainer who is not the author/);
-    assert.match(packet.join('\n'), /identity and evidence/);
+    assert.match(packet.join('\n'), /Wait for a maintainer to confirm approval/);
+    assert.match(packet.join('\n'), /durable evidence.*Git author/);
 
     const noEvidence = await api.externalConfirm({
       external: { id: 'maintainer' },
@@ -428,20 +432,17 @@ Wait for a maintainer who is not the author to approve PR #12.
     });
     assert.equal(noEvidence.error?.code, 'invalid-request');
 
-    const confirmed = await api.externalConfirm({
-      external: { id: 'maintainer', uri: 'github://maintainer' },
-      choiceId: 'approval#0',
-      rationale: 'approved PR #12',
-      evidence: [{
-        provider: 'github', kind: 'review', id: 'acme/repo#12',
-        url: 'https://github.com/acme/repo/pull/12#pullrequestreview-1',
-      }],
-      idempotencyKey: 'external-reviewed',
-      triggerTurn: false,
-    });
-    assert.equal(confirmed.events?.[0].kind, 'external.confirmed');
-    assert.equal(confirmed.events?.[0].principal?.role, 'external-human');
-    assert.equal(confirmed.projection?.status, 'completed');
+    await fake.commands.get('marionette-confirm-human')!.handler(
+      'approval#0 https://github.com/acme/repo/pull/12#pullrequestreview-1 approved PR #12',
+      fake.ctx,
+    );
+    const confirmation = fake.entries.find(
+      (entry) => entry.customType === 'marionette-external-confirmation',
+    )?.data as { external?: { id?: string; uri?: string } } | undefined;
+    assert.equal(confirmation?.external?.id, 'Reviewing Maintainer');
+    assert.equal(confirmation?.external?.uri, 'mailto:reviewer@example.com');
+    const completed = await fake.discover().execute({ operation: 'next' });
+    assert.equal(completed.projection?.status, 'completed');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

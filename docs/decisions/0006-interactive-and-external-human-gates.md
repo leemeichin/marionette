@@ -1,4 +1,4 @@
-# ADR-0006: Separate operator questions from external human actions
+# ADR-0006: Separate operator decisions, input, and evidenced human confirmation
 
 - **Status:** Proposed — implemented for review
 - **Date:** 2026-07-30
@@ -9,8 +9,8 @@ The current `@human` surface conflates two different boundaries:
 
 1. Marionette needs the person currently operating the session to choose among
    authored outcomes; and
-2. work cannot continue until another person performs or approves something,
-   such as a reviewer approving a pull request.
+2. work cannot continue until a human attests that something was performed or
+   approved, with durable evidence such as a pull-request review.
 
 The final review of the live-amendment work exposed the confusion directly.
 It presented two routes as an `@human` escalation, although the host was simply
@@ -31,18 +31,19 @@ unavailable and forces ordinary local decisions through the more ambiguous
    host. The operator selects exactly one available `@ask` choice and supplies
    a rationale. The agent cannot select it. A phase may expose two or more
    `@ask` choices; that is the normal review/accept/rework shape.
-2. **`@human` is an external human action.** It means execution is waiting for
-   a person other than the agent/operator to approve or perform something.
-   The host does not offer the route as the operator's own decision. It records
-   the external actor's identity, rationale, and evidence (for example the PR
-   review URL) through a distinct confirmation API/command.
+2. **`@human` is an evidenced human confirmation.** It means execution is
+   waiting for a person—not the agent—to attest that something was approved or
+   performed. The host records the actor's identity, rationale, and evidence
+   (for example the PR review URL) through a distinct confirmation API/command.
+   The confirmer may also be the current operator; Marionette does not compare
+   identities with the plan committer or other prior actors.
 3. **`@input` replaces the old fixed-route clarification meaning of `@ask`.**
    The agent opens one `@input` edge with a focused free-text question; the
    operator answers, and the already-authored target is unchanged. This keeps
-   “missing context”, “operator chooses a route”, and “external person acted”
+   “missing context”, “operator chooses a route”, and “human attested an action”
    as three different protocol states.
 4. A choice cannot carry more than one of `@ask`, `@input`, or `@human`.
-   Mixed ordinary/interactive/external frontiers remain legal, but status and
+   Mixed ordinary/interactive/confirmation frontiers remain legal, but status and
    UI must describe every available authority class rather than silently
    collapsing them.
 
@@ -52,9 +53,12 @@ unavailable and forces ordinary local decisions through the more ambiguous
   Pi) and records that operator as the decision actor.
 - `@input` is opened by the agent and answered through
   `/marionette-answer`, retaining the existing fixed-edge clarification audit.
-- `@human` is resolved through a new external confirmation surface. It requires
-  an external actor identity and at least one durable evidence reference. A
-  trusted host may attest that external action; the model-facing walker cannot.
+- `@human` is resolved through a confirmation surface. It requires a human
+  actor identity and at least one durable evidence reference. Pi uses a
+  host/flag identity when configured and otherwise resolves the Git author for
+  the current repository, exactly as a commit would. It does not enforce that
+  this identity differs from the operator or plan committer. The model-facing
+  walker cannot confirm.
 - Runtime events distinguish `decision.committed`, `input.required` /
   `input.answered`, and `external.required` / `external.confirmed`. Historical
   spec-0.5 graph epochs continue replaying the former `@ask` elicitation
@@ -62,7 +66,7 @@ unavailable and forces ordinary local decisions through the more ambiguous
 
 ### Decision packets
 
-Every operator or external-human checkpoint must project a complete review
+Every operator or evidenced-human checkpoint must project a complete review
 packet, not a half-sentence. The packet includes:
 
 - plan summary and original prompt when available;
@@ -85,8 +89,8 @@ semantic diff, proposal rationale, and candidate/Mermaid/SVG artifact paths.
   meanings.
 - Source plans using old free-text `@ask` migrate to `@input`. Documentation,
   examples, skills, and diagnostics stop describing `@ask` as clarification.
-- `@human` is intentionally stricter for new graph epochs: a local operator
-  choice without external identity/evidence is refused. Older epochs retain
+- `@human` is intentionally stricter for new graph epochs: a choice without
+  human identity/evidence is refused. Older epochs retain
   the old role-bound behavior for replay and completion.
 
 ## Required conformance cases
@@ -95,16 +99,17 @@ semantic diff, proposal rationale, and candidate/Mermaid/SVG artifact paths.
   trusted operator can choose one;
 - an agent cannot select `@ask`, answer `@input`, or confirm `@human`;
 - `@input` preserves focused-question/fixed-target behavior;
-- `@human` remains parked until external identity and evidence are recorded;
-- the session operator cannot accidentally self-confirm an external action;
+- `@human` remains parked until human identity and evidence are recorded;
+- Pi defaults that identity to `git var GIT_AUTHOR_IDENT` without comparing it
+  to the operator, plan author, or commit history;
 - decision packets include full phase context, targets, progress, and revision;
 - old spec-0.5 elicitation journals replay unchanged after upgrade;
-- Pi tree/restart restoration retains pending operator, input, and external
+- Pi tree/restart restoration retains pending operator, input, and confirmation
   packets without shrinking their context.
 
 ## Consequences
 
 The DSL and protocol gain one marker and clearer states, but hosts can now map
 each gate to the correct interaction: ask the current user, collect missing
-text, or wait for someone outside the session. Review decisions become
+text, or require an evidenced human attestation outside model authority. Review decisions become
 informed audit events rather than labels presented without context.

@@ -90,7 +90,7 @@ Use the supplied targets.
   assert.equal(state.current, 'implement');
 });
 
-test('@human requires a distinct external principal and durable evidence', async () => {
+test('@human requires a human principal outside agent authority and durable evidence', async () => {
   const trajectory = (await compile(`
 === approval ===
 Wait for a maintainer to approve the pull request.
@@ -118,7 +118,7 @@ Wait for a maintainer to approve the pull request.
   assert.equal(confirmed.status, 'completed');
 });
 
-test('runtime confirm records the external actor and evidence separately', async () => {
+test('runtime confirm records the human actor and evidence separately', async () => {
   const trajectory = (await compile(`
 === approval ===
 * [Maintainer approved] @human -> END
