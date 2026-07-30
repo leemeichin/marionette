@@ -135,9 +135,12 @@ variables: attempts=2
 automatic next step -> END (run marionette state advance)
 ```
 
-Edit the plan mid-project and the hash binding catches it: drift is an
-error (exit code 3), and `marionette state rebind` migrates the live state
-onto the new graph with a report of what changed, keeping the decision log.
+Edit the plan mid-project and the hash binding catches it: drift is an error
+(exit code 3). `marionette state rebind --dry-run --json` compares the edited
+plan with its archived baseline. Completed phase ids and the variables they
+used are immutable; unfinished phases may change and new future work may be
+added. An approved rebind keeps the decision log and records the old/new graph
+hashes, actor, rationale, and structured report.
 
 ## The command surface
 
@@ -151,7 +154,9 @@ $ marionette state init plan.mar      # → plan.state.json bound by content has
 $ marionette brief plan.mar --json    # → work packet: what an executor does next
 $ marionette state observe plan.mar remaining 7 --actor agent --rationale "queue query"
 $ marionette state choose plan.mar 1 --actor agent --rationale "metrics red, iterate"
-$ marionette state rebind plan.mar    # migrate state onto an edited plan, keeping the log
+$ marionette state baseline plan.mar  # establish a pre-edit baseline for a legacy state
+$ marionette state rebind plan.mar --dry-run --json  # inspect future-only changes
+$ marionette state rebind plan.mar --actor lee --rationale "approved"  # apply
 $ marionette start plan.mar --run agent-1  # start a local agent runtime
 $ marionette import issues.json -o plan.mar  # scaffold a plan from tracker issues
 $ marionette sync plan.mar --json     # → manifest: what your tracker should show
@@ -246,16 +251,18 @@ Phase 2 (ingestion & execution) is underway: the `brief` work packet
 refs (`github:`/`jira`/`linear`/`ref`) and delivery config (`delivery:`/
 `report:`) ride on plan metadata; the Prolog-backed walker enforces gates,
 `@human` escalation and rationale logging with machine-readable refusal
-codes; `state rebind` migrates live state across plan edits; and a
-runtime-agnostic conformance suite (`spec/conformance/`) holds any future
-walker to the same behaviour. The **local runtime** has landed
+codes; `state rebind` applies only future-only plan amendments against an
+archived baseline; and a runtime-agnostic conformance suite
+(`spec/conformance/`) holds any future walker to the same behaviour. The **local runtime** has landed
 (`marionette start`/`stop`, [`docs/RUNTIME.md`](docs/RUNTIME.md)): a
 single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
 checks, idempotent writes and an append-only journal — the Pi integration
 compiler-checks drafts through `marionette_draft`, traverses bound runs through
 an agent-bound tool, and reserves human choices for the trusted
-`/marionette-decide` path. ADR-0004 is implemented and awaits the dogfood
+`/marionette-decide` path. Bound agents can propose future-only source through
+`marionette_amend`; only `/marionette-approve-amendment` or the trusted host API
+can append the graph-epoch `plan.rebound` event and apply it. ADR-0004 is implemented and awaits the dogfood
 plan's formal human approval (issue #4).
 Tracker integration landed connection-free: `marionette import` ingests a
 Jira/Linear/GitHub backlog into a plan, and `marionette sync` computes the

@@ -95,7 +95,8 @@ $ marionette brief plan.mar             # work packet: phase, refs, choices, esc
 $ marionette state show plan.mar        # current phase, variables, available choices
 $ marionette state choose plan.mar 1 --actor agent --rationale "why"
 $ marionette state advance plan.mar --actor agent   # follow an automatic next step
-$ marionette state rebind plan.mar      # after editing a live plan: migrate, keep the log
+$ marionette state rebind plan.mar --dry-run --json  # verify future-only changes
+$ marionette state rebind plan.mar --actor <you> --rationale "approved"  # apply, keep history
 $ marionette render plan.mar            # Mermaid, with taken path + frontier highlighted
 ```
 
@@ -103,6 +104,10 @@ Rules the walker enforces: `@human` choices refuse `--actor agent` (that's
 the escalation boundary working); every choice requires `--rationale`;
 editing the plan after `state init` trips drift detection (exit code 3) and
 asks you to reconcile via `state rebind` — that's by design, not breakage.
+Completed phases cannot be changed or removed; unfinished phases and new future
+work can. `state init` archives the comparison baseline automatically. For a
+legacy state created before graph archival, restore its unchanged source and
+run `marionette state baseline plan.mar` once before editing.
 To hand the traversal to an agent, use the execution skill: it loops on
 `marionette brief --json`, honours the plan's `# delivery:`/`# report:`
 config, and escalates `@human` checkpoints instead of taking them.
@@ -120,8 +125,13 @@ $ pi \
     --marionette-human <your-name>
 ```
 
-You can also bind later with `/marionette-start plan.mar first-run`. When the
-run reaches `@human`, Pi displays the exact choices and parks the agent; answer
+You can also bind later with `/marionette-start plan.mar first-run`. For a
+mid-run scope change, the agent proposes complete candidate source with
+`marionette_amend`; review its semantic diff and graph artifacts, then apply it
+through `/marionette-approve-amendment` with a human rationale. Completed
+phases stay bound to their archived graph and the proposal cannot be approved
+through `marionette_walk`. When the run reaches `@human`, Pi displays the exact
+choices and parks the agent; answer
 with `/marionette-decide`. See [`RUNTIME.md`](RUNTIME.md) for the wire and
 restart contract. `/marionette-stop` unbinds the session without deleting the
 runtime run.

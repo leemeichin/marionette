@@ -14,6 +14,7 @@ import type {
   Value,
 } from './types.ts';
 import { END, PLAN_STATE_VERSION } from './types.ts';
+import { analyzeAmendment, type AmendmentReport } from './amendment.ts';
 import { emitFacts } from './facts.ts';
 import { blockedText, refusalText } from './diagnostics.ts';
 import {
@@ -754,6 +755,7 @@ function unsupportedStateVersion(version: unknown): WalkError {
 export interface MigrationReport {
   fromHash: string;
   toHash: string;
+  amendment: AmendmentReport | null;
   droppedTaken: string[];
   droppedVariables: Record<string, Value>;
   addedVariables: Record<string, Value>;
@@ -766,6 +768,8 @@ export interface RebindOptions {
   actor?: string;
   rationale?: string | null;
   at?: string;
+  /** Required for a semantic amendment; its hash must match the bound state. */
+  previousTrajectory?: Trajectory;
 }
 
 /**
@@ -780,6 +784,7 @@ export function rebindState(
   const report: MigrationReport = {
     fromHash: state.hash,
     toHash: trajectory.hash,
+    amendment: null,
     droppedTaken: [],
     droppedVariables: {},
     addedVariables: {},
@@ -788,6 +793,21 @@ export function rebindState(
     missingVisited: [],
   };
   if (state.hash === trajectory.hash) return report;
+
+  if (!options.previousTrajectory) {
+    throw new WalkError(
+      'cannot verify a future-only amendment without the previous archived trajectory',
+      'migration-blocked',
+    );
+  }
+  report.amendment = analyzeAmendment(options.previousTrajectory, trajectory, state);
+  if (!report.amendment.allowed) {
+    throw new WalkError(
+      'plan amendment would rewrite completed work:\n' +
+      report.amendment.violations.map((violation) => `  - ${violation.message}`).join('\n'),
+      'migration-blocked',
+    );
+  }
 
   const nodeIds = new Set(trajectory.nodes.map((node) => node.id));
   if (state.current !== END && !nodeIds.has(state.current)) {

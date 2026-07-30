@@ -157,7 +157,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.2.0');
+    assert.equal(api.protocol, '1.3.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -244,6 +244,100 @@ test('Pi extension draft tool validates before atomically writing and emits an e
     assert.equal(readFileSync(planFile, 'utf8'), revised);
     const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
     assert.equal(events.filter((event) => event.kind === 'plan.drafted').length, 2);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Pi extension persists future-only proposals and applies them only through trusted approval', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-amend-'));
+  try {
+    const planFile = join(root, 'plan.mar');
+    const original = [
+      '=== a ===',
+      'Alpha.',
+      '* [Go] -> b',
+      '=== b ===',
+      'Beta.',
+      '-> END',
+      '',
+    ].join('\n');
+    writeFileSync(planFile, original);
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('plan.mar run-amend', fake.ctx);
+    const api = fake.discover();
+    const stepped = await api.execute({
+      operation: 'choose',
+      choiceId: 'a#0',
+      rationale: 'alpha complete',
+      idempotencyKey: 'alpha-complete',
+    });
+    const oldHash = stepped.binding!.graphHash;
+    const forbiddenCandidate = original.replace('Alpha.', 'Alpha rewritten after completion.');
+    const forbidden = await fake.tools.get('marionette_amend').execute(
+      'tool-amend-forbidden',
+      { source: forbiddenCandidate, rationale: 'attempt to rewrite history' },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(forbidden.isError, true);
+    assert.match(forbidden.content[0].text, /rewrite completed work/);
+    assert.equal(readFileSync(planFile, 'utf8'), original);
+
+    const candidate = [
+      '=== a ===',
+      'Alpha.',
+      '* [Go] -> b',
+      '=== b ===',
+      'Beta updated before completion.',
+      '-> c',
+      '=== c ===',
+      'New future work.',
+      '-> END',
+      '',
+    ].join('\n');
+    const proposed = await fake.tools.get('marionette_amend').execute(
+      'tool-amend',
+      { source: candidate, rationale: 'new work was discovered' },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(proposed.isError, undefined);
+    assert.equal(readFileSync(planFile, 'utf8'), original, 'proposal does not mutate the live source');
+    assert.equal(proposed.details.kind, 'plan.amendment-proposed');
+    assert.equal(proposed.details.amendment.report.allowed, true);
+    assert.ok(existsSync(proposed.details.amendment.candidateFile));
+    assert.ok(existsSync(proposed.details.amendment.mermaidFile));
+    assert.ok(existsSync(proposed.details.amendment.svgFile));
+    assert.match(readFileSync(proposed.details.amendment.svgFile, 'utf8'), /<svg/);
+
+    const proposalBranch = fake.branch();
+    fake.useBranch([]);
+    await fake.fire('session_tree', { type: 'session_tree' });
+    fake.useBranch(proposalBranch);
+    await fake.fire('session_tree', { type: 'session_tree' });
+
+    const approved = await api.approveAmendment({
+      human: { id: 'lee', uri: 'pi://human/lee' },
+      proposalId: proposed.details.amendment.id,
+      rationale: 'reviewed the semantic diff and artifacts',
+      triggerTurn: false,
+    });
+    assert.equal(approved.kind, 'plan.rebound');
+    assert.equal(approved.events?.[0].kind, 'plan.rebound');
+    assert.equal(approved.events?.[0].principal?.role, 'human');
+    assert.equal(readFileSync(planFile, 'utf8'), candidate);
+    assert.notEqual(api.getBinding()?.graphHash, oldHash);
+
+    const history = await api.execute({ operation: 'events', after: 0, limit: 20 });
+    const runtimeEvents = history.result?.events as Array<{ kind: string; graph: { trajectoryHash: string } }>;
+    assert.equal(runtimeEvents.find((event) => event.kind === 'decision.committed')?.graph.trajectoryHash, oldHash);
+    assert.equal(runtimeEvents.find((event) => event.kind === 'plan.rebound')?.graph.trajectoryHash,
+      api.getBinding()?.graphHash);
+    assert.equal(fake.tool.parameters.properties.operation.anyOf.some(
+      (entry: { const?: string }) => entry.const === 'amend'), false, 'marionette_walk cannot approve amendments');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

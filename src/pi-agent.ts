@@ -45,7 +45,6 @@ export class PiAgentBridge {
   readonly planFile: string;
   readonly runId: string;
   readonly storeRoot: string;
-  readonly graphHash: string;
   readonly agentPrincipal: RuntimePrincipal;
 
   private requestSequence = 0;
@@ -57,13 +56,12 @@ export class PiAgentBridge {
     runId: string,
     sessionId: string,
     storeRoot: string,
-    private readonly trajectory: Trajectory,
+    private trajectory: Trajectory,
     private readonly controller: RuntimeRunController,
   ) {
     this.planFile = planFile;
     this.runId = runId;
     this.storeRoot = storeRoot;
-    this.graphHash = trajectory.hash;
     this.agentPrincipal = {
       id: `pi:${sessionId}`,
       role: 'agent',
@@ -120,8 +118,20 @@ export class PiAgentBridge {
     );
   }
 
+  get graphHash(): string {
+    return this.trajectory.hash;
+  }
+
   revision(): number {
     return this.controller.currentSnapshot().revision;
+  }
+
+  currentTrajectory(): Trajectory {
+    return this.trajectory;
+  }
+
+  currentState() {
+    return structuredClone(this.controller.currentSnapshot().state);
   }
 
   private requestId(): string {
@@ -306,6 +316,23 @@ export class PiAgentBridge {
         after,
         limit,
       });
+    });
+  }
+
+  humanAmend(
+    human: Omit<RuntimePrincipal, 'role'>,
+    candidate: Trajectory,
+    rationale: string,
+  ): Promise<RuntimeCommandResult> {
+    return this.serialized(async () => {
+      await this.refreshUnlocked();
+      const result = await this.controller.amend(
+        { ...human, role: 'human' },
+        candidate,
+        { rationale, expectedRevision: this.revision() },
+      );
+      this.trajectory = candidate;
+      return result;
     });
   }
 

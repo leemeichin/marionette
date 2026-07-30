@@ -267,30 +267,55 @@ The complete proposal and consequences are recorded in
 is ready for the formal `@human` decision in the dogfood plan
 (`escalation_protocol`, issue #4).
 
-## Editing a live plan: `state rebind`
+## Editing a live plan: immutable past, editable future
 
-Plans change mid-flight. Any semantic edit changes the content hash, and every
-walk command then refuses with a drift error (exit 3). The sanctioned paths:
+Plans change mid-flight. Any semantic edit changes the content hash, but an
+approved amendment may now update the executable future without rewriting
+recorded work.
 
-- `marionette state rebind <plan> [--actor <name>] [--rationale <text>]` —
-  migrate the existing state onto the edited plan, *keeping the decision
-  log*: taken-choice ids that vanished are dropped (reported), removed
-  variables dropped, new variables added at their initials or requested as
-  observations, type-changed variables reset (reported). The migration itself
-  is appended to the
-  decision log as an amendment entry — actor, timestamp, rationale, and the
-  old → new graph hashes — so plan evolution carries the same G4
-  attribution as any branch. Refused (`migration-blocked`) when the current
-  phase no longer exists — that decision needs a human.
-- `marionette state init --force` — start over (history discarded).
+A phase id becomes immutable as soon as a recorded choice or automatic advance
+leaves it. Its prose, actions, observations, metadata, refs, choices, gates,
+and targets must remain semantically identical. Variables used by such a phase
+also keep their declarations. The current phase and every never-completed
+phase may be updated, removed, rerouted, or extended, except that the current
+phase itself must survive. A phase id revisited through a loop remains frozen;
+introduce a new successor id when the new activation needs different work. An
+open `@ask` choice must retain its exact id, marker, and target.
 
-An executor never edits the plan itself: it *proposes* an amendment (a
-validated draft plus the diff and why the graph can't absorb the work),
-escalates in-band like an `@human` gate, and applies it only on the owner's
-explicit approval, recording them as the rebind's `--actor` with their
-rationale. The `marionette-execution` skill carries the full protocol,
-including the park-don't-spin rule for standing service phases (`# wake:`,
-see DSL.md).
+State-file workflow:
+
+```console
+# Existing pre-amendment state files establish this once, before editing:
+marionette state baseline plan.mar
+
+# After editing, inspect the semantic report without changing state:
+marionette state rebind plan.mar --dry-run --json
+
+# Apply only after review:
+marionette state rebind plan.mar \
+  --actor lee --rationale "approved the future-only changes"
+```
+
+`state init` archives its baseline automatically. Rebind resolves that old
+hash-addressed trajectory, refuses completed-work changes with
+`migration-blocked`, archives an accepted candidate, migrates compatible
+future variables, and appends an attributed old-hash → new-hash amendment
+entry. A dry run and every refusal leave state untouched. If a legacy state
+has already drifted without an archive, restore the source matching its state
+hash, run `state baseline`, then edit again; use `state init --force` only when
+discarding history is intentional.
+
+An executor proposes rather than applies. In a bound Pi run it calls
+`marionette_amend` with complete candidate source and a rationale. The tool
+compiler-checks it, enforces the same future-only policy, leaves the live plan
+unchanged, and writes compact, Mermaid, and SVG review artifacts. Only a
+trusted human can apply it through `/marionette-approve-amendment` or the host
+API. `marionette_walk` has no amendment approval operation. Runtime approval
+archives the new graph and appends `plan.rebound`; all earlier events retain
+their original graph hashes and replay under those graph epochs.
+
+The `marionette-execution` skill carries the full proposal protocol, including
+the park-don't-spin rule for standing service phases (`# wake:`, see DSL.md).
 
 ## Conformance
 

@@ -5,8 +5,14 @@ export { emitFacts, exprTerm } from './facts.ts';
 export { compile, trajectoryHash, formatDiagnostics, type CompileResult } from './compile.ts';
 export { validatePlan, analyzePlan } from './validate.ts';
 export { renderFinding, refusalText, blockedText } from './diagnostics.ts';
-export { renderMermaid, type RenderOptions } from './render.ts';
+export { renderCompactGraph, renderMermaid, type RenderOptions } from './render.ts';
+export { renderSvg, type SvgRenderOptions } from './render-svg.ts';
 export { summarize, type SummarizeOptions } from './summarize.ts';
+export {
+  analyzeAmendment, completedPhaseIds, variablesUsedByPhases,
+  type AmendmentReport, type AmendmentChange, type AmendmentChangeKind,
+  type AmendmentViolation, type AmendmentViolationCode,
+} from './amendment.ts';
 export {
   initState, bindState, frontier, takeChoice, ask, answer, advance, observe, enteredAt, visitedPath,
   parseState, serializeState, rebindState, type RebindOptions, DriftError, WalkError,
@@ -44,8 +50,9 @@ export {
   type RuntimeSuccess, type RuntimeFailure, type RuntimeErrorCode,
 } from './runtime-protocol.ts';
 export {
-  createRuntimeSnapshot, buildRuntimeProjection, executeRuntimeRequest,
+  createRuntimeSnapshot, buildRuntimeProjection, executeRuntimeRequest, amendRuntimeSnapshot,
   type RuntimeIdempotencyRecord, type RuntimeSnapshot, type RuntimeCommandOptions,
+  type RuntimeAmendOptions,
   type RuntimeCommandResult,
 } from './runtime.ts';
 export { RuntimeRunController } from './runtime-host.ts';
@@ -64,6 +71,9 @@ export {
   type MarionettePiEventKind,
   type MarionettePiEvent,
   type MarionettePiAgentCommand,
+  type MarionettePiAmendment,
+  type MarionettePiAmendmentRequest,
+  type MarionettePiAmendmentApproval,
   type MarionettePiHumanDecision,
   type MarionettePiHumanAnswer,
   type MarionettePiBindRequest,
@@ -72,7 +82,8 @@ export {
 } from './pi-integration.ts';
 export {
   RUNTIME_STORE_VERSION, MAX_EVENT_BYTES, RuntimeStoreError, runtimePaths,
-  archiveTrajectory, resolveArchivedTrajectory, initializeRuntimeStore,
+  archiveTrajectory, resolveArchivedTrajectory, archiveStateTrajectory,
+  resolveStateTrajectory, stateGraphStoreRoot, initializeRuntimeStore,
   loadRuntimeStore, commitRuntimeStore, readRuntimeEvents, runtimeStoreSize,
   claimRuntimeProcess, readRuntimeProcess, releaseRuntimeProcess, stopRuntimeProcess,
   type RuntimePaths, type RuntimeProcessRecord, type StopRuntimeResult,

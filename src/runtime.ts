@@ -1,6 +1,9 @@
 import { buildBrief, type Brief } from './brief.ts';
 import { sha256Hex } from './hash.ts';
-import { advance, answer, ask, initState, observe, takeChoice, WalkError } from './state.ts';
+import {
+  advance, answer, ask, initState, observe, rebindState, takeChoice, WalkError,
+  type MigrationReport,
+} from './state.ts';
 import type { PlanState, Ref, Trajectory } from './types.ts';
 import {
   ProtocolError, RUNTIME_PROTOCOL_VERSION, graphReference,
@@ -33,6 +36,11 @@ export interface RuntimeCommandResult {
   result: Record<string, unknown>;
   events: RuntimeEvent[];
   replayed: boolean;
+}
+
+export interface RuntimeAmendOptions extends RuntimeCommandOptions {
+  rationale: string;
+  expectedRevision: number;
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -346,6 +354,62 @@ function checkRevision(snapshot: RuntimeSnapshot, expected: number, requestId: s
       requestId,
     );
   }
+}
+
+export async function amendRuntimeSnapshot(
+  previous: Trajectory,
+  candidate: Trajectory,
+  input: RuntimeSnapshot,
+  principal: RuntimePrincipal,
+  options: RuntimeAmendOptions,
+): Promise<RuntimeCommandResult & { report: MigrationReport }> {
+  if (principal.role === 'agent') {
+    throw new ProtocolError(
+      'plan amendments require a trusted human or system principal',
+      'forbidden',
+    );
+  }
+  checkRevision(input, options.expectedRevision, 'amend');
+  const at = options.at ?? new Date().toISOString();
+  const snapshot = clone(input);
+  let report: MigrationReport;
+  try {
+    report = rebindState(candidate, snapshot.state, {
+      previousTrajectory: previous,
+      actor: principal.id,
+      rationale: options.rationale,
+      at,
+    });
+  } catch (error) {
+    if (error instanceof WalkError) {
+      throw new ProtocolError(error.message, error.code, 'amend');
+    }
+    throw error;
+  }
+  const rebound = event(snapshot, candidate, 'plan.rebound', at, {
+    fromHash: previous.hash,
+    toHash: candidate.hash,
+    rationale: options.rationale,
+    expectedRevision: options.expectedRevision,
+    report,
+  }, {
+    principal,
+    nodeId: snapshot.state.status === 'completed' ? undefined : snapshot.state.current,
+  });
+  snapshot.events.push(rebound);
+  snapshot.revision++;
+  return {
+    snapshot,
+    events: [rebound],
+    replayed: false,
+    report,
+    result: {
+      revision: snapshot.revision,
+      eventSeqs: [rebound.seq],
+      report,
+      projection: await buildRuntimeProjection(candidate, snapshot, { at }),
+    },
+  };
 }
 
 async function checkIdempotency(

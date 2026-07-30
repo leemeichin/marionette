@@ -165,27 +165,33 @@ The plan is not frozen — it is gated. When traversal surfaces novel work no
 phase covers and no queue absorbs, do not force it into the nearest
 rationale and do not edit the plan yourself. Propose an amendment:
 
-1. **Draft and prove it.** Edit a copy of the `.mar`;
-   `marionette validate draft.mar --strict` must pass, and the current
-   phase must survive the edit (a deleted current phase blocks migration).
-2. **Escalate in-band**, exactly like an `@human` gate: show the diff, the
-   novel work it admits, and why the current graph cannot absorb it.
-3. **On explicit approval**, apply the edit and record the amendment with
-   the owner's attribution:
-   `marionette state rebind plan.mar --actor <owner> --rationale "<their words>"`.
-   The rebind appends a decision-log entry carrying the old and new graph
-   hashes — the amendment joins the audit trail, not a side channel.
-4. **Silence or ambiguity is not approval**: the un-amended plan stays in
-   force and the novel work stays unstarted.
+1. **Draft and prove it without changing the live source.** Completed phase
+   ids are immutable, including a phase revisited through a loop. Preserve
+   them exactly, keep the current phase, and add or update only unfinished
+   phases. Validate the complete candidate with
+   `marionette validate draft.mar --strict`.
+2. **Escalate in-band**, exactly like an `@human` gate: show the semantic
+   diff, the novel work it admits, and why the current graph cannot absorb it.
+   In a bound Pi session call `marionette_amend` with the complete candidate
+   and rationale; it compiler-checks the candidate, enforces the future-only
+   boundary, writes review artifacts, and leaves the live plan untouched.
+3. **Only trusted approval applies it.** For state-file traversal the owner
+   runs `marionette state rebind plan.mar --dry-run --json`, then applies with
+   their `--actor` and `--rationale`. In a bound Pi session stop and direct the
+   owner to `/marionette-approve-amendment`; the model-facing
+   `marionette_walk` tool cannot approve or apply amendments.
+4. **Silence, ambiguity, or a refused policy report is not approval**: the
+   un-amended plan and runtime graph stay in force and the novel work stays
+   unstarted.
 
 Mechanical ref edits have their own doors and need no proposal:
 `marionette sync link` / `sync bind` recompile-check, rebind automatically,
 and log as actor `sync`.
 
-When `marionette_walk` is bound, do not use either rebind path: the local
-runtime currently treats its archived graph as immutable. Stop and ask the
-trusted host to migrate or open a new run so the runtime journal remains the
-single audit trail.
+A successful amendment archives the new graph and appends an attributed
+`plan.rebound` event. Historical runtime events continue to resolve against
+their original graph hashes; do not rewrite old source artifacts or journal
+records to make them resemble the amended future.
 
 ## Service phases: park, don't spin
 

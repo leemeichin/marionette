@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { Diagnostic, PlanState, Trajectory } from './types.ts';
 import { compile, formatDiagnostics } from './compile.ts';
+import { analyzeAmendment } from './amendment.ts';
 import { parsePlan } from './parser.ts';
 import { emitFacts } from './facts.ts';
 import { oracleQuery, oracleReport } from './oracle.ts';
@@ -35,8 +36,8 @@ import {
 import { loadSidecar, saveSidecar } from './sync-store.ts';
 import { RuntimeService, serveRuntimeLines } from './runtime-process.ts';
 import {
-  RuntimeStoreError, claimRuntimeProcess, initializeRuntimeStore, loadRuntimeStore,
-  releaseRuntimeProcess, stopRuntimeProcess,
+  RuntimeStoreError, archiveStateTrajectory, claimRuntimeProcess, initializeRuntimeStore,
+  loadRuntimeStore, releaseRuntimeProcess, resolveStateTrajectory, stopRuntimeProcess,
 } from './runtime-store.ts';
 import type { RuntimePrincipal, RuntimeRole } from './runtime-protocol.ts';
 
@@ -44,7 +45,7 @@ const err = styleFor(process.stderr);
 const out = styleFor(process.stdout);
 
 const COMMANDS = ['compile', 'validate', 'render', 'summarize', 'brief', 'sync', 'import', 'start', 'stop', 'state', 'help', 'version'];
-const STATE_SUBCOMMANDS = ['init', 'show', 'observe', 'choose', 'ask', 'answer', 'advance', 'rebind'];
+const STATE_SUBCOMMANDS = ['init', 'baseline', 'show', 'observe', 'choose', 'ask', 'answer', 'advance', 'rebind'];
 const SYNC_SUBCOMMANDS = ['status', 'bind', 'link', 'mark'];
 
 function readTextFile(file: string, what = 'plan'): string {
@@ -86,14 +87,16 @@ Usage:
                        [--principal id] [--role agent|human] [--principal-uri uri]
   marionette stop      <plan.mar|.json> --run <id> [--store dir]
   marionette state init    <plan.mar|.json> [--state f] [--force]
+  marionette state baseline <plan.mar|.json> [--state f]        Archive a legacy state's unchanged graph
   marionette state show    <plan.mar|.json> [--state f]
   marionette state observe <plan.mar|.json> <name> <json-value> --actor <name> --rationale <text> [--state f]
   marionette state choose  <plan.mar|.json> <choice> --actor <name> --rationale <text> [--state f]
   marionette state ask     <plan.mar|.json> <choice> --question <text> --actor agent [--rationale <text>] [--state f]
   marionette state answer  <plan.mar|.json> <answer> --actor <name> [--rationale <text>] [--state f]
   marionette state advance <plan.mar|.json> --actor <name> [--rationale <text>] [--state f]
-  marionette state rebind  <plan.mar|.json> [--actor <name>] [--rationale <text>] [--state f]
-                           Migrate state onto an edited plan; the amendment is logged (G4)
+  marionette state rebind  <plan.mar|.json> [--dry-run] [--json]
+                           [--actor <name>] [--rationale <text>] [--state f]
+                           Validate or apply a future-only amendment; application is logged (G4)
 
 Options:
   -o, --out <file>    Output file ('-' for stdout; default varies by command)
@@ -102,6 +105,7 @@ Options:
   --json              Emit the machine-readable form (brief)
   --lr                Render left-to-right instead of top-down
   --force             Overwrite an existing state file on init
+  --dry-run           Validate and report an amendment without changing state
   --actor <name>      Who takes the step ("agent" may not pass @human gates)
   --rationale <text>  Why the step was taken (required for choices)
   --tracker <name>    Tracker to bind/link against: github, jira or linear
@@ -484,22 +488,28 @@ export async function run(argv: string[]): Promise<number> {
           process.stderr.write(formatDiagnostics(recompiled.diagnostics, file, { source: edited, style: err }) + '\n');
           throw new UsageError(`sync ${sub}: the edit did not compile; the plan was left unchanged`);
         }
-        writeFileSync(file, edited);
-        process.stderr.write(err.green('✓') + ` ${sub === 'bind'
-          ? `bound ${file} to tracker "${flags['tracker']}"`
-          : `linked ${positional[1]} → ${positional[2]} in ${file}`}\n`);
+        let rebound: { state: PlanState; report: ReturnType<typeof rebindState> } | null = null;
         if (existsSync(sf)) {
           const state = parseState(readFileSync(sf, 'utf8'));
           const report = rebindState(recompiled.trajectory, state, {
+            previousTrajectory: trajectory,
             actor: 'sync',
             rationale: sub === 'bind'
               ? `bound plan to tracker "${flags['tracker']}"`
               : `linked ${positional[1]} → ${positional[2]}`,
           });
-          if (report.fromHash !== report.toHash) {
-            writeFileSync(sf, serializeState(state));
-            process.stderr.write(err.dim(`  state rebound ${report.fromHash.slice(0, 19)}… → ${report.toHash.slice(0, 19)}…\n`));
-          }
+          rebound = { state, report };
+          await archiveStateTrajectory(sf, recompiled.trajectory);
+        }
+        writeFileSync(file, edited);
+        if (rebound && rebound.report.fromHash !== rebound.report.toHash) {
+          writeFileSync(sf, serializeState(rebound.state));
+        }
+        process.stderr.write(err.green('✓') + ` ${sub === 'bind'
+          ? `bound ${file} to tracker "${flags['tracker']}"`
+          : `linked ${positional[1]} → ${positional[2]} in ${file}`}\n`);
+        if (rebound && rebound.report.fromHash !== rebound.report.toHash) {
+          process.stderr.write(err.dim(`  state rebound ${rebound.report.fromHash.slice(0, 19)}… → ${rebound.report.toHash.slice(0, 19)}…\n`));
         }
         return 0;
       }
@@ -637,7 +647,7 @@ export async function run(argv: string[]): Promise<number> {
         const file = positional[0];
         if (!sub || !file) {
           throw new UsageError(
-            'state: expected "state <init|show|observe|choose|ask|answer|advance|rebind> <plan>"',
+            'state: expected "state <init|baseline|show|observe|choose|ask|answer|advance|rebind> <plan>"',
           );
         }
         const { trajectory, ok, diagnostics, source } = await readSource(file);
@@ -653,9 +663,25 @@ export async function run(argv: string[]): Promise<number> {
             throw new UsageError(`${sf} already exists; pass --force to reinitialise`);
           }
           const state = await initState(trajectory);
+          await archiveStateTrajectory(sf, trajectory);
           writeFileSync(sf, serializeState(state));
           process.stderr.write(`initialised ${sf} bound to ${trajectory.hash.slice(0, 19)}…\n`);
           await printFrontier(trajectory, state);
+          return 0;
+        }
+
+        if (sub === 'baseline') {
+          if (!existsSync(sf)) {
+            throw new UsageError(`no state file at ${sf}; run "marionette state init" first`);
+          }
+          const state = parseState(readFileSync(sf, 'utf8'));
+          bindState(trajectory, state);
+          const archived = await archiveStateTrajectory(sf, trajectory);
+          if (flags['json']) {
+            process.stdout.write(`${JSON.stringify({ hash: trajectory.hash, archived }, null, 2)}\n`);
+          } else {
+            process.stderr.write(err.green('✓') + ` archived unchanged baseline ${trajectory.hash.slice(0, 19)}…\n`);
+          }
           return 0;
         }
 
@@ -664,27 +690,58 @@ export async function run(argv: string[]): Promise<number> {
             throw new UsageError(`no state file at ${sf}; run "marionette state init" first`);
           }
           const state = parseState(readFileSync(sf, 'utf8'));
+          let previous: Trajectory;
+          try {
+            previous = await resolveStateTrajectory(sf, state.hash);
+          } catch (error) {
+            if (error instanceof RuntimeStoreError) throw new UsageError(error.message);
+            throw error;
+          }
+          const analysis = analyzeAmendment(previous, trajectory, state);
+          if (!analysis.allowed) {
+            if (flags['json']) {
+              process.stdout.write(`${JSON.stringify(analysis, null, 2)}\n`);
+              return 1;
+            }
+            throw new WalkError(
+              'plan amendment would rewrite completed work:\n' +
+              analysis.violations.map((violation) => `  - ${violation.message}`).join('\n'),
+              'migration-blocked',
+            );
+          }
           const report = rebindState(trajectory, state, {
+            previousTrajectory: previous,
             actor: typeof flags['actor'] === 'string' ? flags['actor'] : 'system',
             rationale: typeof flags['rationale'] === 'string' ? flags['rationale'] : null,
           });
+          if (flags['json']) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
           if (report.fromHash === report.toHash) {
-            process.stderr.write('state is already bound to this plan; nothing to migrate\n');
+            if (!flags['json']) process.stderr.write('state is already bound to this plan; nothing to migrate\n');
             return 0;
           }
+          if (flags['dry-run']) {
+            if (!flags['json']) {
+              process.stderr.write(err.green('✓') + ` future-only amendment is allowed (dry run)\n` +
+                err.dim(`  from ${report.fromHash.slice(0, 19)}…\n  to   ${report.toHash.slice(0, 19)}…\n`));
+            }
+            return 0;
+          }
+          await archiveStateTrajectory(sf, trajectory);
           writeFileSync(sf, serializeState(state));
-          process.stderr.write(err.green('✓') + ` migrated ${sf}\n` +
-            err.dim(`  from ${report.fromHash.slice(0, 19)}…\n  to   ${report.toHash.slice(0, 19)}…\n`));
-          const note = (label: string, items: string[]) => {
-            if (items.length > 0) process.stderr.write(`  ${label}: ${items.join(', ')}\n`);
-          };
-          note('dropped taken choices', report.droppedTaken);
-          note('dropped variables', Object.keys(report.droppedVariables));
-          note('added variables', Object.entries(report.addedVariables).map(([k, v]) => `${k}=${JSON.stringify(v)}`));
-          note('added observations', report.addedObservations);
-          note('reset variables (type changed)', report.resetVariables);
-          note('visited phases no longer in the plan', report.missingVisited);
-          await printFrontier(trajectory, state);
+          if (!flags['json']) {
+            process.stderr.write(err.green('✓') + ` migrated ${sf}\n` +
+              err.dim(`  from ${report.fromHash.slice(0, 19)}…\n  to   ${report.toHash.slice(0, 19)}…\n`));
+            const note = (label: string, items: string[]) => {
+              if (items.length > 0) process.stderr.write(`  ${label}: ${items.join(', ')}\n`);
+            };
+            note('future-only changes', report.amendment?.changes.map((change) =>
+              `${change.kind}:${change.subject}`) ?? []);
+            note('dropped variables', Object.keys(report.droppedVariables));
+            note('added variables', Object.entries(report.addedVariables).map(([k, v]) => `${k}=${JSON.stringify(v)}`));
+            note('added observations', report.addedObservations);
+            note('reset variables (type changed)', report.resetVariables);
+          }
+          if (!flags['json']) await printFrontier(trajectory, state);
           return 0;
         }
 

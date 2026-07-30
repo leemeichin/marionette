@@ -191,14 +191,19 @@ test('rebind: migrates state across a plan edit, keeping the log', async () => {
   state = await takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
 
   const v2 = (await compile(
-    'VAR added = true\n=== a ===\nAlpha.\n-> b\n=== b ===\nBeta, reworded.\n* [Ship] -> END\n* [Hold] @human -> END\n',
+    'VAR n = 0\nVAR added = true\n=== a ===\nAlpha.\n~ n += 1\n* [Go] -> b\n=== b ===\nBeta, reworded.\n* [Ship] -> END\n* [Hold] @human -> END\n',
   )).trajectory!;
   assert.notEqual(v1.hash, v2.hash);
 
-  const report = rebindState(v2, state, { actor: 'lee', rationale: 'scope grew: hold door added', at: AT });
+  const report = rebindState(v2, state, {
+    previousTrajectory: v1,
+    actor: 'lee',
+    rationale: 'scope grew: hold door added',
+    at: AT,
+  });
   assert.equal(state.hash, v2.hash);
-  assert.deepEqual(report.droppedTaken, ['a#0']);
-  assert.deepEqual(Object.keys(report.droppedVariables), ['n']);
+  assert.deepEqual(report.droppedTaken, []);
+  assert.deepEqual(Object.keys(report.droppedVariables), []);
   assert.deepEqual(report.addedVariables, { added: true });
   assert.equal(state.log.length, 3, 'decision log survives migration and records the amendment');
   const amendment = state.log[2];
@@ -220,7 +225,7 @@ test('rebind: refuses when the current phase no longer exists', async () => {
 
   const v2 = (await compile('=== a ===\nAlpha.\n* [Ship] -> END\n')).trajectory!;
   assert.throws(
-    () => rebindState(v2, state),
+    () => rebindState(v2, state, { previousTrajectory: v1 }),
     (e: unknown) => e instanceof WalkError && e.code === 'migration-blocked',
   );
 });
