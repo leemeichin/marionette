@@ -202,8 +202,9 @@ emitting `dist/`.
 You can author and approve a plan entirely in this standalone package with
 `/plan <task>`, `/refine-plan`, and `/approve-plan [active|worktree <name>]`,
 or bind an existing plan with `/marionette-start <plan.mar> [run-id]`. Draft
-mode is read-only: Pi enables inspection, questions, and `marionette_draft`
-while blocking project writes and mutating shell commands.
+mode is read-only: Pi preserves the session's inspection and planning tools,
+adds `marionette_draft`, and blocks built-in project writes, traversal, and
+mutating shell commands.
 
 `marionette_draft` compiler-checks complete DSL source before atomically
 writing a `.mar` file. Invalid drafts never touch disk. Successful drafts are
@@ -211,6 +212,14 @@ shown immediately as a durable review card and include a minimal terminal
 graph plus plain-language summary. The tool also writes sibling `.mmd` and
 `.svg` files and returns their paths and `file:` URIs for out-of-band viewers.
 Overwriting is opt-in for explicit refinement.
+
+Worktree approval asks once per Pi session whether to enable GitHub's official
+`gh stack` public-preview flow when the repository is hosted on GitHub. Opting
+in requires GitHub CLI 2.90+, installs `github/gh-stack` only when needed, and
+initializes the worktree branch against the repository trunk. Declining or a
+setup failure keeps the normal worktree. The persisted execution metadata
+records `branching: "standard" | "github-stack"`; stack layers stay together
+inside that one worktree.
 
 For a bound run, `marionette_amend` validates complete candidate source against
 completed history, leaves the live source untouched, and returns a semantic
@@ -249,7 +258,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.4.0`) with the same shape in four places:
+(`marionette.pi` / `1.5.0`) with the same shape in four places:
 
 1. `marionette_walk` tool-result `details`;
 2. `marionette-projection` custom-message `details`;

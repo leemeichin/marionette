@@ -214,9 +214,12 @@ packaged and reported — it is configuration, not advice:
 
 - `mode: pr-per-phase` — land each phase as its own PR (use `branch` when
   set; `{phase}` is already expanded). `branch-per-phase` — branch per
-  phase, PRs at your discretion. `single-pr` / `single-branch` — accumulate
-  on one branch, one PR or none. `none` — no prescribed packaging; use
-  judgement (the plan may not produce code at all).
+  phase, PRs at your discretion. `stacked-prs` — use GitHub's official
+  `gh stack` flow, keep all dependent layers in the same isolated worktree,
+  run `gh stack rebase --upstack` after lower-layer changes, submit with
+  `gh stack submit --auto`, and merge bottom-up. `single-pr` /
+  `single-branch` — accumulate on one branch, one PR or none. `none` — no
+  prescribed packaging; use judgement (the plan may not produce code at all).
 - `report: per-phase` — after each recorded step, tell the primary
   session/user: phase completed, choice taken, rationale, what's next.
   `at-checkpoints` — report only when you escalate at `@human` (and at the

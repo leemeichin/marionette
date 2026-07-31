@@ -19,18 +19,7 @@ const DRAFT_REVIEW_ENTRY = 'marionette-plan-review';
 const EXECUTION_ENTRY = 'marionette-execution';
 const LEGACY_EXECUTION_ENTRY = 'pibarm-marionette-execution';
 
-const PLAN_TOOLS = new Set([
-  'read',
-  'bash',
-  'grep',
-  'find',
-  'ls',
-  'question',
-  'elicit_plan_questions',
-  'mcporter_list',
-  'mcporter_resource',
-  'marionette_draft',
-]);
+const PLANNING_DISABLED_TOOLS = new Set(['edit', 'write', 'marionette_amend', 'marionette_walk']);
 
 const SIMPLE_READ_SEGMENT = /^(pwd|ls|rg|grep|cat|head|tail|wc)(?:\s|$)/;
 const READ_ONLY_GIT_SEGMENT =
@@ -106,14 +95,22 @@ async function gitRoot(pi: ExtensionAPI, cwd: string): Promise<string> {
   return root;
 }
 
-async function createWorktree(pi: ExtensionAPI, cwd: string, requested: string): Promise<string> {
+interface Worktree {
+  root: string;
+  path: string;
+  branch: string;
+}
+
+async function createWorktree(pi: ExtensionAPI, cwd: string, requested: string): Promise<Worktree> {
   const root = await gitRoot(pi, cwd);
   const name = slug(requested);
   const path = join(root, CONFIG_DIR_NAME, 'wt', name);
   const branch = `marionette/${name}`;
   await mkdir(join(root, CONFIG_DIR_NAME, 'wt'), { recursive: true });
   const listed = await pi.exec('git', ['-C', root, 'worktree', 'list', '--porcelain'], { timeout: 10_000 });
-  if (listed.code === 0 && listed.stdout.split('\n').includes(`worktree ${path}`)) return path;
+  if (listed.code === 0 && listed.stdout.split('\n').includes(`worktree ${path}`)) {
+    return { root, path, branch };
+  }
   let result = await pi.exec(
     'git',
     ['-C', root, 'worktree', 'add', '-b', branch, path, 'HEAD'],
@@ -123,7 +120,81 @@ async function createWorktree(pi: ExtensionAPI, cwd: string, requested: string):
     result = await pi.exec('git', ['-C', root, 'worktree', 'add', path, branch], { timeout: 30_000 });
   }
   if (result.code !== 0) throw new Error(result.stderr || result.stdout || 'git worktree add failed');
-  return path;
+  return { root, path, branch };
+}
+
+function githubCliVersion(output: string): [number, number, number] | null {
+  const match = /gh version (\d+)\.(\d+)\.(\d+)/.exec(output);
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
+function atLeast([major, minor]: [number, number, number], requiredMajor: number, requiredMinor: number): boolean {
+  return major > requiredMajor || (major === requiredMajor && minor >= requiredMinor);
+}
+
+async function isGitHubWorktree(pi: ExtensionAPI, worktree: Worktree): Promise<boolean> {
+  const remote = await pi.exec(
+    'git',
+    ['-C', worktree.root, 'remote', 'get-url', 'origin'],
+    { timeout: 10_000 },
+  );
+  return remote.code === 0 && /(?:github\.com)[/:]/i.test(remote.stdout.trim());
+}
+
+async function enableGitHubStack(pi: ExtensionAPI, worktree: Worktree): Promise<void> {
+  const versionResult = await pi.exec('gh', ['--version'], { timeout: 10_000 });
+  const version = githubCliVersion(versionResult.stdout);
+  if (versionResult.code !== 0 || !version || !atLeast(version, 2, 90)) {
+    throw new Error('GitHub stacked PRs require GitHub CLI 2.90 or newer.');
+  }
+
+  let stackHelp = await pi.exec('gh', ['stack', '--help'], { cwd: worktree.path, timeout: 10_000 });
+  if (stackHelp.code !== 0) {
+    const installed = await pi.exec(
+      'gh',
+      ['extension', 'install', 'github/gh-stack'],
+      { cwd: worktree.path, timeout: 60_000 },
+    );
+    if (installed.code !== 0 && !/already exists|already installed/i.test(installed.stderr)) {
+      throw new Error(installed.stderr || installed.stdout || 'Could not install github/gh-stack.');
+    }
+    stackHelp = await pi.exec('gh', ['stack', '--help'], { cwd: worktree.path, timeout: 10_000 });
+    if (stackHelp.code !== 0) {
+      throw new Error(stackHelp.stderr || stackHelp.stdout || 'The gh stack extension is unavailable.');
+    }
+  }
+
+  const current = await pi.exec('gh', ['stack', 'view', '--json'], {
+    cwd: worktree.path,
+    timeout: 15_000,
+  });
+  if (current.code === 0) return;
+
+  const remoteHead = await pi.exec(
+    'git',
+    ['-C', worktree.root, 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'],
+    { timeout: 10_000 },
+  );
+  const activeBranch = await pi.exec(
+    'git',
+    ['-C', worktree.root, 'branch', '--show-current'],
+    { timeout: 10_000 },
+  );
+  const base = remoteHead.code === 0
+    ? remoteHead.stdout.trim().replace(/^origin\//, '')
+    : activeBranch.stdout.trim();
+  if (!base || base === worktree.branch) {
+    throw new Error('Could not determine the trunk branch for gh stack init.');
+  }
+
+  const initialized = await pi.exec(
+    'gh',
+    ['stack', 'init', worktree.branch, '--base', base],
+    { cwd: worktree.path, timeout: 30_000 },
+  );
+  if (initialized.code !== 0 && !/already (?:exists|initialized|in a stack)/i.test(initialized.stderr)) {
+    throw new Error(initialized.stderr || initialized.stdout || 'gh stack init failed.');
+  }
 }
 
 interface PlanningOptions {
@@ -155,6 +226,7 @@ export function registerMarionettePlanning(
   let pendingDraft: MarionettePiDraft | null = null;
   let execution: MarionettePiExecution | null = null;
   let approvalPrompted = '';
+  let githubStackPreference: boolean | null = null;
 
   const setRuntimeTools = (): void => {
     const binding = options.getBinding();
@@ -181,6 +253,7 @@ export function registerMarionettePlanning(
     return {
       ...candidate,
       target: candidate.target ?? (candidate.executionRoot === ctx.cwd ? 'active' : 'worktree'),
+      branching: candidate.branching ?? 'standard',
     };
   };
 
@@ -197,7 +270,8 @@ export function registerMarionettePlanning(
     if (!toolsBeforePlanning) toolsBeforePlanning = pi.getActiveTools();
     planning = true;
     if (path) draftPath = path;
-    pi.setActiveTools([...PLAN_TOOLS]);
+    const inspectionTools = toolsBeforePlanning.filter((name) => !PLANNING_DISABLED_TOOLS.has(name));
+    pi.setActiveTools([...new Set([...inspectionTools, 'marionette_draft'])]);
     ctx.ui.setStatus('marionette-plan', 'drafting workflow');
   };
 
@@ -255,14 +329,37 @@ export function registerMarionettePlanning(
     }
     const target = requestedTarget.trim() || 'worktree';
     let executionRoot = ctx.cwd;
+    let branching: MarionettePiExecution['branching'] = 'standard';
     if (target !== 'active') {
       const requestedName = target.replace(/^worktree\s*/i, '').trim() ||
         `marionette-${basename(pendingDraft.planFile, '.mar')}`;
+      let worktree: Worktree;
       try {
-        executionRoot = await createWorktree(pi, ctx.cwd, requestedName);
+        worktree = await createWorktree(pi, ctx.cwd, requestedName);
+        executionRoot = worktree.path;
       } catch (error) {
         ctx.ui.notify(`Could not create worktree: ${(error as Error).message}`, 'error');
         return;
+      }
+
+      if (await isGitHubWorktree(pi, worktree)) {
+        if (githubStackPreference === null) {
+          githubStackPreference = ctx.hasUI && await ctx.ui.confirm(
+            'GitHub stacked PRs',
+            'Enable GitHub stacked PRs inside this worktree? This may install the official github/gh-stack extension.',
+          );
+        }
+        if (githubStackPreference) {
+          try {
+            await enableGitHubStack(pi, worktree);
+            branching = 'github-stack';
+          } catch (error) {
+            ctx.ui.notify(
+              `GitHub stack setup failed; continuing with a normal worktree: ${(error as Error).message}`,
+              'warning',
+            );
+          }
+        }
       }
     }
     execution = {
@@ -270,6 +367,7 @@ export function registerMarionettePlanning(
       graphHash: pendingDraft.graphHash,
       executionRoot,
       target: target === 'active' ? 'active' : 'worktree',
+      branching,
     };
     pi.appendEntry(EXECUTION_ENTRY, execution);
     const event = await options.bind({
@@ -283,7 +381,7 @@ export function registerMarionettePlanning(
     pi.sendMessage({
       customType: 'marionette-approved',
       display: true,
-      content: `The validated Marionette workflow is approved. Execute project changes only under ${executionRoot}. The parent session owns traversal; delegated agents return evidence and must not advance the run.\n\n${JSON.stringify(event.projection ?? {})}`,
+      content: `The validated Marionette workflow is approved. Execute project changes only under ${executionRoot}.${branching === 'github-stack' ? ' GitHub stacked PRs are enabled: keep dependent layers in this worktree and use gh stack for stack operations.' : ''} The parent session owns traversal; delegated agents return evidence and must not advance the run.\n\n${JSON.stringify(event.projection ?? {})}`,
       details: { execution, event },
     }, { deliverAs: 'followUp', triggerTurn: true });
   };
@@ -366,7 +464,7 @@ export function registerMarionettePlanning(
     if (options.getBinding()) {
       setRuntimeTools();
       return {
-        systemPrompt: `${event.systemPrompt}\n\nA Marionette run is bound. Call marionette_walk(next) for the authoritative work packet. The parent session alone records graph transitions. Execute file changes under ${execution?.executionRoot ?? ctx.cwd}; delegated agents receive only the current phase and return evidence.`,
+        systemPrompt: `${event.systemPrompt}\n\nA Marionette run is bound. Call marionette_walk(next) for the authoritative work packet. The parent session alone records graph transitions. Execute file changes under ${execution?.executionRoot ?? ctx.cwd}; delegated agents receive only the current phase and return evidence.${execution?.branching === 'github-stack' ? ' This worktree uses GitHub stacked PRs: keep all dependent layers in the same worktree and use gh stack for stack operations.' : ''}`,
       };
     }
     if (!planning) return;
@@ -378,8 +476,11 @@ export function registerMarionettePlanning(
 
   pi.on('tool_call', (event) => {
     if (!planning) return;
-    if (!PLAN_TOOLS.has(event.toolName)) {
-      return { block: true, reason: 'Marionette draft mode permits only inspection, questions, and marionette_draft.' };
+    if (PLANNING_DISABLED_TOOLS.has(event.toolName)) {
+      return {
+        block: true,
+        reason: 'Marionette draft mode blocks project mutation and traversal, but keeps inspection and planning tools available.',
+      };
     }
     if (event.toolName === 'bash' &&
       !isReadOnlyPlanningCommand(String((event.input as { command?: unknown }).command ?? ''))) {

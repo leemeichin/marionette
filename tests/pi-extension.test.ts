@@ -26,7 +26,18 @@ interface CustomEntry {
   data?: unknown;
 }
 
-const createFakePi = (cwd: string) => {
+interface FakePiOptions {
+  hasUI?: boolean;
+  confirm?: (title: string, message: string) => Promise<boolean>;
+  exec?: (command: string, args: string[], options?: { cwd?: string }) => Promise<{
+    stdout: string;
+    stderr: string;
+    code: number;
+    killed: boolean;
+  }>;
+}
+
+const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
   const commands = new Map<string, { handler: (args: string, ctx: ExtensionContext) => Promise<void> }>();
   const handlers = new Map<string, Array<(event: any, ctx: ExtensionContext) => unknown>>();
   const eventHandlers = new Map<string, Set<(data: unknown) => void>>();
@@ -37,7 +48,15 @@ const createFakePi = (cwd: string) => {
   const notifications: Array<{ message: string; type?: string }> = [];
   const entryRenderers = new Map<string, unknown>();
   const widgets = new Map<string, unknown>();
-  let activeTools = ['read', 'bash', 'edit', 'write', 'marionette_draft', 'marionette_walk'];
+  let activeTools = [
+    'read',
+    'bash',
+    'edit',
+    'write',
+    'custom_inspector',
+    'marionette_draft',
+    'marionette_walk',
+  ];
   let activeBranch: CustomEntry[] = [];
   let sequence = 0;
   const tools = new Map<string, any>();
@@ -71,12 +90,13 @@ const createFakePi = (cwd: string) => {
       notifications.push({ message, type });
     },
     select: async () => undefined,
+    confirm: options.confirm ?? (async () => false),
     input: async () => undefined,
     editor: async () => undefined,
   };
   const ctx = {
     cwd,
-    hasUI: false,
+    hasUI: options.hasUI ?? false,
     ui,
     sessionManager,
   } as unknown as ExtensionContext;
@@ -121,8 +141,9 @@ const createFakePi = (cwd: string) => {
     sendUserMessage(message: string) {
       userMessages.push(message);
     },
-    async exec() {
-      return { stdout: '', stderr: '', code: 1, killed: false };
+    async exec(command: string, args: string[], execOptions?: { cwd?: string }) {
+      return options.exec?.(command, args, execOptions) ??
+        { stdout: '', stderr: '', code: 1, killed: false };
     },
   };
 
@@ -182,7 +203,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.4.0');
+    assert.equal(api.protocol, '1.5.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -227,6 +248,7 @@ test('standalone Pi extension owns read-only draft mode and /plan', async () => 
     await fake.commands.get('plan')!.handler('build and gate a rollout', fake.ctx);
     assert.ok(fake.activeTools().includes('marionette_draft'));
     assert.ok(!fake.activeTools().includes('edit'));
+    assert.ok(fake.activeTools().includes('custom_inspector'));
     assert.match(fake.userMessages[0]!, /Do not execute it yet/);
 
     const before = (await (fake.handlers.get('before_agent_start') ?? [])[0]?.(
@@ -234,7 +256,13 @@ test('standalone Pi extension owns read-only draft mode and /plan', async () => 
       fake.ctx,
     )) as { systemPrompt: string };
     assert.match(before.systemPrompt, /MARIONETTE DRAFT MODE IS ACTIVE/);
-    const blocked = await (fake.handlers.get('tool_call') ?? [])[0]?.(
+    const planningToolHandler = (fake.handlers.get('tool_call') ?? [])[0]!;
+    const allowed = await planningToolHandler(
+      { toolName: 'custom_inspector', input: {} },
+      fake.ctx,
+    );
+    assert.equal(allowed, undefined);
+    const blocked = await planningToolHandler(
       { toolName: 'write', input: {} },
       fake.ctx,
     ) as { block: boolean };
@@ -329,10 +357,88 @@ test('standalone approval binds a validated draft for active-checkout execution'
       graphHash: api.getBinding()?.graphHash,
       executionRoot: root,
       target: 'active',
+      branching: 'standard',
     });
     assert.ok(fake.activeTools().includes('marionette_walk'));
     assert.ok(fake.messages.some((message) =>
       (message as { customType?: string }).customType === 'marionette-approved'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('worktree approval can enable GitHub stacked PR branching once per session', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-stack-'));
+  const calls: string[] = [];
+  let confirmations = 0;
+  try {
+    const fake = createFakePi(root, {
+      hasUI: true,
+      confirm: async () => {
+        confirmations += 1;
+        return true;
+      },
+      exec: async (command, args) => {
+        calls.push([command, ...args].join(' '));
+        const joined = args.join(' ');
+        if (command === 'git' && joined.includes('rev-parse --show-toplevel')) {
+          return { stdout: `${root}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('worktree list --porcelain')) {
+          return { stdout: '', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('worktree add')) {
+          return { stdout: '', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('remote get-url origin')) {
+          return { stdout: 'git@github.com:acme/project.git\n', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('symbolic-ref')) {
+          return { stdout: 'origin/main\n', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('branch --show-current')) {
+          return { stdout: 'main\n', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'gh' && joined === '--version') {
+          return { stdout: 'gh version 2.90.0 (test)\n', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'gh' && joined === 'stack --help') {
+          return { stdout: 'stack help\n', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'gh' && joined === 'stack view --json') {
+          return { stdout: '', stderr: 'not in a stack', code: 1, killed: false };
+        }
+        if (command === 'gh' && joined.includes('stack init')) {
+          return { stdout: '', stderr: '', code: 0, killed: false };
+        }
+        return { stdout: '', stderr: 'unexpected command', code: 1, killed: false };
+      },
+    });
+    await fake.fire('session_start', { reason: 'startup' });
+    const draft = fake.tools.get('marionette_draft');
+    await draft.execute(
+      'draft-stack',
+      {
+        path: 'plans/stack.mar',
+        source: '=== start ===\nDo stacked work.\n* [Done] -> END\n',
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+
+    await fake.commands.get('approve-plan')!.handler('worktree stack-work', fake.ctx);
+    assert.equal(confirmations, 1);
+    assert.deepEqual(fake.discover().getExecution(), {
+      planFile: join(root, 'plans', 'stack.mar'),
+      graphHash: fake.discover().getBinding()?.graphHash,
+      executionRoot: join(root, '.pi', 'wt', 'stack-work'),
+      target: 'worktree',
+      branching: 'github-stack',
+    });
+    assert.ok(calls.some((call) => call.includes(
+      'gh stack init marionette/stack-work --base main',
+    )));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

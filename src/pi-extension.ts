@@ -1318,6 +1318,10 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     label: 'Marionette draft',
     description:
       'Validate and atomically write a Marionette .mar plan. Invalid plans are not written; valid plans are shown immediately and return compiler diagnostics, summary, compact graph, graph hash, and Mermaid/SVG resource paths for out-of-band rendering.',
+    promptSnippet: 'Validate and atomically write a complete Marionette workflow draft',
+    promptGuidelines: [
+      'Use marionette_draft to write the .mar source while Marionette draft mode is active; built-in project write tools remain disabled.',
+    ],
     parameters: Type.Object({
       path: Type.String({ description: 'Destination .mar path, relative to the Pi working directory or absolute' }),
       source: Type.String({ description: 'Complete Marionette DSL source' }),

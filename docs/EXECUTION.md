@@ -175,6 +175,7 @@ Plan-level tags set the default; node-level tags override per phase:
 |---|---|---|
 | `# delivery:` | `pr-per-phase` | each phase's work lands as its own pull request |
 | | `branch-per-phase` | a branch per phase; PRs at the executor's discretion |
+| | `stacked-prs` | ordered, dependent GitHub PR layers in one stack-enabled worktree |
 | | `single-pr` | one pull request for the whole traversal |
 | | `single-branch` | one branch, commits per phase, no PR automation |
 | | `none` *(default)* | no prescribed packaging (non-code plans, executor's discretion) |
@@ -184,7 +185,10 @@ Plan-level tags set the default; node-level tags override per phase:
 | `# delivery:branch:` | any string | branch name template; `{phase}` expands to the node id |
 
 Unknown values warn (`MAR019`) and fall back to the defaults, so a typo can't
-silently change delivery behaviour. A "report" is executor-shaped — a chat
+silently change delivery behaviour. `stacked-prs` uses GitHub's official
+`gh stack` public-preview flow: keep every dependent layer in the same isolated
+worktree, update upstack layers after lower-layer changes, and merge bottom-up.
+A "report" is executor-shaped — a chat
 message from a subagent, a PR description, a CI summary — but its cadence and
 packaging are the plan author's call, versioned with the plan.
 

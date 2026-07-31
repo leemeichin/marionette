@@ -303,7 +303,7 @@ delivery, report, context tags) the **last occurrence wins**.
 | `# linear:workspace:` | plan (node override) | Linear workspace slug context | — | [`EXECUTION.md`](EXECUTION.md) |
 | `# linear:` | node or plan | issue ids: `ENG-42`, comma lists | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
 | `# ref:` | node or plan | generic http(s) link | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
-| `# delivery:` | plan default, node override | `pr-per-phase` \| `branch-per-phase` \| `single-pr` \| `single-branch` \| `none` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
+| `# delivery:` | plan default, node override | `pr-per-phase` \| `branch-per-phase` \| `stacked-prs` \| `single-pr` \| `single-branch` \| `none` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
 | `# delivery:branch:` | plan default, node override | branch template; `{phase}` → node id | — | [`EXECUTION.md`](EXECUTION.md) |
 | `# report:` | plan default, node override | `per-phase` \| `at-checkpoints` \| `at-end` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
 

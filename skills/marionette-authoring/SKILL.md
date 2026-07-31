@@ -245,7 +245,9 @@ transcribe tickets into DSL by hand — fetch and scaffold
   `plan.intent`.
 - **Metadata rides on tags.** `# project: <name>` in the preamble;
   `# github:issue: <n>` on a node to link it to a tracker item. Namespaced
-  keys only for extensions.
+  keys only for extensions. When the user requests dependent GitHub review
+  layers, set `# delivery: stacked-prs`; execution keeps those layers together
+  in one stack-enabled worktree rather than creating one worktree per layer.
 - **Naming:** `snake_case` phase ids that read as states (`beta_launch`,
   `pivot_or_kill`); choice labels are short human sentences, since reviewers
   and decision logs read them verbatim.

@@ -95,6 +95,13 @@ test('delivery: node tags override plan tags; {phase} expands; unknown values wa
   assert.deepEqual(resolveDelivery(trajectory!.meta, b.meta, b.id),
     { mode: 'single-pr', report: 'at-checkpoints', branch: null });
 
+  const stacked = await compile('# delivery: stacked-prs\n=== a ===\nAlpha.\n-> END\n');
+  assert.deepEqual(
+    resolveDelivery(stacked.trajectory!.meta, stacked.trajectory!.nodes[0].meta, 'a'),
+    { mode: 'stacked-prs', report: 'per-phase', branch: null },
+  );
+  assert.equal(stacked.diagnostics.filter((d) => d.code === 'MAR019').length, 0);
+
   const { diagnostics } = await compile('# delivery: yolo\n# report: sometimes\n=== a ===\nAlpha.\n-> END\n');
   assert.equal(diagnostics.filter((d) => d.code === 'MAR019').length, 2);
 });

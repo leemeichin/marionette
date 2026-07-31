@@ -17,7 +17,7 @@ import type {
 import type { AmendmentReport } from './amendment.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.4.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.5.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -81,6 +81,8 @@ export interface MarionettePiExecution {
   graphHash: string;
   executionRoot: string;
   target: 'active' | 'worktree';
+  /** Worktrees remain the isolation boundary; this selects how branches are layered inside it. */
+  branching: 'standard' | 'github-stack';
 }
 
 export interface MarionettePiStartDraftRequest {

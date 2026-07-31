@@ -248,6 +248,7 @@
           "enum": [
             "pr-per-phase",
             "branch-per-phase",
+            "stacked-prs",
             "single-pr",
             "single-branch",
             "none"

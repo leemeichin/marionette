@@ -133,7 +133,9 @@ Start from natural language with `/plan <task>`; a validated draft appears in
 the transcript with compact terminal and plain-language views, while sibling
 `.mmd` and `.svg` artifacts are available for out-of-band viewers. Approve it
 with `/approve-plan` (isolated worktree by default), or bind an existing plan
-with `/marionette-start plan.mar first-run`.
+with `/marionette-start plan.mar first-run`. In a GitHub repository, worktree
+approval asks once whether to layer dependent PRs with the official `gh stack`
+flow; declining or failed setup leaves an ordinary worktree.
 
 For a mid-run scope change, the agent proposes complete candidate source with
 `marionette_amend`; review its semantic diff and graph artifacts, then apply it
