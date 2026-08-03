@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "hash": "sha256:135af05bf5f95fbc8da61e3c5a344ca67324921ae5de371946d58dd52497c589",
+  "hash": "sha256:423c8a93d60199a1f1e86f5f072de0a5ebb259adc0993422d07a1a78a73f6742",
   "status": "active",
   "current": "escalation_protocol",
   "variables": {
@@ -75,6 +75,15 @@
       "label": "plan rebound sha256:9100394e7467… → sha256:135af05bf5f9…",
       "to": "escalation_protocol",
       "rationale": "Trajectory contract 0.5 adds @ask elicitation metadata; existing graph semantics are unchanged."
+    },
+    {
+      "at": "2026-08-03T21:12:28.899Z",
+      "actor": "lee",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:135af05bf5f9… → sha256:423c8a93d601…",
+      "to": "escalation_protocol",
+      "rationale": "User approved reconciliation after confirming the drift predates PR #36; completed graph history is unchanged."
     }
   ],
   "pendingObservations": [],
