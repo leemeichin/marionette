@@ -245,25 +245,58 @@ const resultWithoutProjection = (result: RuntimeCommandResult): Record<string, u
 const instructionsFor = (projection: RuntimeProjection): string => {
   switch (projection.status) {
     case 'awaiting-operator':
-      return 'Stop autonomous work and wait. The trusted operator must choose through /marionette-decide.';
     case 'awaiting-external':
-      return 'Stop autonomous work and wait for an evidenced human confirmation through the trusted host.';
     case 'awaiting-human':
-      return 'Stop autonomous work and wait. This legacy graph requires a human decision.';
     case 'awaiting-elicitation':
-      return 'Stop autonomous work and wait. The user supplies context through /marionette-answer.';
+      return 'Stop autonomous work and wait while the host collects human input.';
     case 'awaiting-observation':
-      return 'Obtain only the requested observations, then record each with marionette_walk.';
+      return 'Obtain only the requested observations, then return them through work_packet.';
     case 'waiting-timeout':
-      return 'Park until the graph-authored timeout dueAt; do not poll or take another choice.';
+      return 'Park until the authored timeout; do not poll or take another outcome.';
     case 'stranded':
-      return 'Stop and report the blocked choices and variables. The plan needs intervention.';
+      return 'Stop and report the blocked outcomes. The work packet needs intervention.';
     case 'completed':
-      return 'The run is complete. Report the recorded outcome and stop.';
+      return 'The managed work is complete. Report the outcome and stop.';
     case 'active':
-      return 'Complete the current phase, then use marionette_walk for exactly one graph transition.';
+      return 'Complete the current work packet, then return its outcome once through work_packet.';
   }
 };
+
+const choiceIdForOutcome = (
+  projection: RuntimeProjection | null,
+  outcome: string,
+): string | null => {
+  const choices = projection?.choices.filter((choice) => choice.available) ?? [];
+  const normalized = outcome.trim().toLowerCase();
+  const exact = choices.filter((choice) => choice.label.toLowerCase() === normalized);
+  if (exact.length === 1) return exact[0]!.id;
+  const prefixed = choices.filter((choice) => choice.label.toLowerCase().startsWith(normalized));
+  return prefixed.length === 1 ? prefixed[0]!.id : null;
+};
+
+const agentProjection = (projection: RuntimeProjection): Record<string, unknown> => ({
+  status: projection.status,
+  intent: projection.plan?.intent,
+  task: projection.node
+    ? {
+        title: projection.node.title,
+        instructions: projection.node.body,
+        refs: projection.node.refs,
+      }
+    : null,
+  outcomes: projection.choices
+    .filter((choice) => choice.available)
+    .map((choice) => choice.label),
+  automaticContinuation: Boolean(projection.next),
+  observations: projection.observations,
+  progress: projection.progress
+    ? {
+        steps: projection.progress.steps,
+        completed: projection.progress.nodesVisited,
+        total: projection.progress.nodesTotal,
+      }
+    : undefined,
+});
 
 export default function marionetteExtension(pi: ExtensionAPI): void {
   let bridge: PiAgentBridge | null = null;
@@ -340,12 +373,11 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     ctx.ui.setStatus('marionette', `${phase} · r${projection.revision}`);
     if (projection.elicitation) {
       ctx.ui.setWidget('marionette-escalation', [
-        `Marionette needs input (${projection.elicitation.id})`,
+        'Workflow needs input',
         projection.plan?.intent.summary ? `Plan: ${projection.plan.intent.summary}` : '',
-        projection.node ? `Phase ${projection.node.id}: ${projection.node.body ?? projection.node.title}` : '',
+        projection.node ? projection.node.body ?? projection.node.title : '',
         `Question: ${projection.elicitation.question}`,
-        `Route after answer: ${projection.elicitation.choice.target ?? 'authored target'}`,
-        'Use /marionette-answer to respond.',
+        'Respond in the intervention dialog.',
       ].filter(Boolean));
     } else if (projection.escalation) {
       const packet = projection.escalation;
@@ -355,24 +387,21 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
           ? 'Human confirmation required'
           : 'Legacy human decision required';
       const lines = [
-        `${heading} (${packet.id})`,
+        heading,
         packet.context.planSummary ? `Plan: ${packet.context.planSummary}` : '',
-        `Phase ${packet.context.phaseId} (${packet.context.progress?.nodesVisited ?? 0}/${packet.context.progress?.nodesTotal ?? 0} visited)`,
+        `Progress: ${packet.context.progress?.nodesVisited ?? 0}/${packet.context.progress?.nodesTotal ?? 0} phases visited`,
         ...packet.context.phaseBody.split('\n').map((line) => `  ${line}`),
-        `Why waiting: ${packet.reason}`,
         'Available outcomes:',
         ...packet.choices.map((choice) =>
-          `  ${choice.id} — ${choice.label} → ${choice.target ?? '?'}${choice.targetTitle ? ` — ${choice.targetTitle}` : ''}` +
+          `  ${choice.label}${choice.targetTitle ? ` — ${choice.targetTitle}` : ''}` +
           `${choice.gate ? ` {${choice.gate}}` : ''}`),
         ...packet.context.refs.map((ref) => `  context: ${ref.url ?? `${ref.provider}:${ref.id}`}`),
         ...packet.context.recentRecords.map((record) =>
           `  record (${record.kind}, ${record.at}): ${record.summary}` +
           `${record.refs.length ? ` — ${record.refs.map((ref) => ref.url ?? ref.id).join(', ')}` : ''}`),
-        ...packet.fallbacks.map((fallback) =>
-          `  fallback ${fallback.choiceId} opens ${fallback.dueAt ?? 'at its authored timeout'}`),
         packet.kind === 'external'
-          ? 'Use /marionette-confirm-human with durable evidence; actor identity defaults to this repository’s Git author.'
-          : 'Use /marionette-decide to choose with your rationale.',
+          ? 'This explicitly high-risk checkpoint requires durable evidence in the intervention dialog.'
+          : 'Choose in the intervention dialog.',
       ].filter(Boolean);
       ctx.ui.setWidget('marionette-escalation', lines);
     } else {
@@ -538,7 +567,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     if (!event.projection) return;
     pi.sendMessage({
       customType: PROJECTION_MESSAGE,
-      content: `${instructionsFor(event.projection)}\n\n${JSON.stringify(event.projection)}`,
+      content: `${instructionsFor(event.projection)}\n\n${JSON.stringify(agentProjection(event.projection))}`,
       display: true,
       details: event,
     }, { triggerTurn, deliverAs: 'steer' });
@@ -973,6 +1002,8 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       source: 'host',
       name: command.operation,
     }),
+    resolveHumanIdentity: async () =>
+      activeContext ? resolveHumanIdentity(activeContext, 'recorded as the workflow participant') : null,
     proposeAmendment: (request) => proposeAmendment(request, {
       source: 'host',
       name: 'proposeAmendment',
@@ -1360,9 +1391,11 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         uri: pathToFileURL(path).href,
         mediaType,
       });
+      const project = compiled.trajectory.meta['project'];
       const draft = {
         planFile,
         graphHash: compiled.trajectory.hash,
+        name: typeof project === 'string' ? project : undefined,
         summary,
         compact,
         mermaid,
@@ -1435,6 +1468,155 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     id: Type.String(),
     url: Type.Union([Type.String(), Type.Null()]),
   }, { additionalProperties: false });
+
+  pi.registerTool({
+    name: 'work_packet',
+    label: 'Work packet',
+    description:
+      'Read the current managed task, return one completed outcome, request authored input, record observations, or attach evidence. Human intervention is handled by the host.',
+    promptSnippet: 'Read or complete the current managed work packet',
+    promptGuidelines: [
+      'Use work_packet with operation=status to read the current task.',
+      'After completing a task, call work_packet exactly once with operation=complete, the human-readable outcome label when choices exist, and an evidence-based summary.',
+      'When work_packet says human input is pending, stop; the host opens the intervention UI automatically.',
+    ],
+    executionMode: 'sequential',
+    parameters: Type.Object({
+      operation: Type.Union([
+        Type.Literal('status'),
+        Type.Literal('complete'),
+        Type.Literal('request_input'),
+        Type.Literal('observe'),
+        Type.Literal('record'),
+      ]),
+      outcome: Type.Optional(Type.String({ description: 'Human-readable outcome label; internal ids are never needed' })),
+      question: Type.Optional(Type.String()),
+      name: Type.Optional(Type.String()),
+      value: Type.Optional(Type.Union([Type.String(), Type.Number(), Type.Boolean()])),
+      summary: Type.Optional(Type.String()),
+      rationale: Type.Optional(Type.String()),
+      evidence: Type.Optional(Type.Array(refSchema)),
+      recordKind: Type.Optional(Type.String()),
+      refs: Type.Optional(Type.Array(refSchema)),
+    }, { additionalProperties: false }),
+    async execute(toolCallId, params, _signal, _onUpdate, ctx) {
+      activeContext = ctx;
+      const cause = { source: 'tool' as const, name: 'work_packet', id: toolCallId };
+      let command: MarionettePiAgentCommand;
+      if (params.operation === 'status') {
+        command = { operation: 'next', profile: 'work' };
+      } else if (params.operation === 'complete') {
+        if (!params.summary) {
+          const event = failure(cause, new PiIntegrationError(
+            'complete requires an evidence-based summary',
+            'invalid-request',
+          ));
+          return { content: [{ type: 'text', text: event.error!.message }], details: event, isError: true };
+        }
+        if (params.outcome) {
+          const choiceId = choiceIdForOutcome(lastProjection, params.outcome);
+          if (!choiceId) {
+            const event = failure(cause, new PiIntegrationError(
+              `No unique available outcome matches “${params.outcome}”`,
+              'invalid-request',
+            ));
+            return { content: [{ type: 'text', text: event.error!.message }], details: event, isError: true };
+          }
+          command = {
+            operation: 'choose',
+            choiceId,
+            rationale: params.summary,
+            idempotencyKey: toolCallId,
+            profile: 'work',
+            evidence: refsOf(params.evidence),
+          };
+        } else {
+          command = {
+            operation: 'advance',
+            rationale: params.summary,
+            idempotencyKey: toolCallId,
+            profile: 'work',
+            evidence: refsOf(params.evidence),
+          };
+        }
+      } else if (params.operation === 'request_input') {
+        if (!params.outcome || !params.question || !params.summary) {
+          const event = failure(cause, new PiIntegrationError(
+            'request_input requires outcome, question, and summary',
+            'invalid-request',
+          ));
+          return { content: [{ type: 'text', text: event.error!.message }], details: event, isError: true };
+        }
+        const choiceId = choiceIdForOutcome(lastProjection, params.outcome);
+        if (!choiceId) {
+          const event = failure(cause, new PiIntegrationError(
+            `No unique available outcome matches “${params.outcome}”`,
+            'invalid-request',
+          ));
+          return { content: [{ type: 'text', text: event.error!.message }], details: event, isError: true };
+        }
+        command = {
+          operation: 'ask',
+          choiceId,
+          question: params.question,
+          rationale: params.summary,
+          idempotencyKey: toolCallId,
+          profile: 'work',
+          evidence: refsOf(params.evidence),
+        };
+      } else if (params.operation === 'observe') {
+        if (!params.name || params.value === undefined || !params.summary) {
+          const event = failure(cause, new PiIntegrationError(
+            'observe requires name, value, and summary',
+            'invalid-request',
+          ));
+          return { content: [{ type: 'text', text: event.error!.message }], details: event, isError: true };
+        }
+        command = {
+          operation: 'observe',
+          name: params.name,
+          value: params.value as Value,
+          rationale: params.summary,
+          idempotencyKey: toolCallId,
+          profile: 'work',
+          evidence: refsOf(params.evidence),
+        };
+      } else {
+        if (!params.recordKind || !params.summary) {
+          const event = failure(cause, new PiIntegrationError(
+            'record requires recordKind and summary',
+            'invalid-request',
+          ));
+          return { content: [{ type: 'text', text: event.error!.message }], details: event, isError: true };
+        }
+        command = {
+          operation: 'record',
+          kind: params.recordKind,
+          summary: params.summary,
+          rationale: params.rationale,
+          refs: refsOf(params.refs),
+          idempotencyKey: toolCallId,
+        };
+      }
+
+      const event = await executeAgent(command, cause);
+      if (event.error) {
+        return {
+          content: [{ type: 'text', text: event.error.message }],
+          details: event,
+          isError: true,
+        };
+      }
+      const payload = event.projection ? agentProjection(event.projection) : event.result ?? {};
+      const stop = event.projection && event.projection.status !== 'active'
+        ? `\n${instructionsFor(event.projection)}`
+        : '';
+      return {
+        content: [{ type: 'text', text: `${JSON.stringify(payload)}${stop}` }],
+        details: event,
+      };
+    },
+  });
 
   pi.registerTool({
     name: 'marionette_walk',

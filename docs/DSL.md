@@ -109,8 +109,9 @@ Use `@ask` when the current trusted operator owns a route decision:
 The agent cannot choose either edge. Status becomes `awaiting-operator`; the
 host presents a complete decision packet (plan intent, full phase body,
 progress, refs, variables, choices, targets/effects, revision and fallbacks).
-The operator records one exact choice and rationale through
-`/marionette-decide` or `state choose --actor <operator>`.
+In Pi, the trusted host opens a native choice dialog and records the selected
+label without exposing internal choice ids or command syntax. The CLI fallback
+is `state choose --actor <operator>`.
 
 Use `@input` when the route is fixed but context is missing:
 
@@ -119,11 +120,15 @@ Use `@input` when the route is fixed but context is missing:
 ```
 
 The agent opens it with `state ask --question ... --actor agent`; traversal
-parks at `awaiting-elicitation`. The operator's `state answer` is audited, the
-fixed edge advances, and the next work packet carries the clarification. This
-is context, not approval or route selection.
+parks at `awaiting-elicitation`. In Pi, the trusted host opens a native text
+editor automatically. The operator's answer is audited, the fixed edge
+advances, and the next work packet carries the clarification. This is context,
+not approval or route selection.
 
-Use `@human` when progress requires an evidenced human attestation rather than only a route decision:
+Reserve `@human` for explicitly high-risk actions whose external evidence is
+useful independently of the workflow, such as production release, security or
+legal sign-off, or a maintainer approval URL. Routine review, feature
+acceptance, scope, rework, and loop termination use `@ask`:
 
 ```
 * [Maintainer approved PR] @human -> merge
@@ -279,7 +284,7 @@ metadata: the walker never schedules; the executing platform owns waking.
 Investigate and fix the next bug from the queue.
 # wake: github issues labeled "bug" pushed to acme/shop
 + [Queue has work — bug fixed or rejected] ~loop~ -> triage
-* [Service retired] @human -> END
+* [Service retired] @ask -> END
 ```
 
 Any metadata key accepts the fenced form (`# key: """` … `"""`); short

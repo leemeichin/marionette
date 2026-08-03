@@ -247,9 +247,10 @@ identity, captures the rationale, records the human-bound write, and injects
 the resulting projection
 so the agent can resume. A trusted embedding can instead provide an
 authenticated human principal through the host API described below.
-At an elicitation the user instead answers through `/marionette-answer`;
-the host records an `answer` write and resumes the agent. Evidenced `@human`
-actions use `/marionette-confirm-human <choice> <evidence-url> [rationale]`.
+At an elicitation the trusted Pi host opens a native text editor, records the
+answer, and resumes the agent. Operator choices likewise open as named native
+choices without internal ids. Only explicitly high-risk `@human` actions ask
+for a durable evidence URL. Slash commands remain compatibility fallbacks.
 
 The binding is stored on the active Pi session branch and restored after
 restart or `/tree` navigation. `/marionette-stop` appends an unbound tombstone
@@ -258,9 +259,9 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.5.0`) with the same shape in four places:
+(`marionette.pi` / `1.6.0`) with the same shape in four places:
 
-1. `marionette_walk` tool-result `details`;
+1. `work_packet` (and legacy `marionette_walk`) tool-result `details`;
 2. `marionette-projection` custom-message `details`;
 3. durable `marionette-event` custom session entries;
 4. Pi's shared `marionette:event:v1` extension event channel.
@@ -285,16 +286,20 @@ lets a thin host router call `startDraft()`, and retains `getBinding()`,
 `bind()`, `unbind()`, every agent-bound runtime operation through `execute()`,
 future-only proposal/review through `proposeAmendment()` and trusted
 `approveAmendment()`, plus separate `humanChoose()`, `externalConfirm()`, and
-`humanAnswer()` methods accepting host-authenticated principals. Before
-prompting, trusted human commands ask `marionette:human:v1` for an optional
+`humanAnswer()` methods accepting host-authenticated principals.
+`resolveHumanIdentity()` lets a trusted host reuse the package's configured
+identity/Git-author fallback without duplicating it. Before prompting,
+compatibility commands ask `marionette:human:v1` for an optional
 host-configured actor identity, then fall back to the repository Git author.
 Channel
 names, envelope types and the host interface are exported from the package. The shared event bus is the
 notification plane; the host API or the runtime protocol remains the
 request/response command plane.
 
-When this tool is bound, the bundled execution skill directs the model to use
-it exclusively. The legacy `marionette brief` / `marionette state ...` flow
+When managed work is bound, Pi activates the generic `work_packet` tool. The
+model receives task prose and named outcomes; engine names and internal choice
+ids stay out of model-facing output. The legacy `marionette brief` /
+`marionette state ...` flow
 uses a separate `<plan>.state.json` store and must not be mixed into the same
 run.
 

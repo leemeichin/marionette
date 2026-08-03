@@ -136,7 +136,7 @@ transcribe tickets into DSL by hand — fetch and scaffold
   Investigate and fix the next bug from the queue.
   # wake: github issues labeled "bug" pushed to acme/shop
   + [Queue has work — bug fixed or rejected] ~loop~ -> triage
-  * [Service retired] @human -> END
+  * [Service retired] @ask -> END
   ```
 
   The loop is unbounded by design; the bound is the evidence claim on the
@@ -166,10 +166,13 @@ transcribe tickets into DSL by hand — fetch and scaffold
   the trusted host owns. Usually mark every option at that phase, e.g.
   `* [Approve] @ask -> rollout` and `+ [Request changes] @ask ~loop~ -> rework`.
   The decision packet must contain enough phase context to choose honestly.
-- **`@human` requires evidenced human confirmation.** Use it for actions such
-  as a maintainer approving a PR or a security reviewer signing off. Continuing
-  requires the confirming person's identity plus durable evidence. In Pi, the
-  identity defaults to the repository Git author and may be the current
+- **`@human` is only for explicitly high-risk, externally evidenced actions.**
+  Reserve it for production releases, security/legal sign-off, or maintainer
+  approval that already has a durable review or audit URL. Never use it for
+  routine UX review, feature acceptance, rework, scope, or stopping a loop;
+  those are ordinary operator decisions and use `@ask`. Continuing through
+  `@human` requires the confirming person's identity plus durable evidence. In
+  Pi, the identity defaults to the repository Git author and may be the current
   operator; the agent still cannot confirm it.
 - **`@input` marks missing open-ended context on a fixed route.** Example:
   `* [Need target platforms] @input -> reconsider`. The agent opens one
@@ -184,7 +187,7 @@ transcribe tickets into DSL by hand — fetch and scaffold
   === iterate ===
   ~ attempts += 1
   + {attempts < 3} [Try again] ~loop~ -> iterate
-  * {attempts >= 3} [Not converging] @human -> rethink
+  * {attempts >= 3} [Not converging] @ask -> rethink
   * [It works] -> next_phase
   ```
 
@@ -214,8 +217,9 @@ transcribe tickets into DSL by hand — fetch and scaffold
   when it cannot prove how an observed condition evolves; surface the warning
   rather than inventing a bound.
 
-  The always-available `@human` escape (`+ [Enough. Decide.] @human -> …`)
-  remains appropriate when a person owns termination.
+  The always-available operator escape (`+ [Enough. Decide.] @ask -> …`)
+  remains appropriate when a person owns termination. Use `@human` only when
+  that exit represents an explicitly high-risk action with external evidence.
 
   **`~loop~` placement:** the compiler accepts a cycle once **any one edge
   on it** carries `~loop~`; put it on the returning edge (the one that
@@ -243,8 +247,9 @@ transcribe tickets into DSL by hand — fetch and scaffold
   paragraphs intact. The plan must not operate in a vacuum: reviewers see
   these first in `summarize`, and executors receive them in the brief as
   `plan.intent`.
-- **Metadata rides on tags.** `# project: <name>` in the preamble;
-  `# github:issue: <n>` on a node to link it to a tracker item. Namespaced
+- **Metadata rides on tags.** `# project: <name>` in the preamble; keep the
+  project name to 3–4 useful words because the host uses it for generated
+  worktree names. `# github:issue: <n>` on a node to link it to a tracker item. Namespaced
   keys only for extensions. When the user requests dependent GitHub review
   layers, set `# delivery: stacked-prs`; execution keeps those layers together
   in one stack-enabled worktree rather than creating one worktree per layer.
@@ -287,8 +292,12 @@ Build the importer against the vendor API.
 Fall back to CSV upload: same importer surface, manual ingestion.
 * [Fallback works] -> signoff
 
-=== signoff ===
-Sam reviews the shipped surface.
-* [Sam approves, ship it] @human -> END
-+ [Changes requested] @human ~loop~ -> build_importer
+=== signoff_review ===
+The operator decides whether the importer is ready for Sam's evidenced approval.
+* [Ready for Sam] @ask -> sam_signoff
++ [Changes requested] @ask ~loop~ -> build_importer
+
+=== sam_signoff ===
+Sam approves the shipped surface in the durable review system.
+* [Sam approved with review evidence] @human -> END
 ```

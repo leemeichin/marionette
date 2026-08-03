@@ -56,6 +56,7 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
     'custom_inspector',
     'marionette_draft',
     'marionette_walk',
+    'work_packet',
   ];
   let activeBranch: CustomEntry[] = [];
   let sequence = 0;
@@ -166,6 +167,9 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
     get tool() {
       return tools.get('marionette_walk');
     },
+    get workPacket() {
+      return tools.get('work_packet');
+    },
     branch: () => [...activeBranch],
     useBranch(branch: CustomEntry[]) {
       activeBranch = [...branch];
@@ -203,7 +207,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.5.0');
+    assert.equal(api.protocol, '1.6.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -359,9 +363,42 @@ test('standalone approval binds a validated draft for active-checkout execution'
       target: 'active',
       branching: 'standard',
     });
-    assert.ok(fake.activeTools().includes('marionette_walk'));
+    assert.ok(fake.activeTools().includes('work_packet'));
+    assert.equal(fake.activeTools().includes('marionette_walk'), false);
+    assert.equal(fake.activeTools().includes('marionette_amend'), false);
     assert.ok(fake.messages.some((message) =>
       (message as { customType?: string }).customType === 'marionette-approved'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('managed work packets use outcome labels without exposing internal ids', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-packet-'));
+  try {
+    writePlan(root, 'packet.mar', 'Complete the managed task.');
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('packet.mar run-packet', fake.ctx);
+
+    const status = await fake.workPacket.execute(
+      'packet-status',
+      { operation: 'status' },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.match(status.content[0].text, /Complete the managed task/);
+    assert.match(status.content[0].text, /"outcomes":\["Done"\]/);
+    assert.doesNotMatch(status.content[0].text, /start#0|marionette/i);
+
+    const completed = await fake.workPacket.execute(
+      'packet-complete',
+      { operation: 'complete', outcome: 'Done', summary: 'Task and checks completed.' },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(completed.details.projection.status, 'completed');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -437,7 +474,7 @@ test('worktree approval can enable GitHub stacked PR branching once per session'
       branching: 'github-stack',
     });
     assert.ok(calls.some((call) => call.includes(
-      'gh stack init marionette/stack-work --base main',
+      'gh stack init work/stack-work --base main',
     )));
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -609,7 +646,8 @@ Wait for a maintainer to confirm approval of PR #12.
     assert.match(packet.join('\n'), /Human confirmation required/);
     assert.match(packet.join('\n'), /Merge a reviewed pull request/);
     assert.match(packet.join('\n'), /Wait for a maintainer to confirm approval/);
-    assert.match(packet.join('\n'), /durable evidence.*Git author/);
+    assert.match(packet.join('\n'), /high-risk checkpoint requires durable evidence/);
+    assert.doesNotMatch(packet.join('\n'), /approval#0|marionette-confirm-human/);
 
     const noEvidence = await api.externalConfirm({
       external: { id: 'maintainer' },
@@ -654,7 +692,8 @@ Human approval required.
     const packet = fake.widgets.get('marionette-escalation') as string[];
     assert.match(packet.join('\n'), /Operator decision required/);
     assert.match(packet.join('\n'), /Human approval required\./);
-    assert.match(packet.join('\n'), /approval#0 — Approve → END/);
+    assert.match(packet.join('\n'), /Approve/);
+    assert.doesNotMatch(packet.join('\n'), /approval#0|marionette-decide/);
 
     const forbidden = await fake.tool.execute(
       'tool-human',
