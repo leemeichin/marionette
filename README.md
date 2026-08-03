@@ -262,9 +262,11 @@ single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
 checks, idempotent writes and an append-only journal — the standalone Pi
 integration owns read-only `/plan` mode, immediate compact/Mermaid/SVG review,
-and bound traversal. It routes operator `@ask` through `/marionette-decide`,
-evidenced `@human` confirmation through `/marionette-confirm-human`, and
-`@input` through `/marionette-answer`. Bound agents can propose future-only
+and bound traversal. Trusted hosts open native dialogs automatically for
+operator `@ask`, free-text `@input`, and explicitly high-risk evidenced
+`@human` checkpoints; compatibility slash commands remain available. Bound
+agents use the generic `work_packet` surface with named outcomes rather than
+engine commands or internal choice ids. Bound agents can propose future-only
 source through `marionette_amend`; only `/marionette-approve-amendment` or the
 trusted host API can append the graph-epoch `plan.rebound` event and apply it.
 ADR-0004 is implemented and awaits the dogfood

@@ -19,7 +19,7 @@ const DRAFT_REVIEW_ENTRY = 'marionette-plan-review';
 const EXECUTION_ENTRY = 'marionette-execution';
 const LEGACY_EXECUTION_ENTRY = 'pibarm-marionette-execution';
 
-const PLANNING_DISABLED_TOOLS = new Set(['edit', 'write', 'marionette_amend', 'marionette_walk']);
+const PLANNING_DISABLED_TOOLS = new Set(['edit', 'write', 'marionette_amend', 'marionette_walk', 'work_packet']);
 
 const SIMPLE_READ_SEGMENT = /^(pwd|ls|rg|grep|cat|head|tail|wc)(?:\s|$)/;
 const READ_ONLY_GIT_SEGMENT =
@@ -52,8 +52,17 @@ function slug(value: string, limit = 48): string {
     .slice(0, limit) || 'workflow';
 }
 
+export function summarizedWorktreeName(value: string): string {
+  const words = value
+    .replace(/\.[^.]+$/, '')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 4);
+  return slug(words.join('-'), 40);
+}
+
 function planName(prompt: string): string {
-  return slug(prompt.split(/\s+/).slice(0, 7).join(' '), 40);
+  return summarizedWorktreeName(prompt);
 }
 
 function latestEntry<T>(ctx: ExtensionContext, customTypes: string[]): T | undefined {
@@ -105,7 +114,7 @@ async function createWorktree(pi: ExtensionAPI, cwd: string, requested: string):
   const root = await gitRoot(pi, cwd);
   const name = slug(requested);
   const path = join(root, CONFIG_DIR_NAME, 'wt', name);
-  const branch = `marionette/${name}`;
+  const branch = `work/${name}`;
   await mkdir(join(root, CONFIG_DIR_NAME, 'wt'), { recursive: true });
   const listed = await pi.exec('git', ['-C', root, 'worktree', 'list', '--porcelain'], { timeout: 10_000 });
   if (listed.code === 0 && listed.stdout.split('\n').includes(`worktree ${path}`)) {
@@ -237,9 +246,10 @@ export function registerMarionettePlanning(
       context?.ui.setStatus('marionette-plan', undefined);
     }
     const active = pi.getActiveTools().filter((name) =>
-      name !== 'marionette_draft' && name !== 'marionette_walk');
+      name !== 'marionette_draft' && name !== 'marionette_walk' &&
+      name !== 'marionette_amend' && name !== 'work_packet');
     if (planning) active.push('marionette_draft');
-    else if (binding) active.push('marionette_walk');
+    else if (binding) active.push('work_packet');
     pi.setActiveTools([...new Set(active)]);
   };
 
@@ -331,8 +341,11 @@ export function registerMarionettePlanning(
     let executionRoot = ctx.cwd;
     let branching: MarionettePiExecution['branching'] = 'standard';
     if (target !== 'active') {
-      const requestedName = target.replace(/^worktree\s*/i, '').trim() ||
-        `marionette-${basename(pendingDraft.planFile, '.mar')}`;
+      const requestedName = summarizedWorktreeName(
+        target.replace(/^worktree\s*/i, '').trim() ||
+          pendingDraft.name ||
+          basename(pendingDraft.planFile, '.mar'),
+      );
       let worktree: Worktree;
       try {
         worktree = await createWorktree(pi, ctx.cwd, requestedName);
@@ -464,7 +477,7 @@ export function registerMarionettePlanning(
     if (options.getBinding()) {
       setRuntimeTools();
       return {
-        systemPrompt: `${event.systemPrompt}\n\nA Marionette run is bound. Call marionette_walk(next) for the authoritative work packet. The parent session alone records graph transitions. Execute file changes under ${execution?.executionRoot ?? ctx.cwd}; delegated agents receive only the current phase and return evidence.${execution?.branching === 'github-stack' ? ' This worktree uses GitHub stacked PRs: keep all dependent layers in the same worktree and use gh stack for stack operations.' : ''}`,
+        systemPrompt: `${event.systemPrompt}\n\nA managed work packet is active. Call work_packet(status) for the current task. When that task is done, call work_packet(complete) exactly once with its human-readable outcome and an evidence-based summary. The host owns routing and all human intervention. Execute file changes under ${execution?.executionRoot ?? ctx.cwd}; delegated agents receive only the current task and return evidence.${execution?.branching === 'github-stack' ? ' Keep dependent GitHub review layers in this worktree and use gh stack for stack operations.' : ''}`,
       };
     }
     if (!planning) return;

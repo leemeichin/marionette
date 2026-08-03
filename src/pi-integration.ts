@@ -17,7 +17,7 @@ import type {
 import type { AmendmentReport } from './amendment.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.5.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.6.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -64,6 +64,8 @@ export interface MarionettePiResource {
 export interface MarionettePiDraft {
   planFile: string;
   graphHash: string;
+  /** Short human-authored project name used for generated worktrees. */
+  name?: string;
   summary: string;
   /** Minimal terminal projection; intentionally not a full ASCII graph. */
   compact: string;
@@ -244,6 +246,7 @@ export interface MarionettePiHostApi {
   bind(request: MarionettePiBindRequest): Promise<MarionettePiEvent>;
   unbind(): Promise<MarionettePiEvent>;
   execute(command: MarionettePiAgentCommand): Promise<MarionettePiEvent>;
+  resolveHumanIdentity(): Promise<Omit<RuntimePrincipal, 'role'> | null>;
   proposeAmendment(request: MarionettePiAmendmentRequest): Promise<MarionettePiEvent>;
   approveAmendment(approval: MarionettePiAmendmentApproval): Promise<MarionettePiEvent>;
   humanChoose(decision: MarionettePiHumanDecision): Promise<MarionettePiEvent>;

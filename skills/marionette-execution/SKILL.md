@@ -19,25 +19,19 @@ https://github.com/leemeichin/marionette/blob/main/docs/EXECUTION.md
 
 ## Choose the bound runtime before the CLI
 
-If `marionette_walk` is available and a run is bound, it is the authoritative
-walker for this session. Use it for `next`, `choose`, `ask`, `advance`,
-`observe`, `record`, and runtime event reads. **Do not** run `marionette brief` or
-`marionette state ...` against that plan: those commands use a separate
-`<plan>.state.json` store and would fork the traversal.
+If `work_packet` is available, the host has bound managed work for this
+session. Treat the engine as an implementation detail:
 
-In a bound session, translate the loop below as follows:
+- read the current task with `work_packet(status)`;
+- return completion once with `work_packet(complete)`, an exact
+  human-readable outcome label when choices exist, and an evidence summary;
+- use `work_packet(request_input)` for an authored free-text route;
+- record requested observations with `work_packet(observe)`;
+- stop whenever human input is pending—the host opens native intervention UI
+  automatically. Never ask the user to type command syntax or internal ids.
 
-- re-brief → `marionette_walk` with `operation: "next"`
-- state choose/ask/advance/observe → the matching `marionette_walk` operation
-- attach an audit record → `marionette_walk` with `operation: "record"`
-- inspect history → `marionette_walk` with `operation: "events"` and its cursor
-- human checkpoint → `/marionette-decide`; never proxy it through the tool
-- elicitation checkpoint → agent opens it with `ask`; the human answers
-  through `/marionette-answer`
-
-The `work` projection is the full work packet. If a caller deliberately
-requests a smaller budget and receives `truncated: true`, call `next` again
-with a sufficient `budget`; do not infer omitted prose or choices.
+**Do not** run CLI state commands against bound work: they use a separate state
+store and would fork traversal.
 
 ## Locating the CLI when no runtime is bound
 
@@ -67,26 +61,19 @@ Repeat until the brief says otherwise:
    - `waiting-timeout` — no ordinary route is currently available and a hard
      timeout has not expired. Park; if the platform can schedule a wake-up,
      arrange it for the deadline, then re-brief. Do not poll in a tight loop.
-   - `awaiting-operator` — deliver the complete decision packet verbatim:
-     plan intent, full phase body, progress, refs, variables, each available
-     `@ask` outcome with target/effect, revision, and fallbacks. Then stop.
-     The trusted operator chooses through `/marionette-decide` in Pi or
-     `state choose --actor <operator> --rationale <their words>` unbound.
-     Never infer, proxy, or default their route.
-   - `awaiting-external` — an `@human` action requires an evidenced human
-     confirmation outside agent authority. Show the complete packet and park.
-     Continue only through `/marionette-confirm-human` or `state confirm`,
-     recording the actual human actor, rationale, and durable evidence URL.
-     In Pi, actor identity defaults to the repository Git author; it need not
-     differ from the operator or plan committer. The model tool has no
-     confirmation operation.
+   - `awaiting-operator` — stop. In Pi, the trusted host opens named choices
+     automatically and records the selection without exposing internal ids.
+     Never infer, proxy, or default the route.
+   - `awaiting-external` — stop. This is an explicitly high-risk `@human`
+     action; the trusted host requests the existing durable evidence in its
+     intervention dialog. Routine review and acceptance should use `@ask`,
+     not this status.
    - `awaiting-human` — legacy spec-0.5 graph epoch. Preserve its recorded
      human-choice semantics and follow the packet's trusted response path;
      new plans use `awaiting-operator` or `awaiting-external` instead.
-   - `awaiting-elicitation` — deliver the `@input` payload verbatim: focused
-     question, fixed target, who asked, and why. Then stop. This is context,
-     not approval or route selection. Use `/marionette-answer` in Pi or
-     `state answer` unbound; never invent or default the answer.
+   - `awaiting-elicitation` — stop. In Pi, the trusted host opens the authored
+     question in a native text editor and records the answer. This is context,
+     not approval or route selection; never invent or default it.
    For every parked interaction, silence never selects a default. Schedule
    only graph-authored timeout fallbacks listed in the packet.
    - `stranded` — report which gates are shut and the current variables; the
@@ -165,8 +152,8 @@ rationale and do not edit the plan yourself. Propose an amendment:
 3. **Only trusted approval applies it.** For state-file traversal the owner
    runs `marionette state rebind plan.mar --dry-run --json`, then applies with
    their `--actor` and `--rationale`. In a bound Pi session stop and direct the
-   owner to `/marionette-approve-amendment`; the model-facing
-   `marionette_walk` tool cannot approve or apply amendments.
+   owner to the trusted amendment-approval UI; the model-facing work packet
+   cannot approve or apply amendments.
 4. **Silence, ambiguity, or a refused policy report is not approval**: the
    un-amended plan and runtime graph stay in force and the novel work stays
    unstarted.

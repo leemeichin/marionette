@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isReadOnlyPlanningCommand } from '../src/pi-planning.ts';
+import { isReadOnlyPlanningCommand, summarizedWorktreeName } from '../src/pi-planning.ts';
+
+test('generated worktree names are capped at four useful words', () => {
+  assert.equal(
+    summarizedWorktreeName('new stack addition request is it even possible'),
+    'new-stack-addition-request',
+  );
+  assert.equal(summarizedWorktreeName('repo-context-overlay.mar'), 'repo-context-overlay');
+});
 
 test('Pi planning shell policy allows only bounded inspection commands', () => {
   for (const command of [
