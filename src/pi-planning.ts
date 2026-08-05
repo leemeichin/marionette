@@ -98,10 +98,19 @@ function reviewMarkdown(draft: MarionettePiDraft): string {
 }
 
 function approvalPrompt(draft: MarionettePiDraft): string {
-  const overview = draft.summary.split(/\n## Walkthrough\b/, 1)[0]?.trim() ?? draft.summary;
+  const intent = /^\*\*Intent:\*\*\s*(.+)$/m.exec(draft.summary)?.[1];
+  const shape = /^Starts at .+$/m.exec(draft.summary)?.[0];
+  const compact = draft.compact?.split('\n') ?? [];
+  const walkthrough = compact.slice(0, 4).map((line) =>
+    line.length > 160 ? `${line.slice(0, 159)}…` : line);
+  if (compact.length > walkthrough.length) {
+    walkthrough.push(`… ${compact.length - walkthrough.length} more lines in the review above`);
+  }
   return [
-    overview,
-    draft.compact ? `High-level walkthrough:\n${draft.compact}` : '',
+    `Plan: ${draft.name ?? basename(draft.planFile, '.mar')}`,
+    intent ? `Intent: ${intent.length > 200 ? `${intent.slice(0, 199)}…` : intent}` : '',
+    shape ?? '',
+    walkthrough.length ? `High-level walkthrough:\n${walkthrough.join('\n')}` : '',
     `Plan source: ${draft.planFile}`,
     'Choose what happens next:',
   ].filter(Boolean).join('\n\n');
