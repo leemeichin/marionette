@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/leemeichin/marionette/spec/parity/packet.schema.json",
+  "title": "Marionette differential parity packet",
+  "type": "object",
+  "required": ["spec", "reference", "diagnostics", "trajectories", "walkers"],
+  "additionalProperties": false,
+  "properties": {
+    "spec": {
+      "const": "marionette-parity/0.2"
+    },
+    "reference": {
+      "type": "object",
+      "required": ["oracle", "baselineCommit", "trajectorySpec", "baseTime"],
+      "additionalProperties": false,
+      "properties": {
+        "oracle": { "const": "typescript+swi" },
+        "baselineCommit": { "const": "ce70e14" },
+        "trajectorySpec": { "type": "string" },
+        "baseTime": { "type": "string", "format": "date-time" }
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case", "plan", "findings"],
+        "additionalProperties": false,
+        "properties": {
+          "case": { "type": "string" },
+          "plan": { "type": "string" },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["code", "severity", "line"],
+              "additionalProperties": false,
+              "properties": {
+                "code": { "type": "string" },
+                "severity": { "enum": ["error", "warning"] },
+                "line": {
+                  "oneOf": [
+                    { "type": "integer" },
+                    { "type": "null" }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "trajectories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case", "plan", "trajectory"],
+        "additionalProperties": false,
+        "properties": {
+          "case": { "type": "string" },
+          "plan": { "type": "string" },
+          "trajectory": { "type": "object" }
+        }
+      }
+    },
+    "walkers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case", "plan", "observations"],
+        "additionalProperties": false,
+        "properties": {
+          "case": { "type": "string" },
+          "plan": { "type": "string" },
+          "observations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["step", "outcome", "state", "frontier"],
+              "additionalProperties": false,
+              "properties": {
+                "step": {
+                  "oneOf": [
+                    { "const": "initial" },
+                    { "type": "integer" }
+                  ]
+                },
+                "outcome": { "enum": ["ok", "refused"] },
+                "code": { "type": "string" },
+                "state": { "type": "object" },
+                "frontier": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id", "blockedCode"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": { "type": "string" },
+                      "blockedCode": {
+                        "type": ["string", "null"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

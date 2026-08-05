@@ -1,0 +1,83 @@
+{
+  "spec": "marionette-parity-reference/0.2",
+  "packetSpec": "marionette-parity/0.2",
+  "packetSha256": "026b6e50336ebb541231f86c705d8710a04a3a066ce10e3a3a812379fea76bd9",
+  "diagnostics": [
+    {
+      "case": "mar006-dead-end",
+      "sha256": "9c4845a0b0103c4650a5a2913e8b9c3e26b5e1bdea81924e6456f92bc5b2546b"
+    },
+    {
+      "case": "mar007-unreachable",
+      "sha256": "e0a12a1545b2e801fdc3fb4582bd34f1da3a3ec7309e968c0aef086922868953"
+    },
+    {
+      "case": "mar008-undeclared-cycle",
+      "sha256": "1d3a047bfb1c4f07411c41d9b29d5cf11e892edaa83c6a82fe69d66128f53e08"
+    },
+    {
+      "case": "mar009-loop-without-exit",
+      "sha256": "88ec391da0f8e20bcdff569dc7f04ced73fd6a30ad56baf2b2fed5f3b30b545f"
+    },
+    {
+      "case": "mar010-loop-exit-unsatisfiable",
+      "sha256": "ecafac44bb2eece9617496bfa653d4bcb8357d8f2d266a09acd76aeab427244b"
+    },
+    {
+      "case": "mar011-constant-false-gate",
+      "sha256": "7996accd3e6f98ea528d731020ea1ee1313db222ce762acc6866f71dc146c5b7"
+    },
+    {
+      "case": "mar013-loop-not-a-cycle",
+      "sha256": "5c7092382ad341fd6746fc3ea693f5a9f1406cda534426a9c34d0a1ed61292ab"
+    },
+    {
+      "case": "mar014-unverified-gate",
+      "sha256": "0049dbfb4d91184e58c544d5d54e980eb56ec859d4a5a5e49bd5a78e9046bb80"
+    },
+    {
+      "case": "mar017-loop-once-only",
+      "sha256": "315254854dfebf69623953565048b7a3cd314b7f338d1619c601a3cd05ca987a"
+    },
+    {
+      "case": "mar023-timebox-without-alternative",
+      "sha256": "a051296b887c9d11da7034cea940b0071550ea1fb61feef81491fa8ed56f7600"
+    },
+    {
+      "case": "strand-once-only-on-cycle",
+      "sha256": "15ebaf0f3321d242b5975667ebfdd6c99745cbd76d7c81eb34a39865529fa35b"
+    }
+  ],
+  "trajectories": [
+    {
+      "case": "smallest-plan",
+      "sha256": "9e8df48d516b9e9648e32e168a1153acd359b20ab01d5529f27cd92d4b989016"
+    },
+    {
+      "case": "complete-surface",
+      "sha256": "b4c744115e5db6b842c055ba203f4ca1b73b5429847c264e5ebbd6bc1163ebd7"
+    }
+  ],
+  "walkers": [
+    {
+      "case": "baseline-full-traversal",
+      "sha256": "a32df76bc7f0dfdad3a9e1c34f7a8e9072cf96d2fb916ba66c92a11b458d1055"
+    },
+    {
+      "case": "dynamic-observation",
+      "sha256": "9b410e42d297d08b33f9fd9d23d273a09fda11d56a4e1bd3b38038dc14c7af9d"
+    },
+    {
+      "case": "kitchen-sink-guardrails",
+      "sha256": "90ce3452bdcc6b61dd69f8dfa51e9e81d11df72070b39610dc53b678ea0eb0c1"
+    },
+    {
+      "case": "resolution-and-advance",
+      "sha256": "9acba08e8fe14bf4feb828033e06994af95eae445860f07a449045cdf5c7178c"
+    },
+    {
+      "case": "timeout-loop",
+      "sha256": "d8e9da43f5c1dd6e9191b729ec30ae32ee3a4364c342888448c5576d2be56f0e"
+    }
+  ]
+}

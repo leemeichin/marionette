@@ -1,0 +1,603 @@
+{
+  "spec": "0.6.0",
+  "hash": "sha256:76db284822bac9d7b8ed0bbd7b134bdd606fcc64e6af30c6f42fb361b687a4d6",
+  "source": {
+    "file": "plans/racket-port.mar"
+  },
+  "variables": {},
+  "start": "baseline_pr",
+  "nodes": [
+    {
+      "id": "baseline_pr",
+      "body": "Open a draft PR with this validated trajectory before adding delivery code.\nThe PR keeps the TypeScript/SWI implementation authoritative and makes Lee's\nownership of substantive Racket language work explicit.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "baseline_pr#0",
+          "label": "Draft PR is open and the autonomy boundary is reviewable",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "racket_workspace",
+          "line": 22
+        }
+      ],
+      "next": null,
+      "line": 17,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "racket_workspace",
+      "body": "Bootstrap a fresh racket/ package with metadata, test commands, empty module\nboundaries and a trivial CLI that proves Racket, Datalog and Racklog load.\nDo not implement the Marionette reader, AST, rules or walker.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "racket_workspace#0",
+          "label": "The seed package and smoke test work locally",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "distribution_evidence",
+          "line": 29
+        }
+      ],
+      "next": null,
+      "line": 24,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "distribution_evidence",
+      "body": "Automate reproducible release archives for supported macOS and Linux targets.\nCI must unpack and run each self-contained artifact on a clean runner, retain\nPR artifacts, and attach the same archives to tagged GitHub releases.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "distribution_evidence#0",
+          "label": "The distribution evidence packet is complete",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "parity_lab",
+          "line": 36
+        }
+      ],
+      "next": null,
+      "line": 31,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "parity_lab",
+      "body": "Freeze implementation-neutral fixtures and a differential-test interface\nwhich can compare Racket output with today's TypeScript/SWI reference before\nimports change either side. Cover diagnostics, trajectories and walker effects.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "parity_lab#0",
+          "label": "The parity contract fails clearly until a Racket result exists",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "adapter_boundary",
+          "line": 44
+        }
+      ],
+      "next": null,
+      "line": 38,
+      "meta": {
+        "github:issue": [
+          "33",
+          "32"
+        ]
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        },
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#32",
+          "url": "https://github.com/leemeichin/marionette/issues/32"
+        }
+      ]
+    },
+    {
+      "id": "adapter_boundary",
+      "body": "Record the migration topology: the Racket executable becomes the only\ninterpreter, while the npm package remains temporarily as a thin Pi/Node host\nadapter that locates or installs the platform binary and speaks its protocol.\nThe browser demo may remain on the frozen TypeScript implementation.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "adapter_boundary#0",
+          "label": "The wrapper and cutover boundaries are explicit",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "implementation_gate",
+          "line": 52
+        }
+      ],
+      "next": null,
+      "line": 46,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "implementation_gate",
+      "body": "Lee reviews the seed project, cross-platform artifact evidence, scoped parity\nlab and 48-hour workbook. No reader, source AST, logic rules or walker\nimplementation starts until Lee chooses a route here.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "implementation_gate#0",
+          "label": "Distribution is pleasant enough — refresh the baseline",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "baseline_refresh",
+          "line": 59
+        },
+        {
+          "id": "implementation_gate#1",
+          "label": "Distribution is too brittle — reconsider the host",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "host_reconsideration",
+          "line": 60
+        }
+      ],
+      "next": null,
+      "line": 54,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "host_reconsideration",
+      "body": "Record which packaging or runtime constraints made Racket unsuitable and\nchoose whether to revise the distribution target or evaluate another host.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "host_reconsideration#0",
+          "label": "A revised experiment is worth running",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": true,
+          "timeout": null,
+          "target": "racket_workspace",
+          "line": 66
+        },
+        {
+          "id": "host_reconsideration#1",
+          "label": "Stop the Racket port with the evidence preserved",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "END",
+          "line": 67
+        }
+      ],
+      "next": null,
+      "line": 62,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "baseline_refresh",
+      "body": "Before substantive implementation, review changes since the bootstrap, pin the\nTypeScript/SWI oracle, refresh the scoped core packet and record its exclusions.\nConfirm the thin adapter still owns Pi presentation, work packets, identity and\nworktree integration while Racket owns all language and runtime semantics.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "baseline_refresh#0",
+          "label": "The current baseline and remaining parity families are explicit",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "vertical_slice",
+          "line": 75
+        }
+      ],
+      "next": null,
+      "line": 69,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "vertical_slice",
+      "body": "Lee works through the outcome-based 48-hour workbook and owns every substantive\nlanguage decision. The slice proves representation and host fit, not complete\nruntime or Pi parity. AI may review, explain a failing invariant, or reveal one\nrequested hint level; it must not fill in the implementation.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "vertical_slice#0",
+          "label": "The slice proves Racket — continue the complete port",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "complete_port",
+          "line": 84
+        },
+        {
+          "id": "vertical_slice#1",
+          "label": "The slice exposes a fatal mismatch — stop and document it",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "END",
+          "line": 85
+        }
+      ],
+      "next": null,
+      "line": 77,
+      "meta": {
+        "github:issue": [
+          "33",
+          "32"
+        ]
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        },
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#32",
+          "url": "https://github.com/leemeichin/marionette/issues/32"
+        }
+      ]
+    },
+    {
+      "id": "complete_port",
+      "body": "Lee ports coherent compiler and walker families under differential tests, then\nimplements the source AST, imports and rich diagnostics from issue 32. The full\nwalker includes operator @ask, fixed-route @input, evidenced @human,\nfuture-only amendments and legacy epoch replay.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "complete_port#0",
+          "label": "Compiler and walker families match the pinned oracle",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "runtime_contracts",
+          "line": 94
+        },
+        {
+          "id": "complete_port#1",
+          "label": "The port needs another human iteration",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": true,
+          "timeout": null,
+          "target": "complete_port",
+          "line": 95
+        },
+        {
+          "id": "complete_port#2",
+          "label": "The complete port is no longer justified",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "END",
+          "line": 96
+        }
+      ],
+      "next": null,
+      "line": 87,
+      "meta": {
+        "github:issue": [
+          "33",
+          "32"
+        ]
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        },
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#32",
+          "url": "https://github.com/leemeichin/marionette/issues/32"
+        }
+      ]
+    },
+    {
+      "id": "runtime_contracts",
+      "body": "Implement the versioned NDJSON runtime, graph-epoch persistence and complete\nstructured projections. Prove restart, stale-write atomicity, amendment and\nauthority behaviour against the TypeScript oracle before adapting consumers.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "runtime_contracts#0",
+          "label": "Runtime and persistence contract tests pass",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "migrate_consumers",
+          "line": 103
+        }
+      ],
+      "next": null,
+      "line": 98,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "migrate_consumers",
+      "body": "Move the Pi extension, packaged skills and CLI entry points onto the Racket\nbinary protocol. Keep only the TypeScript process adapter and trusted Pi UI.\nPreserve generic work packets, draft/review artifacts, identity resolution,\nstack metadata, bounded approvals and concise transcript rendering.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "migrate_consumers#0",
+          "label": "Host adapters pass integration tests against release binaries",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "cutover_gate",
+          "line": 111
+        }
+      ],
+      "next": null,
+      "line": 105,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "cutover_gate",
+      "body": "Lee reviews parity history, release artifacts, adapter behaviour and the\ndocumented treatment of the browser demo before changing the authoritative\nimplementation.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "cutover_gate#0",
+          "label": "Make the Racket executable authoritative",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": false,
+          "timeout": null,
+          "target": "release_cutover",
+          "line": 118
+        },
+        {
+          "id": "cutover_gate#1",
+          "label": "Extend the confidence window",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": true,
+          "loop": true,
+          "timeout": null,
+          "target": "complete_port",
+          "line": 119
+        }
+      ],
+      "next": null,
+      "line": 113,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    },
+    {
+      "id": "release_cutover",
+      "body": "Publish the approved Racket release, switch installers and documentation to\nits artifacts, and retain or retire the TypeScript/SWI oracle exactly as the\nupdated architecture decisions specify.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "release_cutover#0",
+          "label": "Release and migration evidence are published",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "END",
+          "line": 126
+        }
+      ],
+      "next": null,
+      "line": 121,
+      "meta": {
+        "github:issue": "33"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#33",
+          "url": "https://github.com/leemeichin/marionette/issues/33"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "project": "marionette-racket-port",
+    "summary": "Prove Racket distribution, pin a truthful parity baseline, and hand Lee a mechanically bootstrapped 48-hour language project before any substantive port begins.",
+    "prompt": "sounds amazing, so you know what's next? using marionette to plan the delivery of this. We've decided the actual implementation is human gated but we can let AI bootstrap the racket project (give it a fresh directory to start with so we can test for parity against TS before imports are introduced), do the CI, compile the binaries for github releases, and then handle the migration work so the extensions and skills use it (do we still keep a TS package that wraps the bin?). So the first thing is to open a baseline PR with a marionette plan for all this and then work to the human gate.",
+    "tracker": "github",
+    "github:repo": "leemeichin/marionette",
+    "github:issue": "33, 32",
+    "delivery": "single-pr",
+    "delivery:branch": "agent/racket-port-plan",
+    "report": "at-checkpoints"
+  },
+  "refs": [
+    {
+      "provider": "github",
+      "kind": "repo",
+      "id": "leemeichin/marionette",
+      "url": "https://github.com/leemeichin/marionette"
+    },
+    {
+      "provider": "github",
+      "kind": "issue",
+      "id": "leemeichin/marionette#33",
+      "url": "https://github.com/leemeichin/marionette/issues/33"
+    },
+    {
+      "provider": "github",
+      "kind": "issue",
+      "id": "leemeichin/marionette#32",
+      "url": "https://github.com/leemeichin/marionette/issues/32"
+    }
+  ]
+}

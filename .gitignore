@@ -8,3 +8,8 @@ plans/*.mmd
 plans/*.summary.md
 docs/dogfood/**/plan.mmd
 docs/dogfood/**/summary.txt
+
+# Racket build products
+racket/**/compiled/
+racket/artifacts/
+racket/build/

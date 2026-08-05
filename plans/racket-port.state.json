@@ -1,0 +1,90 @@
+{
+  "version": 2,
+  "hash": "sha256:76db284822bac9d7b8ed0bbd7b134bdd606fcc64e6af30c6f42fb361b687a4d6",
+  "status": "active",
+  "current": "implementation_gate",
+  "variables": {},
+  "pendingObservations": [],
+  "pendingEntry": false,
+  "activationStartedAt": "2026-07-29T21:17:30.114Z",
+  "observations": [],
+  "taken": [
+    "baseline_pr#0"
+  ],
+  "log": [
+    {
+      "at": "2026-07-29T20:43:01.689Z",
+      "actor": "system",
+      "from": null,
+      "choice": null,
+      "label": null,
+      "to": "baseline_pr",
+      "rationale": "plan started"
+    },
+    {
+      "at": "2026-07-29T20:43:15.236Z",
+      "actor": "agent",
+      "from": "baseline_pr",
+      "choice": "baseline_pr#0",
+      "label": "Draft PR is open and the autonomy boundary is reviewable",
+      "to": "racket_workspace",
+      "rationale": "Draft PR #34 opened from commit 10f6924 with only the validated 12-phase plan; TypeScript/SWI remains authoritative and substantive Racket implementation is behind implementation_gate."
+    },
+    {
+      "at": "2026-07-29T20:52:19.952Z",
+      "actor": "agent",
+      "from": "racket_workspace",
+      "choice": "racket_workspace#0",
+      "label": "The seed package and smoke test work locally",
+      "to": "distribution_evidence",
+      "rationale": "Fresh racket/ multi-collection package created with empty human-owned module boundaries, a nine-mission workbook, and a seed CLI; Racket 9.2 on aarch64-darwin passed 2 package tests and reported datalog=yes racklog=yes."
+    },
+    {
+      "at": "2026-07-29T21:09:45.239Z",
+      "actor": "agent",
+      "from": "distribution_evidence",
+      "choice": "distribution_evidence#0",
+      "label": "The distribution evidence packet is complete",
+      "to": "parity_lab",
+      "rationale": "Actions run 30491077877 built, unpacked and ran self-contained Racket 9.2 archives for x86_64-linux, aarch64-linux and aarch64-macos; archives are 14.56–15.00 MiB with 176–286 ms seed startup. Evidence and the local Nix distribution caveat are recorded in racket/evidence/2026-07-29-bootstrap.md."
+    },
+    {
+      "at": "2026-07-29T21:16:08.963Z",
+      "actor": "agent",
+      "from": "parity_lab",
+      "choice": "parity_lab#0",
+      "label": "The parity contract fails clearly until a Racket result exists",
+      "to": "adapter_boundary",
+      "rationale": "spec/parity now freezes per-case SHA-256 references for 11 diagnostic fixtures, 2 normalized trajectories and all 5 walker vectors. npm run parity:reference passes; npm run parity:check exits 2 with an explicit human-gate message because no Racket candidate exists."
+    },
+    {
+      "at": "2026-07-29T21:17:30.114Z",
+      "actor": "agent",
+      "from": "adapter_boundary",
+      "choice": "adapter_boundary#0",
+      "label": "The wrapper and cutover boundaries are explicit",
+      "to": "implementation_gate",
+      "rationale": "ADR-0005 records one authoritative Racket interpreter with a temporary TypeScript/npm shell for Pi, binary resolution and protocol transport. It forbids compiler/walker fallback after cutover, maps the three release targets, freezes the browser demo, and sequences consumer migration."
+    },
+    {
+      "at": "2026-07-29T22:00:43.152Z",
+      "actor": "Lee",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:3c29f6ed7fec… → sha256:f515bb0db13c…",
+      "to": "implementation_gate",
+      "rationale": "Reconcile the Racket plan after merging ask elicitation to main before beginning human-owned language work."
+    },
+    {
+      "at": "2026-08-05T17:47:10.039Z",
+      "actor": "Lee Meichin",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:f515bb0db13c… → sha256:76db284822ba…",
+      "to": "implementation_gate",
+      "rationale": "Update the parked Racket plan for the post-bootstrap parity baseline, current gate taxonomy, runtime contracts and thin Pi adapter boundary."
+    }
+  ],
+  "pendingElicitation": null,
+  "elicitations": []
+}
