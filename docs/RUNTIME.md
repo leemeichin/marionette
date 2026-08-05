@@ -209,9 +209,11 @@ mutating shell commands.
 `marionette_draft` compiler-checks complete DSL source before atomically
 writing a `.mar` file. Invalid drafts never touch disk. Successful drafts are
 shown immediately as a durable review card and include a minimal terminal
-graph plus plain-language summary. The tool also writes sibling `.mmd` and
-`.svg` files and returns their paths and `file:` URIs for out-of-band viewers.
-Overwriting is opt-in for explicit refinement.
+graph plus plain-language summary. The approval dialog repeats the plan
+overview and compact walkthrough beside its choices, so approval does not rely
+on transcript backscroll. The tool also writes sibling `.mmd` and `.svg` files
+and returns their paths and `file:` URIs for out-of-band viewers. Overwriting
+is opt-in for explicit refinement.
 
 Worktree approval asks once per Pi session whether to enable GitHub's official
 `gh stack` public-preview flow when the repository is hosted on GitHub. Opting
