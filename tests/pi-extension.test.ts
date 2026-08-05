@@ -337,7 +337,7 @@ test('Pi extension draft tool validates before atomically writing and emits an e
   }
 });
 
-test('automatic plan approval shows the overview and high-level walkthrough beside the choices', async () => {
+test('automatic plan approval bounds the review shown beside the choices', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-review-'));
   const prompts: string[] = [];
   try {
@@ -355,11 +355,18 @@ test('automatic plan approval shows the overview and high-level walkthrough besi
       {
         path: 'plans/review.mar',
         source: [
+          '# project: review-plan',
           '# summary: Ship a reviewed slice.',
-          '# prompt: Ship the smallest reviewed slice',
+          '# prompt: This deliberately verbose original request must not fill the approval dialog.',
           '=== start ===',
-          'Build and verify the slice.',
-          '* [Done] -> END',
+          'Build the slice.',
+          '-> verify',
+          '=== verify ===',
+          'Verify the slice.',
+          '-> deliver',
+          '=== deliver ===',
+          'Deliver the slice.',
+          '-> END',
           '',
         ].join('\n'),
       },
@@ -370,10 +377,12 @@ test('automatic plan approval shows the overview and high-level walkthrough besi
 
     await fake.fire('agent_settled', {});
 
+    assert.match(prompts[0]!, /Plan: review-plan/);
     assert.match(prompts[0]!, /Ship a reviewed slice/);
-    assert.match(prompts[0]!, /Ship the smallest reviewed slice/);
     assert.match(prompts[0]!, /High-level walkthrough:/);
     assert.match(prompts[0]!, /● start/);
+    assert.match(prompts[0]!, /… 2 more lines/);
+    assert.doesNotMatch(prompts[0]!, /deliberately verbose original request|● deliver/);
     assert.match(prompts[0]!, /Plan source: .*review\.mar/);
   } finally {
     rmSync(root, { recursive: true, force: true });
