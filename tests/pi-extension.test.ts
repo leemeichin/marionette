@@ -410,8 +410,10 @@ test('standalone approval binds a validated draft for active-checkout execution'
     assert.ok(fake.activeTools().includes('work_packet'));
     assert.equal(fake.activeTools().includes('marionette_walk'), false);
     assert.equal(fake.activeTools().includes('marionette_amend'), false);
-    assert.ok(fake.messages.some((message) =>
-      (message as { customType?: string }).customType === 'marionette-approved'));
+    const approval = fake.messages.find((message) =>
+      (message as { customType?: string }).customType === 'marionette-approved') as { content: string };
+    assert.match(approval.content, /Call work_packet/);
+    assert.doesNotMatch(approval.content, /\{"runId"/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -434,6 +436,10 @@ test('managed work packets use outcome labels without exposing internal ids', as
     assert.match(status.content[0].text, /Complete the managed task/);
     assert.match(status.content[0].text, /"outcomes":\["Done"\]/);
     assert.doesNotMatch(status.content[0].text, /start#0|marionette/i);
+    const rendered = fake.workPacket.renderResult(status).render(80).join('\n');
+    assert.match(rendered, /start · active/);
+    assert.match(rendered, /Outcomes: Done/);
+    assert.doesNotMatch(rendered, /[{}\"]/);
 
     const completed = await fake.workPacket.execute(
       'packet-complete',
@@ -762,6 +768,9 @@ Human approval required.
     );
     const approved = await api.execute({ operation: 'next' });
     assert.equal(approved.projection?.status, 'completed');
+    const projectionMessage = fake.messages.find((message) =>
+      (message as { customType?: string }).customType === 'marionette-projection') as { display: boolean };
+    assert.equal(projectionMessage.display, false);
     const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
     const decision = events.find((event) =>
       event.events?.some((item) => item.kind === 'decision.committed'));
