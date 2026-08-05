@@ -97,6 +97,16 @@ function reviewMarkdown(draft: MarionettePiDraft): string {
   return `${draft.summary}${compact}\n\n## Review artifacts\n\n${resourceLines}`;
 }
 
+function approvalPrompt(draft: MarionettePiDraft): string {
+  const overview = draft.summary.split(/\n## Walkthrough\b/, 1)[0]?.trim() ?? draft.summary;
+  return [
+    overview,
+    draft.compact ? `High-level walkthrough:\n${draft.compact}` : '',
+    `Plan source: ${draft.planFile}`,
+    'Choose what happens next:',
+  ].filter(Boolean).join('\n\n');
+}
+
 async function gitRoot(pi: ExtensionAPI, cwd: string): Promise<string> {
   const result = await pi.exec('git', ['-C', cwd, 'rev-parse', '--show-toplevel'], { timeout: 10_000 });
   const root = result.stdout.trim();
@@ -504,7 +514,7 @@ export function registerMarionettePlanning(
   pi.on('agent_settled', async (_event, ctx) => {
     if (!planning || !pendingDraft || !ctx.hasUI || approvalPrompted === pendingDraft.graphHash) return;
     approvalPrompted = pendingDraft.graphHash;
-    const choice = await ctx.ui.select('Validated Marionette plan — review is shown above', [
+    const choice = await ctx.ui.select(approvalPrompt(pendingDraft), [
       'Approve and execute in a worktree',
       'Approve and execute in the active checkout',
       'Refine before approval',

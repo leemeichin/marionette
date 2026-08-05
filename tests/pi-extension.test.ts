@@ -29,6 +29,7 @@ interface CustomEntry {
 interface FakePiOptions {
   hasUI?: boolean;
   confirm?: (title: string, message: string) => Promise<boolean>;
+  select?: (title: string, choices: string[]) => Promise<string | undefined>;
   exec?: (command: string, args: string[], options?: { cwd?: string }) => Promise<{
     stdout: string;
     stderr: string;
@@ -90,7 +91,7 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
     notify(message: string, type?: string) {
       notifications.push({ message, type });
     },
-    select: async () => undefined,
+    select: options.select ?? (async () => undefined),
     confirm: options.confirm ?? (async () => false),
     input: async () => undefined,
     editor: async () => undefined,
@@ -331,6 +332,49 @@ test('Pi extension draft tool validates before atomically writing and emits an e
     assert.equal(readFileSync(planFile, 'utf8'), revised);
     const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
     assert.equal(events.filter((event) => event.kind === 'plan.drafted').length, 2);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('automatic plan approval shows the overview and high-level walkthrough beside the choices', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-review-'));
+  const prompts: string[] = [];
+  try {
+    const fake = createFakePi(root, {
+      hasUI: true,
+      select: async (title) => {
+        prompts.push(title);
+        return 'Keep for later';
+      },
+    });
+    await fake.fire('session_start', { reason: 'startup' });
+    await fake.commands.get('plan')!.handler('Ship the smallest reviewed slice', fake.ctx);
+    await fake.tools.get('marionette_draft').execute(
+      'draft-review',
+      {
+        path: 'plans/review.mar',
+        source: [
+          '# summary: Ship a reviewed slice.',
+          '# prompt: Ship the smallest reviewed slice',
+          '=== start ===',
+          'Build and verify the slice.',
+          '* [Done] -> END',
+          '',
+        ].join('\n'),
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+
+    await fake.fire('agent_settled', {});
+
+    assert.match(prompts[0]!, /Ship a reviewed slice/);
+    assert.match(prompts[0]!, /Ship the smallest reviewed slice/);
+    assert.match(prompts[0]!, /High-level walkthrough:/);
+    assert.match(prompts[0]!, /● start/);
+    assert.match(prompts[0]!, /Plan source: .*review\.mar/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
