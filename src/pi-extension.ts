@@ -298,6 +298,25 @@ const agentProjection = (projection: RuntimeProjection): Record<string, unknown>
     : undefined,
 });
 
+const stepSummary = (event: MarionettePiEvent): string => {
+  if (event.error) return `Marionette ${event.operation ?? 'step'} failed: ${event.error.message}`;
+  const projection = event.projection;
+  if (!projection) return `Marionette ${event.operation ?? 'step'} complete`;
+  const progress = projection.progress
+    ? ` · ${projection.progress.nodesVisited}/${projection.progress.nodesTotal}`
+    : '';
+  const short = (text: string): string => text.length > 160 ? `${text.slice(0, 159)}…` : text;
+  const outcomes = projection.choices
+    .filter((choice) => choice.available)
+    .map((choice) => choice.label);
+  return [
+    `${projection.node?.id ?? 'workflow'} · ${projection.status}${progress}`,
+    projection.node?.title ? short(projection.node.title) : '',
+    outcomes.length ? short(`Outcomes: ${outcomes.join(' / ')}`) : '',
+    projection.status === 'active' ? '' : instructionsFor(projection),
+  ].filter(Boolean).join('\n');
+};
+
 export default function marionetteExtension(pi: ExtensionAPI): void {
   let bridge: PiAgentBridge | null = null;
   let lastProjection: RuntimeProjection | null = null;
@@ -568,7 +587,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     pi.sendMessage({
       customType: PROJECTION_MESSAGE,
       content: `${instructionsFor(event.projection)}\n\n${JSON.stringify(agentProjection(event.projection))}`,
-      display: true,
+      display: false,
       details: event,
     }, { triggerTurn, deliverAs: 'steer' });
   };
@@ -1616,6 +1635,9 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         details: event,
       };
     },
+    renderResult(result) {
+      return new Text(stepSummary(result.details as MarionettePiEvent), 0, 0);
+    },
   });
 
   pi.registerTool({
@@ -1844,6 +1866,9 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         }],
         details: event,
       };
+    },
+    renderResult(result) {
+      return new Text(stepSummary(result.details as MarionettePiEvent), 0, 0);
     },
   });
 

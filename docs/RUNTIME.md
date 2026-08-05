@@ -251,8 +251,10 @@ so the agent can resume. A trusted embedding can instead provide an
 authenticated human principal through the host API described below.
 At an elicitation the trusted Pi host opens a native text editor, records the
 answer, and resumes the agent. Operator choices likewise open as named native
-choices without internal ids. Only explicitly high-risk `@human` actions ask
-for a durable evidence URL. Slash commands remain compatibility fallbacks.
+choices without internal ids. Projection JSON stays in model context and
+structured result details, while the transcript shows only phase, status,
+progress, and outcomes. Only explicitly high-risk `@human` actions ask for a
+durable evidence URL. Slash commands remain compatibility fallbacks.
 
 The binding is stored on the active Pi session branch and restored after
 restart or `/tree` navigation. `/marionette-stop` appends an unbound tombstone

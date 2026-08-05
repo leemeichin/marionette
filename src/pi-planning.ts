@@ -404,7 +404,7 @@ export function registerMarionettePlanning(
     pi.sendMessage({
       customType: 'marionette-approved',
       display: true,
-      content: `The validated Marionette workflow is approved. Execute project changes only under ${executionRoot}.${branching === 'github-stack' ? ' GitHub stacked PRs are enabled: keep dependent layers in this worktree and use gh stack for stack operations.' : ''} The parent session owns traversal; delegated agents return evidence and must not advance the run.\n\n${JSON.stringify(event.projection ?? {})}`,
+      content: `The validated Marionette workflow is approved. Execute project changes only under ${executionRoot}.${branching === 'github-stack' ? ' GitHub stacked PRs are enabled: keep dependent layers in this worktree and use gh stack for stack operations.' : ''} The parent session owns traversal; delegated agents return evidence and must not advance the run. Call work_packet with operation=status for the current task.`,
       details: { execution, event },
     }, { deliverAs: 'followUp', triggerTurn: true });
   };
