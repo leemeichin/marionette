@@ -46,3 +46,8 @@ package remains temporarily because Pi loads TypeScript extensions; it should
 become a thin adapter that locates the right platform artifact and speaks the
 binary's versioned protocol. It must not retain a second parser, rule engine,
 or walker after cutover.
+
+The first oracle pin is TypeScript/SWI at `ce70e14`. The small packet under
+`spec/parity/` covers core diagnostics, trajectories and walker effects; it is
+not full runtime or Pi parity. The workbook names the post-slice interaction,
+amendment, persistence and adapter work required before cutover.

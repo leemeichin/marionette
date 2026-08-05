@@ -1,7 +1,7 @@
-# ADR-0005: keep a thin TypeScript host adapter around one Racket interpreter
+# ADR-0007: keep a thin TypeScript host adapter around one Racket interpreter
 
 - Status: Proposed; activation is gated by the Racket vertical slice
-- Date: 2026-07-29
+- Date: 2026-07-29; updated 2026-08-05
 - Issues: [#33](https://github.com/leemeichin/marionette/issues/33),
   [#32](https://github.com/leemeichin/marionette/issues/32)
 
@@ -84,8 +84,15 @@ the release matrix.
 ## Protocol boundary
 
 The existing runtime process protocol is the primary integration seam. Racket
-must implement its versioned initialize/next/choose/advance/observe/record/
-events surface and machine refusal codes before the Pi adapter migrates.
+must implement the versioned initialize/next/choose/confirm/ask/answer/advance/
+observe/record/events surface, projection profiles, receipts, graph epochs and
+machine refusal codes before the Pi adapter migrates. Future-only amendment
+validation/application needs an equally structured trusted-host boundary.
+
+The runtime owns the three current authority classes: operator `@ask`,
+fixed-route `@input`, and evidenced `@human`. Archived spec-0.5 epochs retain
+the former `@ask` elicitation meaning. The adapter authenticates principals and
+resolves its Git-identity fallback; it does not reproduce authority rules.
 
 One-shot compiler and presentation commands need a similarly structured
 process contract. Human-readable stdout/stderr remains for terminal use, but
@@ -105,6 +112,12 @@ Keep the TypeScript extension and its trusted host UI. Replace imports of
 compiler, rule, state, and runtime modules with a small process client. Contract
 tests exercise the client first against a fake protocol process, then against
 each release binary.
+
+The adapter preserves the generic `work_packet` boundary, atomic validated
+plan drafting, review artifacts, standard/stacked-worktree metadata and trusted
+Git identity. It keeps complete projections in model context and structured
+result details while rendering concise transcript steps and bounded approval
+prompts. These are host presentation contracts, not Racket semantics.
 
 ### Skills
 
@@ -126,14 +139,18 @@ separate decision.
 
 ## Migration sequence
 
-1. TypeScript/SWI remains authoritative while Racket emits parity packets.
-2. The adapter gains an explicit opt-in Racket backend for differential and
-   integration tests.
-3. A human confirms the required parity window and release evidence.
-4. The package defaults to the Racket executable.
-5. TypeScript compiler, rule, and walker modules are removed in the same
+1. TypeScript/SWI at `ce70e14` is the initial post-bootstrap oracle while
+   Racket emits partial parity packets.
+2. Port coherent compiler and walker families, including authority classes,
+   amendments and legacy replay, under differential tests; advance the oracle
+   pin only deliberately.
+3. The adapter gains an explicit opt-in Racket backend and runs runtime and Pi
+   contract tests against release binaries.
+4. A human confirms the required parity window and release evidence.
+5. The package defaults to the Racket executable.
+6. TypeScript compiler, rule, and walker modules are removed in the same
    release; no silent fallback remains.
-6. The wrapper can be retired later if Pi accepts native executable extensions
+7. The wrapper can be retired later if Pi accepts native executable extensions
    or another host owns the process integration.
 
 ## Consequences

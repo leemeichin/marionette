@@ -7,14 +7,15 @@
   "additionalProperties": false,
   "properties": {
     "spec": {
-      "const": "marionette-parity/0.1"
+      "const": "marionette-parity/0.2"
     },
     "reference": {
       "type": "object",
-      "required": ["implementation", "trajectorySpec", "baseTime"],
+      "required": ["oracle", "baselineCommit", "trajectorySpec", "baseTime"],
       "additionalProperties": false,
       "properties": {
-        "implementation": { "const": "typescript+swi" },
+        "oracle": { "const": "typescript+swi" },
+        "baselineCommit": { "const": "ce70e14" },
         "trajectorySpec": { "type": "string" },
         "baseTime": { "type": "string", "format": "date-time" }
       }

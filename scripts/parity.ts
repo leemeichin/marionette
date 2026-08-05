@@ -44,6 +44,7 @@ const referenceFile = join(repositoryRoot, 'spec', 'parity', 'reference.json');
 const graphCasesFile = join(repositoryRoot, 'spec', 'conformance', 'graph', 'cases.json');
 const walkerCasesDirectory = join(repositoryRoot, 'spec', 'conformance', 'cases');
 const baseTime = '2026-01-01T00:00:00.000Z';
+const baselineCommit = 'ce70e14';
 
 const command = process.argv[2];
 
@@ -79,9 +80,10 @@ switch (command) {
 
 async function capture(): Promise<Json> {
   return {
-    spec: 'marionette-parity/0.1',
+    spec: 'marionette-parity/0.2',
     reference: {
-      implementation: 'typescript+swi',
+      oracle: 'typescript+swi',
+      baselineCommit,
       trajectorySpec: SPEC_VERSION,
       baseTime,
     },
@@ -308,7 +310,7 @@ function referenceManifest(packet: Json): Json {
     });
   };
   return {
-    spec: 'marionette-parity-reference/0.1',
+    spec: 'marionette-parity-reference/0.2',
     packetSpec: packet['spec'] as Json,
     packetSha256: digest(packet),
     diagnostics: caseDigests('diagnostics'),

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "hash": "sha256:f515bb0db13c3c7ceeb48b3ef71057aaf57c57cb05c5da6444b0a09229a6c058",
+  "hash": "sha256:76db284822bac9d7b8ed0bbd7b134bdd606fcc64e6af30c6f42fb361b687a4d6",
   "status": "active",
   "current": "implementation_gate",
   "variables": {},
@@ -74,6 +74,15 @@
       "label": "plan rebound sha256:3c29f6ed7fec… → sha256:f515bb0db13c…",
       "to": "implementation_gate",
       "rationale": "Reconcile the Racket plan after merging ask elicitation to main before beginning human-owned language work."
+    },
+    {
+      "at": "2026-08-05T17:47:10.039Z",
+      "actor": "Lee Meichin",
+      "from": null,
+      "choice": null,
+      "label": "plan rebound sha256:f515bb0db13c… → sha256:76db284822ba…",
+      "to": "implementation_gate",
+      "rationale": "Update the parked Racket plan for the post-bootstrap parity baseline, current gate taxonomy, runtime contracts and thin Pi adapter boundary."
     }
   ],
   "pendingElicitation": null,

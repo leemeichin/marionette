@@ -24,6 +24,28 @@ inputs and outputs; do not translate its internal structure line by line.
 The 48 hours are an orientation target, not a deadline. A precise account of
 where the experiment stopped is a successful result.
 
+## Baseline and honest scope
+
+The initial oracle is TypeScript/SWI at `ce70e14`. Record any later baseline
+advance before accepting new reference output; never regenerate parity hashes
+merely to make a check green.
+
+This workbook proves that the source model, semantic split, diagnostics,
+transition boundary, imports and distribution feel viable in Racket. It does
+**not** promise full Marionette parity in 48 hours. In particular, complete
+runtime persistence, future-only amendments, every refusal precedence case and
+the Pi process-adapter migration belong to the post-slice work below.
+
+Current gate names matter while reading older bootstrap material:
+
+- `@ask` — a trusted operator chooses an authored route;
+- `@input` — the agent opens a focused question and a human answer follows the
+  fixed route;
+- `@human` — a human attests an action with identity and durable evidence.
+
+Archived spec-0.5 trajectories used `@ask` for elicitation. Preserve that
+meaning only when replaying those old graph epochs.
+
 ## Mission 0 — portable seed
 
 ### Outcome
@@ -289,11 +311,14 @@ visible effect as the current walker.
 - A successful operation appends exactly one attributed log entry.
 - A refused operation changes nothing.
 - The transition is selected by exact choice identity, not by target phase.
+- The state shape can grow into distinct `@ask`, `@input`, and `@human`
+  interactions without treating a display label as authority.
 
 ### Finish condition
 
-One versioned walker conformance vector passes unchanged for TypeScript and
-Racket output.
+One versioned autonomous walker conformance vector passes unchanged for
+TypeScript and Racket output. Full interaction and persistence parity is
+explicitly post-slice; do not squeeze it into this mission.
 
 ### Design questions
 
@@ -437,6 +462,7 @@ Make an evidence-backed decision about the complete Racket port.
 - Language ergonomics and distribution ergonomics are evaluated separately.
 - No consumer migrates before the required parity boundary is agreed.
 - Imports and rich diagnostics are implemented once, in the chosen frontend.
+- A successful slice is not described as runtime or Pi parity.
 
 ### Finish condition
 
@@ -445,7 +471,8 @@ Write a short decision record answering:
 1. What felt natural in Racket?
 2. What fought the host or its distribution model?
 3. Which semantics should use Datalog, Racklog, or ordinary Racket?
-4. What must the full parity window include?
+4. What must the full parity window include for interactions, amendments,
+   persistence and host adapters?
 5. Should the project continue, revise the experiment, or stop?
 
 ### Design questions
@@ -475,8 +502,32 @@ demo silently become a production cutover.
 
 ### Reflect
 
-The decision record is the reflection. Bring it to the `vertical_slice` human
-checkpoint.
+The decision record is the reflection. Bring it to the `vertical_slice`
+operator checkpoint.
+
+## After the slice — required before cutover
+
+If the experiment continues, port one coherent family at a time and advance
+the pinned oracle only after reviewing the reference delta:
+
+1. Complete parser, linker, diagnostics and graph-rule parity, including issue
+   #32's imports and source provenance.
+2. Complete walker parity for operator `@ask`, agent-opened `@input`, evidenced
+   `@human`, observations, timeouts and legacy spec-0.5 replay.
+3. Implement future-only amendments: frozen completed contracts, exact open
+   input edges, graph epochs, pure validation and atomic stale-write refusal.
+4. Implement the versioned NDJSON runtime, receipts, projections, event replay,
+   persistence recovery and executor-complete work-packet data.
+5. Run the thin TypeScript adapter against release binaries. Preserve atomic
+   draft validation, review artifacts, standard/stacked worktree metadata, Git
+   identity, generic work packets, bounded approval prompts and concise visible
+   results with complete structured details kept out of transcript rendering.
+6. Remove TypeScript/SWI semantics only after the agreed differential window;
+   never ship a silent fallback interpreter.
+
+The core parity packet in `spec/parity/` is a starting seam, not proof of all
+six items. Existing runtime, amendment and Pi integration tests remain required
+until equivalent process-level conformance vectors replace them.
 
 ## Reference shelf
 
