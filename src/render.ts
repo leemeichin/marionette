@@ -13,6 +13,25 @@ export interface RenderOptions {
   direction?: 'TD' | 'LR';
 }
 
+/** A deliberately small terminal projection: phases and their outgoing routes. */
+export function renderCompactGraph(trajectory: Trajectory): string {
+  const lines: string[] = [];
+  for (const node of trajectory.nodes) {
+    const title = firstLine(node.body);
+    lines.push(`● ${node.id}${title ? ` — ${title}` : ''}`);
+    for (const choice of node.choices) {
+      const marks = [
+        choice.human ? '✋' : '', choice.ask ? '?' : '', choice.input ? '‽' : '', choice.loop ? '↻' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      lines.push(`  ${marks ? `${marks} ` : '→ '}${choice.label} → ${choice.target}`);
+    }
+    if (node.next) lines.push(`  → ${node.next.target}`);
+  }
+  return lines.join('\n');
+}
+
 function esc(text: string): string {
   return text
     .replace(/&/g, '&amp;')
@@ -71,7 +90,8 @@ export async function renderMermaid(
     for (const choice of node.choices) {
       const parts: string[] = [];
       if (choice.human) parts.push('✋');
-      if (choice.ask) parts.push('‽');
+      if (choice.ask) parts.push('?');
+      if (choice.input) parts.push('‽');
       if (choice.loop) parts.push('↻');
       parts.push(choice.label);
       if (choice.gate) parts.push(`{${choice.gate.source}}`);
@@ -80,7 +100,7 @@ export async function renderMermaid(
       const arrow = choice.loop ? `-. "${text}" .->` : `-- "${text}" -->`;
       lines.push(`  ${node.id} ${arrow} ${choice.target}`);
       if (choice.human) humanEdges.push(edgeIndex);
-      if (choice.ask) askEdges.push(edgeIndex);
+      if (choice.ask || choice.input) askEdges.push(edgeIndex);
       edgeIndex++;
     }
     if (node.next) {

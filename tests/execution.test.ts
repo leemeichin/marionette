@@ -95,6 +95,13 @@ test('delivery: node tags override plan tags; {phase} expands; unknown values wa
   assert.deepEqual(resolveDelivery(trajectory!.meta, b.meta, b.id),
     { mode: 'single-pr', report: 'at-checkpoints', branch: null });
 
+  const stacked = await compile('# delivery: stacked-prs\n=== a ===\nAlpha.\n-> END\n');
+  assert.deepEqual(
+    resolveDelivery(stacked.trajectory!.meta, stacked.trajectory!.nodes[0].meta, 'a'),
+    { mode: 'stacked-prs', report: 'per-phase', branch: null },
+  );
+  assert.equal(stacked.diagnostics.filter((d) => d.code === 'MAR019').length, 0);
+
   const { diagnostics } = await compile('# delivery: yolo\n# report: sometimes\n=== a ===\nAlpha.\n-> END\n');
   assert.equal(diagnostics.filter((d) => d.code === 'MAR019').length, 2);
 });
@@ -129,7 +136,7 @@ test('brief: awaiting-human when every available choice is @human, with escalati
   state = await takeChoice(trajectory!, state, 'Done', { actor: 'agent', rationale: 'n reached 2', at: AT });
   const brief = await buildBrief(trajectory!, state, { file: 'plan.mar' });
 
-  assert.equal(brief.status, 'awaiting-human');
+  assert.equal(brief.status, 'awaiting-external');
   assert.ok(brief.escalation);
   assert.deepEqual(brief.escalation!.choices, ['b#0']);
   assert.deepEqual(brief.escalation!.fallbacks, []);
@@ -150,7 +157,7 @@ timeout 1h [Expire safely] -> END
     at: '2026-01-01T00:30:00.000Z',
   });
 
-  assert.equal(brief.status, 'awaiting-human');
+  assert.equal(brief.status, 'awaiting-external');
   assert.deepEqual(brief.escalation?.fallbacks, [{
     choice: 'approval#1',
     label: 'Expire safely',
@@ -191,14 +198,19 @@ test('rebind: migrates state across a plan edit, keeping the log', async () => {
   state = await takeChoice(v1, state, '0', { actor: 'agent', rationale: 'go', at: AT });
 
   const v2 = (await compile(
-    'VAR added = true\n=== a ===\nAlpha.\n-> b\n=== b ===\nBeta, reworded.\n* [Ship] -> END\n* [Hold] @human -> END\n',
+    'VAR n = 0\nVAR added = true\n=== a ===\nAlpha.\n~ n += 1\n* [Go] -> b\n=== b ===\nBeta, reworded.\n* [Ship] -> END\n* [Hold] @human -> END\n',
   )).trajectory!;
   assert.notEqual(v1.hash, v2.hash);
 
-  const report = rebindState(v2, state, { actor: 'lee', rationale: 'scope grew: hold door added', at: AT });
+  const report = rebindState(v2, state, {
+    previousTrajectory: v1,
+    actor: 'lee',
+    rationale: 'scope grew: hold door added',
+    at: AT,
+  });
   assert.equal(state.hash, v2.hash);
-  assert.deepEqual(report.droppedTaken, ['a#0']);
-  assert.deepEqual(Object.keys(report.droppedVariables), ['n']);
+  assert.deepEqual(report.droppedTaken, []);
+  assert.deepEqual(Object.keys(report.droppedVariables), []);
   assert.deepEqual(report.addedVariables, { added: true });
   assert.equal(state.log.length, 3, 'decision log survives migration and records the amendment');
   const amendment = state.log[2];
@@ -220,7 +232,7 @@ test('rebind: refuses when the current phase no longer exists', async () => {
 
   const v2 = (await compile('=== a ===\nAlpha.\n* [Ship] -> END\n')).trajectory!;
   assert.throws(
-    () => rebindState(v2, state),
+    () => rebindState(v2, state, { previousTrajectory: v1 }),
     (e: unknown) => e instanceof WalkError && e.code === 'migration-blocked',
   );
 });

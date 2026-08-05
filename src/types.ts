@@ -73,6 +73,11 @@ export interface Choice {
    * human for missing context before the edge can advance.
    */
   ask: boolean;
+  /**
+   * Fixed-target free-text input checkpoint in spec 0.6+. Absent from archived
+   * spec-0.5 trajectories, where `ask: true` carried this meaning.
+   */
+  input?: boolean;
   /** Declared loop edge (`~loop~`): the author asserts this edge intentionally revisits earlier work. */
   loop: boolean;
   /** Temporal availability for a `timeout` edge; null for ordinary choices. */
@@ -139,7 +144,7 @@ export interface Trajectory {
   refs: Ref[];
 }
 
-export const SPEC_VERSION = '0.5.0';
+export const SPEC_VERSION = '0.6.0';
 export const PLAN_STATE_VERSION = 2;
 export const END = 'END';
 
@@ -218,7 +223,7 @@ export interface ObservationEntry {
   rationale: string | null;
 }
 
-/** One open or answered `@ask` exchange in the traversal audit trail. */
+/** One open or answered `@input` exchange in the traversal audit trail. */
 export interface ElicitationEntry {
   choice: string;
   label: string;
@@ -232,7 +237,7 @@ export interface ElicitationEntry {
   answeredBy: string | null;
 }
 
-/** The `@ask` edge currently waiting for a human answer. */
+/** The `@input` edge currently waiting for an operator answer. */
 export interface PendingElicitation {
   choice: string;
   target: string;

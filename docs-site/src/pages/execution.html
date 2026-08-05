@@ -154,9 +154,10 @@ phase.</p>
 <div class="table-wrap">
 <table>
   <tr><th scope="col">Tag</th><th scope="col">Values</th><th scope="col">Meaning</th></tr>
-  <tr><td rowspan="5"><code># delivery:</code></td>
+  <tr><td rowspan="6"><code># delivery:</code></td>
       <td><code>pr-per-phase</code></td><td>each phase's work lands as its own pull request</td></tr>
   <tr><td><code>branch-per-phase</code></td><td>a branch per phase; PRs at the executor's discretion</td></tr>
+  <tr><td><code>stacked-prs</code></td><td>ordered, dependent GitHub PR layers in one stack-enabled worktree</td></tr>
   <tr><td><code>single-pr</code></td><td>one pull request for the whole traversal</td></tr>
   <tr><td><code>single-branch</code></td><td>one branch, commits per phase, no PR automation</td></tr>
   <tr><td><code>none</code> <em>(default)</em></td><td>no prescribed packaging (non-code plans, executor's discretion)</td></tr>
@@ -170,7 +171,8 @@ phase.</p>
 </div>
 
 <p>Unknown values warn (<code>MAR019</code>) and fall back to the defaults,
-so a typo can't silently change delivery behaviour.</p>
+so a typo can't silently change delivery behaviour. Stacked layers stay in
+one isolated worktree and use GitHub's official <code>gh stack</code> flow.</p>
 
 <h2 id="refs">External refs</h2>
 

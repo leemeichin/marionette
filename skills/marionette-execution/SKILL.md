@@ -19,25 +19,19 @@ https://github.com/leemeichin/marionette/blob/main/docs/EXECUTION.md
 
 ## Choose the bound runtime before the CLI
 
-If `marionette_walk` is available and a run is bound, it is the authoritative
-walker for this session. Use it for `next`, `choose`, `ask`, `advance`,
-`observe`, `record`, and runtime event reads. **Do not** run `marionette brief` or
-`marionette state ...` against that plan: those commands use a separate
-`<plan>.state.json` store and would fork the traversal.
+If `work_packet` is available, the host has bound managed work for this
+session. Treat the engine as an implementation detail:
 
-In a bound session, translate the loop below as follows:
+- read the current task with `work_packet(status)`;
+- return completion once with `work_packet(complete)`, an exact
+  human-readable outcome label when choices exist, and an evidence summary;
+- use `work_packet(request_input)` for an authored free-text route;
+- record requested observations with `work_packet(observe)`;
+- stop whenever human input is pending—the host opens native intervention UI
+  automatically. Never ask the user to type command syntax or internal ids.
 
-- re-brief → `marionette_walk` with `operation: "next"`
-- state choose/ask/advance/observe → the matching `marionette_walk` operation
-- attach an audit record → `marionette_walk` with `operation: "record"`
-- inspect history → `marionette_walk` with `operation: "events"` and its cursor
-- human checkpoint → `/marionette-decide`; never proxy it through the tool
-- elicitation checkpoint → agent opens it with `ask`; the human answers
-  through `/marionette-answer`
-
-The `work` projection is the full work packet. If a caller deliberately
-requests a smaller budget and receives `truncated: true`, call `next` again
-with a sufficient `budget`; do not infer omitted prose or choices.
+**Do not** run CLI state commands against bound work: they use a separate state
+store and would fork traversal.
 
 ## Locating the CLI when no runtime is bound
 
@@ -67,40 +61,21 @@ Repeat until the brief says otherwise:
    - `waiting-timeout` — no ordinary route is currently available and a hard
      timeout has not expired. Park; if the platform can schedule a wake-up,
      arrange it for the deadline, then re-brief. Do not poll in a tight loop.
-   - `awaiting-human` — deliver the brief's `escalation` payload to the
-     primary session/human verbatim: the phase body, each choice (label,
-     target, gate), any graph-authored `fallbacks`, and the recorded `how`.
-     Then **stop and wait**. Never
-     take an `@human` choice on your own judgement. The human answers
-     through either channel:
-     - **Out of band (unbound CLI traversal only):** they run `state choose`
-       themselves with their own `--actor`.
-     - **In band (unbound CLI traversal only):** they state their decision in
-       the conversation and you record it *as their proxy*:
-       `marionette state choose <plan> <choice>
-       --actor <their-name> --rationale "<their words, quoted or faithfully
-       summarised>"`. Proxy rules: only for a decision they stated
-       explicitly and unambiguously in this conversation, mapped to exactly
-       one available choice; the rationale is *their* stated reasoning, not
-       yours (you may append context in brackets, e.g. "[relayed from
-       session]"); if their message is ambiguous, doesn't match a choice,
-       or is silence — ask, never infer, never default. The walker refuses
-       only `--actor agent` at `@human` gates: attribution, not ceremony,
-       is the contract.
-     - **Trusted host UI (required when bound):** when the host provides a
-       human-only response path (Pi's `/marionette-decide`, for example),
-       direct the user there. The model-facing `marionette_walk` tool stays
-       agent-bound and cannot proxy the human choice.
-     Silence never selects a default. If `fallbacks` is empty, the run parks
-     indefinitely; if it lists a timeout choice, schedule a wake-up for its
-     `dueAt` and re-brief then. Only the frontier may open that fallback.
-   - `awaiting-elicitation` — deliver the brief's `elicitation` payload
-     verbatim: the focused question, choice label, fixed target, who asked and
-     why. Then stop. This is not approval and the human does not select a
-     route. In a bound host direct them to `/marionette-answer`; in an
-     unbound CLI traversal record their explicit answer with
-     `marionette state answer <plan> "<answer>" --actor <name>`. Never invent,
-     complete or default the answer.
+   - `awaiting-operator` — stop. In Pi, the trusted host opens named choices
+     automatically and records the selection without exposing internal ids.
+     Never infer, proxy, or default the route.
+   - `awaiting-external` — stop. This is an explicitly high-risk `@human`
+     action; the trusted host requests the existing durable evidence in its
+     intervention dialog. Routine review and acceptance should use `@ask`,
+     not this status.
+   - `awaiting-human` — legacy spec-0.5 graph epoch. Preserve its recorded
+     human-choice semantics and follow the packet's trusted response path;
+     new plans use `awaiting-operator` or `awaiting-external` instead.
+   - `awaiting-elicitation` — stop. In Pi, the trusted host opens the authored
+     question in a native text editor and records the answer. This is context,
+     not approval or route selection; never invent or default it.
+   For every parked interaction, silence never selects a default. Schedule
+   only graph-authored timeout fallbacks listed in the packet.
    - `stranded` — report which gates are shut and the current variables; the
      plan likely needs editing (author fixes, then `marionette state rebind`).
      Stop.
@@ -130,7 +105,7 @@ the plan changed underneath the state: stop and surface the drift message;
   `timebox 3d — in phase 5d (overdue)` does not stop you — nothing in the
   walker will on metadata alone — it tells you the honest move: wrap up and take
   the phase's abandon exit (its claim "timebox spent" is now simply true),
-  or escalate if only `@human` doors remain. State the elapsed time in the
+  or escalate if only operator/external doors remain. State the elapsed time in the
   rationale so the log shows time drove the decision. Use `# priority:`
   to order work when several phases or plans compete for your session;
   priority never makes an unavailable choice available.
@@ -147,17 +122,16 @@ the plan changed underneath the state: stop and surface the drift message;
   phase implies; a found source gets linked into the plan
   (`marionette sync link`, or ask the owner to add a `# ref:`). Only when
   discovery comes up empty, stop and ask the plan owner — in-band, like an
-  `@human` escalation, stating exactly what's unspecified — and record the
+  `@input` request, stating exactly what's unspecified — and record the
   answer where it survives: the decision rationale, or better, a ref on the
   phase so the next traversal doesn't re-ask. Never substitute your own
   reading of under-specified work for the owner's — a wrong guess executed
   confidently is worse than a paused phase.
-- **Prefer an authored `@ask` route when it is available.** Open it with one
-  focused question and a rationale explaining the ambiguity. Do not use
-  ordinary `choose`: the runtime parks, records the human answer separately,
-  and advances the already-authored edge.
+- **Prefer an authored `@input` route for missing context.** Open it with one
+  focused question and a rationale explaining the ambiguity. The runtime
+  parks, records the operator answer separately, and advances the fixed edge.
 - **Honest rationales beat optimistic ones.** If the evidence for a choice
-  is thin, that is what loop edges and `@human` escapes are for.
+  is thin, that is what loops, operator `@ask`, and evidenced `@human` gates are for.
 
 ## Proposing plan amendments
 
@@ -165,27 +139,33 @@ The plan is not frozen — it is gated. When traversal surfaces novel work no
 phase covers and no queue absorbs, do not force it into the nearest
 rationale and do not edit the plan yourself. Propose an amendment:
 
-1. **Draft and prove it.** Edit a copy of the `.mar`;
-   `marionette validate draft.mar --strict` must pass, and the current
-   phase must survive the edit (a deleted current phase blocks migration).
-2. **Escalate in-band**, exactly like an `@human` gate: show the diff, the
-   novel work it admits, and why the current graph cannot absorb it.
-3. **On explicit approval**, apply the edit and record the amendment with
-   the owner's attribution:
-   `marionette state rebind plan.mar --actor <owner> --rationale "<their words>"`.
-   The rebind appends a decision-log entry carrying the old and new graph
-   hashes — the amendment joins the audit trail, not a side channel.
-4. **Silence or ambiguity is not approval**: the un-amended plan stays in
-   force and the novel work stays unstarted.
+1. **Draft and prove it without changing the live source.** Completed phase
+   ids are immutable, including a phase revisited through a loop. Preserve
+   them exactly, keep the current phase, and add or update only unfinished
+   phases. Validate the complete candidate with
+   `marionette validate draft.mar --strict`.
+2. **Escalate in-band** as an informed operator decision: show the semantic
+   diff, the novel work it admits, and why the current graph cannot absorb it.
+   In a bound Pi session call `marionette_amend` with the complete candidate
+   and rationale; it compiler-checks the candidate, enforces the future-only
+   boundary, writes review artifacts, and leaves the live plan untouched.
+3. **Only trusted approval applies it.** For state-file traversal the owner
+   runs `marionette state rebind plan.mar --dry-run --json`, then applies with
+   their `--actor` and `--rationale`. In a bound Pi session stop and direct the
+   owner to the trusted amendment-approval UI; the model-facing work packet
+   cannot approve or apply amendments.
+4. **Silence, ambiguity, or a refused policy report is not approval**: the
+   un-amended plan and runtime graph stay in force and the novel work stays
+   unstarted.
 
 Mechanical ref edits have their own doors and need no proposal:
 `marionette sync link` / `sync bind` recompile-check, rebind automatically,
 and log as actor `sync`.
 
-When `marionette_walk` is bound, do not use either rebind path: the local
-runtime currently treats its archived graph as immutable. Stop and ask the
-trusted host to migrate or open a new run so the runtime journal remains the
-single audit trail.
+A successful amendment archives the new graph and appends an attributed
+`plan.rebound` event. Historical runtime events continue to resolve against
+their original graph hashes; do not rewrite old source artifacts or journal
+records to make them resemble the amended future.
 
 ## Service phases: park, don't spin
 
@@ -221,9 +201,12 @@ packaged and reported — it is configuration, not advice:
 
 - `mode: pr-per-phase` — land each phase as its own PR (use `branch` when
   set; `{phase}` is already expanded). `branch-per-phase` — branch per
-  phase, PRs at your discretion. `single-pr` / `single-branch` — accumulate
-  on one branch, one PR or none. `none` — no prescribed packaging; use
-  judgement (the plan may not produce code at all).
+  phase, PRs at your discretion. `stacked-prs` — use GitHub's official
+  `gh stack` flow, keep all dependent layers in the same isolated worktree,
+  run `gh stack rebase --upstack` after lower-layer changes, submit with
+  `gh stack submit --auto`, and merge bottom-up. `single-pr` /
+  `single-branch` — accumulate on one branch, one PR or none. `none` — no
+  prescribed packaging; use judgement (the plan may not produce code at all).
 - `report: per-phase` — after each recorded step, tell the primary
   session/user: phase completed, choice taken, rationale, what's next.
   `at-checkpoints` — report only when you escalate at `@human` (and at the
@@ -271,10 +254,10 @@ carries a `# tracker:` tag — the manifest tells you exactly what to do
 - Never edit the `.mar`, the trajectory JSON, or the state file by hand;
   state changes go through `state observe|choose|ask|answer|advance|rebind`
   only.
-- Never pass `--actor` other than `agent` for your own steps. Recording a
-  human's decision as their proxy requires their explicit in-conversation
-  instruction, their name as `--actor`, and their stated rationale — a
-  paraphrase of intent you inferred is not a decision.
+- Never pass `--actor` other than `agent` for your own steps. Human decisions
+  and confirmations must use the trusted host/CLI surface; Pi resolves the
+  configured identity or current repository Git author. A paraphrase of intent
+  inferred by the agent is not a decision.
 - Zero out-of-graph actions (G2): if what you did doesn't match any
   available choice, that's a finding to report, not something to force into
   the log.

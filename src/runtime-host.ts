@@ -10,24 +10,28 @@
 import type { Trajectory } from './types.ts';
 import type { RuntimePrincipal, RuntimeRequest } from './runtime-protocol.ts';
 import {
-  executeRuntimeRequest,
-  type RuntimeCommandOptions,
+  amendRuntimeSnapshot, executeRuntimeRequest,
+  type RuntimeAmendOptions, type RuntimeCommandOptions,
   type RuntimeCommandResult,
   type RuntimeSnapshot,
 } from './runtime.ts';
-import { commitRuntimeStore } from './runtime-store.ts';
+import { archiveTrajectory, commitRuntimeStore } from './runtime-store.ts';
 
 export class RuntimeRunController {
   private tail: Promise<void> = Promise.resolve();
 
   constructor(
-    private readonly trajectory: Trajectory,
+    private trajectory: Trajectory,
     private snapshot: RuntimeSnapshot,
     private readonly storeRoot: string,
   ) {}
 
   currentSnapshot(): RuntimeSnapshot {
     return this.snapshot;
+  }
+
+  currentTrajectory(): Trajectory {
+    return this.trajectory;
   }
 
   /**
@@ -38,6 +42,36 @@ export class RuntimeRunController {
   reload(load: () => Promise<RuntimeSnapshot>): Promise<void> {
     const pending = this.tail.then(async () => {
       this.snapshot = await load();
+    });
+    this.tail = pending.then(() => undefined, () => undefined);
+    return pending;
+  }
+
+  amend(
+    principal: RuntimePrincipal,
+    candidate: Trajectory,
+    options: RuntimeAmendOptions,
+  ): Promise<RuntimeCommandResult> {
+    const pending = this.tail.then(async () => {
+      const before = this.snapshot;
+      const executed = await amendRuntimeSnapshot(
+        this.trajectory,
+        candidate,
+        before,
+        principal,
+        options,
+      );
+      await archiveTrajectory(this.storeRoot, candidate);
+      commitRuntimeStore(
+        this.storeRoot,
+        candidate,
+        before,
+        executed.snapshot,
+        executed.events,
+      );
+      this.trajectory = candidate;
+      this.snapshot = executed.snapshot;
+      return executed;
     });
     this.tail = pending.then(() => undefined, () => undefined);
     return pending;

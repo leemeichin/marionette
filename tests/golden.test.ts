@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compile } from '../src/compile.ts';
-import { renderMermaid } from '../src/render.ts';
+import { renderCompactGraph, renderMermaid } from '../src/render.ts';
+import { renderSvg } from '../src/render-svg.ts';
 import { summarize } from '../src/summarize.ts';
 import { initState, takeChoice } from '../src/state.ts';
 
@@ -39,6 +40,26 @@ test('render: mermaid marks human (✋), loops (↻, dashed), gates and END', as
   assert.match(mmd, /\{iteration &lt; 3\}/);
   assert.match(mmd, /END\(\(\(END\)\)\)/);
   assert.match(mmd, /linkStyle \d+ stroke:#7d3e80/);
+});
+
+test('render: compact terminal view stays linear while preserving review markers', async () => {
+  const trajectory = (await compile(fixture('kitchen_sink.mar'))).trajectory!;
+  const compact = renderCompactGraph(trajectory);
+  assert.match(compact, /^● build_mvp/m);
+  assert.match(compact, /✋/);
+  assert.match(compact, /↻/);
+  assert.doesNotMatch(compact, /[┌┐└┘]/);
+});
+
+test('render: dependency-free SVG is a styled, browser-readable graph', async () => {
+  const trajectory = (await compile(fixture('kitchen_sink.mar'))).trajectory!;
+  const svg = await renderSvg(trajectory, { direction: 'LR' });
+  assert.match(svg, /^<\?xml/);
+  assert.match(svg, /<svg[^>]+role="img"/);
+  assert.match(svg, /arrow-human/);
+  assert.match(svg, /class="edge human"/);
+  assert.match(svg, /class="node start"/);
+  assert.match(svg, />END<\/text>/);
 });
 
 test('render: taken path, current node and frontier are highlighted from state', async () => {

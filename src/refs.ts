@@ -14,7 +14,7 @@
  *
  * Delivery config — how an executor portions out and reports the work:
  *
- *   # delivery: pr-per-phase | branch-per-phase | single-pr | single-branch | none
+ *   # delivery: pr-per-phase | branch-per-phase | stacked-prs | single-pr | single-branch | none
  *   # delivery:branch: replatform/{phase}    branch name template ({phase} → node id)
  *   # report: per-phase | at-checkpoints | at-end
  *
@@ -32,6 +32,8 @@ export const DELIVERY_MODES = [
   'pr-per-phase',
   /** A branch per phase; pull requests at the executor's discretion. */
   'branch-per-phase',
+  /** Ordered, dependent GitHub pull requests kept in one stack-enabled worktree. */
+  'stacked-prs',
   /** One pull request for the whole traversal. */
   'single-pr',
   /** One branch, commits per phase, no PR automation. */

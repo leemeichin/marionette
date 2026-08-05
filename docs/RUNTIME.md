@@ -58,15 +58,18 @@ bounded at 64 KiB.
 The first request initializes the connection:
 
 ```json
-{"protocol":"0.4.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
+{"protocol":"0.5.0","id":1,"op":"initialize","client":{"name":"pibarm","version":"0.1"}}
 ```
 
 After initialization, the host uses:
 
 - `next` — read the current projection.
-- `choose` — take an exact choice id with rationale, expected revision and
-  optional idempotency key.
-- `ask` — open an exact `@ask` choice with a focused question and rationale.
+- `choose` — take an autonomous choice or trusted operator `@ask` route with
+  rationale, expected revision and optional idempotency key.
+- `confirm` — attest an `@human` action with a human principal and at least
+  one durable evidence reference. The protocol's `external-human` role means
+  external to agent authority, not necessarily a different session operator.
+- `ask` — open an exact `@input` choice with a focused question and rationale.
 - `answer` — supply human-authored context for the open elicitation.
 - `advance` — follow the automatic next step with the same write controls.
 - `observe` — supply a requested scalar value with its source/evidence in the
@@ -94,52 +97,43 @@ prose. Truncated projections contain `truncated: true`, an `omitted` summary
 and a `bodyRef` that can be resolved against the archived trajectory.
 
 ```json
-{"protocol":"0.4.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
+{"protocol":"0.5.0","id":2,"op":"next","profile":"signal","budget":{"maxItems":4}}
 ```
 
 The host should keep event traffic outside model context. Wake or prompt the
 model only for actionable states such as a new node, `observation.required`,
-`human.required`, `elicitation.required`, `run.stranded`, or `run.completed`.
+`operator.required`, `external.required`, `elicitation.required`,
+`run.stranded`, or `run.completed`.
 
-## Human escalation
+## Operator decisions and evidenced human confirmations
 
-`human.required` is a durable wake signal for one activation of an `@human`
-checkpoint. Its data contains:
+`operator.required` wakes the trusted host when `@ask` routes require its
+current operator. `external.required` parks until a human attests the action
+with durable evidence. Both project a stable escalation id and a complete decision packet: plan
+intent, full phase body, refs, variables, progress, exact choices,
+target titles/effects, expected revision, response operation, evidence
+requirement, and graph-authored fallbacks.
+
+The operator resolves `@ask` with an exact `choose` under a human-bound
+principal. `@human` instead requires evidenced `confirm`. The wire role remains
+`external-human` because the authority is outside the agent; the confirmer may
+also be the current Pi operator:
 
 ```json
-{
-  "id": "marionette://run/implementation/escalation/7",
-  "expectedRevision": 3,
-  "reason": "every choice at this phase is an @human checkpoint",
-  "choices": [
-    { "id": "approval#0", "label": "Approve", "target": "rollout" }
-  ],
-  "fallbacks": [],
-  "response": { "operation": "choose" }
-}
+{"protocol":"0.5.0","id":3,"op":"confirm","choiceId":"approval#0","rationale":"maintainer approved PR #12","expectedRevision":2,"evidence":[{"provider":"github","kind":"review","id":"acme/repo#12","url":"https://github.com/acme/repo/pull/12#pullrequestreview-1"}]}
 ```
 
-The id survives journal replay and remains stable until the run leaves and
-later re-enters the checkpoint. Before presenting or resolving it, call
-`next`: that projection carries the current revision, phase context and the
-same escalation id. A graph-linked `record` can change the revision without
-changing the escalation activation.
+Success emits `external.confirmed` with the actual human actor and evidence.
+The runtime does not compare that actor with the plan committer or operator.
+Agent tools cannot issue either trusted response. Silence parks the run; only
+a graph-authored timeout fallback may end the wait.
 
-There is no protocol-level deadline or default. Silence parks the run. If the
-plan authors a `timeout` choice, `fallbacks` contains its id and `dueAt`; the
-host may schedule a wake-up, but only the Prolog frontier decides when that
-choice becomes available.
+## Input elicitation
 
-Agent-facing connections remain unable to take the listed choices. A trusted
-host records the answer through a human-bound principal, using the normal
-exact `choose` request with rationale, revision and idempotency key.
-
-## Elicitation
-
-`@ask` is a two-write exchange. An agent-bound principal opens it:
+`@input` is a two-write exchange. An agent-bound principal opens it:
 
 ```json
-{"protocol":"0.4.0","id":3,"op":"ask","choiceId":"design#1","question":"Must the release run without network access after unpacking?","rationale":"the packaging route depends on this constraint","expectedRevision":2,"idempotencyKey":"ask-42"}
+{"protocol":"0.5.0","id":3,"op":"ask","choiceId":"design#1","question":"Must the release run without network access after unpacking?","rationale":"the packaging route depends on this constraint","expectedRevision":2,"idempotencyKey":"ask-42"}
 ```
 
 The runtime emits `elicitation.required` and projects
@@ -147,12 +141,38 @@ The runtime emits `elicitation.required` and projects
 question and the already-authored edge. A human-bound principal answers:
 
 ```json
-{"protocol":"0.4.0","id":4,"op":"answer","answer":"Yes; unpacking is allowed, but no runtime download.","expectedRevision":3,"idempotencyKey":"answer-42"}
+{"protocol":"0.5.0","id":4,"op":"answer","answer":"Yes; unpacking is allowed, but no runtime download.","expectedRevision":3,"idempotencyKey":"answer-42"}
 ```
 
 The runtime records `elicitation.answered`, advances the fixed edge and
 resumes the agent. The answer is context rather than authority: it neither
-chooses a target nor passes an `@human` gate.
+chooses a target nor confirms an evidenced `@human` action.
+
+## Graph epochs and live amendments
+
+A durable run is not tied to one graph forever. It is tied to an append-only
+sequence of graph epochs. Ordinary decisions retain the trajectory hash that
+was current when they were recorded. A trusted future-only amendment:
+
+1. compares the archived current trajectory with the compiled candidate;
+2. refuses changes to every completed phase id and variable declaration used
+   by completed work;
+3. archives the candidate by hash;
+4. migrates the live future state; and
+5. appends one human- or system-attributed `plan.rebound` event containing the
+   old/new hashes, rationale, expected revision, and structured report.
+
+Journal replay starts from `run.started`, resolves each archived trajectory,
+and switches graphs only at `plan.rebound`. Historical events are never
+rewritten to the new hash. Revisions and the single-writer snapshot check apply
+to amendments just as they do to decisions; a stale concurrent amendment
+leaves the accepted epoch active.
+
+Amendment approval is intentionally not an agent runtime request. A trusted
+host uses `RuntimeRunController.amend` (the Pi host API wraps it), while the
+model-facing command plane remains `next|choose|ask|answer|advance|observe|record|events`;
+trusted hosts additionally expose external `confirm`.
+This keeps graph authority at the same trust boundary as human checkpoints.
 
 ## Pi proving-ground integration
 
@@ -163,9 +183,14 @@ launch:
 pi install git:github.com/leemeichin/marionette
 pi \
   --marionette-plan plans/marionette.mar \
-  --marionette-run implementation \
-  --marionette-human lee
+  --marionette-run implementation
 ```
+
+Trusted decisions default to the author identity that `git var GIT_AUTHOR_IDENT`
+resolves in the current repository. `--marionette-human lee` remains an
+explicit override. The same fallback applies to `/marionette-decide`,
+`/marionette-answer`, `/marionette-confirm-human`, and amendment approval;
+Marionette does not compare it with the author of an earlier commit.
 
 The package manifest points directly at `src/pi-extension.ts`; Pi loads that
 TypeScript source through its extension loader. The compiled `dist/` tree is
@@ -174,12 +199,37 @@ prerequisite for loading the Pi extension. Source imports name the real
 `.ts` files; TypeScript rewrites those relative specifiers to `.js` only when
 emitting `dist/`.
 
-You can instead bind interactively with
-`/marionette-start <plan.mar> [run-id]`. Pi also exposes `marionette_draft`,
-which compiler-checks complete DSL source before atomically writing a `.mar`
-file. Invalid drafts never touch disk; successful results include the graph
-hash, plain-language summary, and Mermaid review graph. Overwriting is opt-in
-for explicit refinement.
+You can author and approve a plan entirely in this standalone package with
+`/plan <task>`, `/refine-plan`, and `/approve-plan [active|worktree <name>]`,
+or bind an existing plan with `/marionette-start <plan.mar> [run-id]`. Draft
+mode is read-only: Pi preserves the session's inspection and planning tools,
+adds `marionette_draft`, and blocks built-in project writes, traversal, and
+mutating shell commands.
+
+`marionette_draft` compiler-checks complete DSL source before atomically
+writing a `.mar` file. Invalid drafts never touch disk. Successful drafts are
+shown immediately as a durable review card and include a minimal terminal
+graph plus plain-language summary. The approval dialog repeats a bounded plan
+overview and walkthrough preview beside its choices, so it stays within a
+normal terminal viewport without relying on transcript backscroll. The tool
+also writes sibling `.mmd` and `.svg` files and returns their paths and `file:`
+URIs for out-of-band viewers. Overwriting
+is opt-in for explicit refinement.
+
+Worktree approval asks once per Pi session whether to enable GitHub's official
+`gh stack` public-preview flow when the repository is hosted on GitHub. Opting
+in requires GitHub CLI 2.90+, installs `github/gh-stack` only when needed, and
+initializes the worktree branch against the repository trunk. Declining or a
+setup failure keeps the normal worktree. The persisted execution metadata
+records `branching: "standard" | "github-stack"`; stack layers stay together
+inside that one worktree.
+
+For a bound run, `marionette_amend` validates complete candidate source against
+completed history, leaves the live source untouched, and returns a semantic
+diff plus compact output and candidate/Mermaid/SVG artifact paths. The pending
+proposal survives restart and `/tree` navigation. A trusted user applies it
+with `/marionette-approve-amendment`; hosts use `proposeAmendment()` and
+`approveAmendment()` on the typed API.
 
 The model gets one agent-bound traversal tool, `marionette_walk`. It mirrors
 the runtime command surface:
@@ -195,12 +245,17 @@ caller can deliberately bound it; `truncated`/`omitted` then tell the caller
 to fetch `next` again with a larger budget.
 
 At an escalation the agent must stop. The user answers through
-`/marionette-decide`, which selects a choice, captures the user's name and
-rationale, records the human-bound write, and injects the resulting projection
+`/marionette-decide`, which selects a choice, resolves the user's configured or repository Git
+identity, captures the rationale, records the human-bound write, and injects
+the resulting projection
 so the agent can resume. A trusted embedding can instead provide an
 authenticated human principal through the host API described below.
-At an elicitation the user instead answers through `/marionette-answer`;
-the host records an `answer` write and resumes the agent.
+At an elicitation the trusted Pi host opens a native text editor, records the
+answer, and resumes the agent. Operator choices likewise open as named native
+choices without internal ids. Projection JSON stays in model context and
+structured result details, while the transcript shows only phase, status,
+progress, and outcomes. Only explicitly high-risk `@human` actions ask for a
+durable evidence URL. Slash commands remain compatibility fallbacks.
 
 The binding is stored on the active Pi session branch and restored after
 restart or `/tree` navigation. `/marionette-stop` appends an unbound tombstone
@@ -209,19 +264,20 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.2.0`) with the same shape in four places:
+(`marionette.pi` / `1.6.0`) with the same shape in four places:
 
-1. `marionette_walk` tool-result `details`;
+1. `work_packet` (and legacy `marionette_walk`) tool-result `details`;
 2. `marionette-projection` custom-message `details`;
 3. durable `marionette-event` custom session entries;
 4. Pi's shared `marionette:event:v1` extension event channel.
 
 Every envelope identifies its cause and current binding and may carry the
 projection, emitted runtime events, revision/event-sequence receipt, replay
-state, operation result, a structured error, or a validated draft artifact.
-Successful `marionette_draft` calls emit `plan.drafted`; runtime traversal
-continues to emit binding and runtime events. A host therefore never needs to
-parse rendered prose, widgets, or the runtime store.
+state, operation result, a structured error, a validated draft, or an
+amendment artifact. Successful proposals emit `plan.amendment-proposed`;
+trusted application emits `plan.rebound`. Runtime traversal continues to emit
+binding and runtime events. A host therefore never needs to parse rendered
+prose, widgets, or the runtime store.
 
 Trusted in-process extensions discover the typed `MarionettePiHostApi` through
 either:
@@ -230,17 +286,25 @@ either:
 - `marionette:discover:v1`, with `{ respond(api) { ... } }` for load-order
   independent discovery.
 
-The API exposes `getBinding()`, `bind()`, `unbind()`, every agent-bound runtime
-operation through `execute()`, plus separate `humanChoose()` and
-`humanAnswer()` methods accepting a host-authenticated principal. Before
-prompting, `/marionette-decide` and `/marionette-answer` also ask
-`marionette:human:v1` for an optional host-configured actor identity. Channel
+The API exposes draft/execution state through `getDraft()` and `getExecution()`,
+lets a thin host router call `startDraft()`, and retains `getBinding()`,
+`bind()`, `unbind()`, every agent-bound runtime operation through `execute()`,
+future-only proposal/review through `proposeAmendment()` and trusted
+`approveAmendment()`, plus separate `humanChoose()`, `externalConfirm()`, and
+`humanAnswer()` methods accepting host-authenticated principals.
+`resolveHumanIdentity()` lets a trusted host reuse the package's configured
+identity/Git-author fallback without duplicating it. Before prompting,
+compatibility commands ask `marionette:human:v1` for an optional
+host-configured actor identity, then fall back to the repository Git author.
+Channel
 names, envelope types and the host interface are exported from the package. The shared event bus is the
 notification plane; the host API or the runtime protocol remains the
 request/response command plane.
 
-When this tool is bound, the bundled execution skill directs the model to use
-it exclusively. The legacy `marionette brief` / `marionette state ...` flow
+When managed work is bound, Pi activates the generic `work_packet` tool. The
+model receives task prose and named outcomes; engine names and internal choice
+ids stay out of model-facing output. The legacy `marionette brief` /
+`marionette state ...` flow
 uses a separate `<plan>.state.json` store and must not be mixed into the same
 run.
 
@@ -249,7 +313,7 @@ run.
 A choice command is intentionally small:
 
 ```json
-{"protocol":"0.4.0","id":5,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":4,"idempotencyKey":"turn-42","profile":"signal"}
+{"protocol":"0.5.0","id":5,"op":"choose","choiceId":"build#0","rationale":"unit and integration tests pass","expectedRevision":4,"idempotencyKey":"turn-42","profile":"signal"}
 ```
 
 - Choice ids must be exact; CLI label prefixes are not accepted.
@@ -262,7 +326,7 @@ A choice command is intentionally small:
 An observation command fills exactly one value requested by the projection:
 
 ```json
-{"protocol":"0.4.0","id":6,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":5,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
+{"protocol":"0.5.0","id":6,"op":"observe","name":"remaining","value":7,"rationale":"7 items returned by the queue query at 09:30Z","expectedRevision":5,"idempotencyKey":"queue-2026-07-28T09:30Z","profile":"signal"}
 ```
 
 Values are typed scalars: number, boolean, or string. An initial declaration
@@ -275,7 +339,7 @@ and is kept in a separate audit stream from branch decisions.
 `record` provides pibarm-style graph-linked decision records without advancing:
 
 ```json
-{"protocol":"0.4.0","id":7,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":6,"idempotencyKey":"adr-7"}
+{"protocol":"0.5.0","id":7,"op":"record","kind":"architecture-decision","summary":"Use local NDJSON IPC","rationale":"The host can filter lifecycle traffic before model context","expectedRevision":6,"idempotencyKey":"adr-7"}
 ```
 
 Every event carries the immutable trajectory hash, current node/choice when

@@ -18,8 +18,8 @@ VAR remaining: number = ?      // late-bound: supplied by the runtime
 Ship the smallest testable slice.       // prose body: what this phase is
 # github:issue: 12                      // node-level metadata tag
 ~ iteration += 1                        // mutation, applied on entry (=, +=, -=)
-* [Metrics green] @human -> beta_launch          // once-only choice, human checkpoint
-* [I'm not sure] @ask -> clarify                 // ask before this edge advances
+* [Metrics green] @ask -> beta_launch            // trusted operator chooses this route
+* [I'm not sure] @input -> clarify               // collect text before this edge advances
 + {iteration < 3} [Go again] ~loop~ -> build_mvp // sticky choice, gated, declared loop
 * {iteration >= 3} [Three strikes] -> pivot
 
@@ -28,8 +28,8 @@ Launch to the beta cohort.
 -> END                         // automatic next step; END completes the plan
 
 === pivot ===
-* [Pivot] @human ~loop~ -> build_mvp
-* [Kill it] @human -> END
+* [Pivot] @ask ~loop~ -> build_mvp
+* [Kill it] @ask -> END
 ```
 
 ## Constructs
@@ -45,8 +45,9 @@ Launch to the beta cohort.
 | Choice (once) | `* [Label] -> target` | May be taken at most once per traversal. |
 | Choice (sticky) | `+ [Label] -> target` | Repeatable. Use for loop edges. |
 | Gate | `{expr}` before or after the label | Choice is available only while the expression is true. |
-| Human checkpoint | `@human` on a choice | The agent must pause and escalate; only a human may record this decision. |
-| Elicitation checkpoint | `@ask` on a choice | The agent opens a focused question; a human supplies context, then the fixed edge advances. Rendered as `‽`. |
+| Operator decision | `@ask` on a choice | The trusted operator chooses an authored route with rationale. Rendered as `?`. |
+| Input checkpoint | `@input` on a choice | The agent asks for free text; the operator supplies context, then the fixed edge advances. Rendered as `‽`. |
+| Human confirmation | `@human` on a choice | A human must attest the action with their identity and durable evidence. Rendered as `✋`. |
 | Loop | `~loop~` on a choice | Declares an intentional cycle. A cycle is declared when **any one** of its edges carries `~loop~` (convention: the returning edge); overlapping cycles each need a marked edge. Undeclared cycles are compile errors. |
 | Conditional loop | `while {expr} -> target` · `else -> target` | An exhaustive sticky pair. `while` declares its true arm as the repeating edge. Optional `[labels]` may precede each arrow. |
 | Conditional exit | `until {expr} -> target` · `else -> target` | An exhaustive sticky pair. `until` exits on true and declares its `else` arm as the repeating edge. |
@@ -96,39 +97,61 @@ This is deliberately source-neutral. The same construct can represent a work
 count, test health, rollout capacity, a measured score or any other scalar
 fact. Marionette never assumes how the host obtains it.
 
-## Elicitation checkpoints
+## Operator, input, and human-confirmation checkpoints
 
-`@ask` is the ambiguity boundary next to `@human`, but it does not transfer
-route ownership:
+Use `@ask` when the current trusted operator owns a route decision:
 
 ```
-* [The next step is clear] -> implement
-* [I'm not sure] @ask -> reconsider
+* [Approve release] @ask -> rollout
++ [Request changes] @ask ~loop~ -> rework
 ```
 
-The agent cannot take the second edge with an ordinary `choose`. It opens it
-with one focused question:
+The agent cannot choose either edge. Status becomes `awaiting-operator`; the
+host presents a complete decision packet (plan intent, full phase body,
+progress, refs, variables, choices, targets/effects, revision and fallbacks).
+In Pi, the trusted host opens a native choice dialog and records the selected
+label without exposing internal choice ids or command syntax. The CLI fallback
+is `state choose --actor <operator>`.
+
+Use `@input` when the route is fixed but context is missing:
+
+```
+* [Need target platforms] @input -> reconsider
+```
+
+The agent opens it with `state ask --question ... --actor agent`; traversal
+parks at `awaiting-elicitation`. In Pi, the trusted host opens a native text
+editor automatically. The operator's answer is audited, the fixed edge
+advances, and the next work packet carries the clarification. This is context,
+not approval or route selection.
+
+Reserve `@human` for explicitly high-risk actions whose external evidence is
+useful independently of the workflow, such as production release, security or
+legal sign-off, or a maintainer approval URL. Routine review, feature
+acceptance, scope, rework, and loop termination use `@ask`:
+
+```
+* [Maintainer approved PR] @human -> merge
+```
+
+Status becomes `awaiting-external`. The agent cannot choose it; a trusted
+human must confirm it rather than taking it as an ordinary route. After the
+action exists, record the confirming human and durable evidence:
 
 ```console
-marionette state ask plan.mar 1 \
-  --question "Must this work without network access after installation?" \
-  --actor agent \
-  --rationale "the packaging route depends on this constraint"
+marionette state confirm plan.mar 0 --actor maintainer \
+  --evidence https://github.com/acme/repo/pull/12#pullrequestreview-1 \
+  --rationale "approved the PR"
 ```
 
-Traversal remains at the current phase with status `awaiting-elicitation`.
-A human supplies free-form context with `state answer`; this is recorded in a
-separate elicitation audit entry, after which the already-authored edge
-advances. The entered phase receives the question and answer as
-`clarification` in its work packet. The answer is evidence, not approval and
-not a choice of target.
+In Pi, the confirming identity defaults to the Git author configured in the
+current repository. Marionette does not compare that identity with the plan's
+committer or with an operator identity; the boundary is human-versus-agent,
+not person-versus-person.
 
-Use ordinary choices when the possible answers and routes are known in
-advance. Use `@ask` when the missing information is open-ended. A choice
-cannot be both `@human` and `@ask`: `@human` means the person owns the route,
-while `@ask` means the agent owns the ambiguity and the person clarifies it.
-The source spelling stays ASCII and searchable; Mermaid and host UIs use `‽`
-as its compact visual badge.
+A choice cannot combine `@ask`, `@input`, and `@human`. Archived spec-0.5
+trajectories retain their old meanings during replay; source using the former
+free-text `@ask` form migrates to `@input`.
 
 ## While and until
 
@@ -261,7 +284,7 @@ metadata: the walker never schedules; the executing platform owns waking.
 Investigate and fix the next bug from the queue.
 # wake: github issues labeled "bug" pushed to acme/shop
 + [Queue has work — bug fixed or rejected] ~loop~ -> triage
-* [Service retired] @human -> END
+* [Service retired] @ask -> END
 ```
 
 Any metadata key accepts the fenced form (`# key: """` … `"""`); short
@@ -285,7 +308,7 @@ delivery, report, context tags) the **last occurrence wins**.
 | `# linear:workspace:` | plan (node override) | Linear workspace slug context | — | [`EXECUTION.md`](EXECUTION.md) |
 | `# linear:` | node or plan | issue ids: `ENG-42`, comma lists | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
 | `# ref:` | node or plan | generic http(s) link | MAR018 | [`EXECUTION.md`](EXECUTION.md) |
-| `# delivery:` | plan default, node override | `pr-per-phase` \| `branch-per-phase` \| `single-pr` \| `single-branch` \| `none` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
+| `# delivery:` | plan default, node override | `pr-per-phase` \| `branch-per-phase` \| `stacked-prs` \| `single-pr` \| `single-branch` \| `none` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
 | `# delivery:branch:` | plan default, node override | branch template; `{phase}` → node id | — | [`EXECUTION.md`](EXECUTION.md) |
 | `# report:` | plan default, node override | `per-phase` \| `at-checkpoints` \| `at-end` | MAR019 | [`EXECUTION.md`](EXECUTION.md) |
 

@@ -45,7 +45,6 @@ export class PiAgentBridge {
   readonly planFile: string;
   readonly runId: string;
   readonly storeRoot: string;
-  readonly graphHash: string;
   readonly agentPrincipal: RuntimePrincipal;
 
   private requestSequence = 0;
@@ -57,13 +56,12 @@ export class PiAgentBridge {
     runId: string,
     sessionId: string,
     storeRoot: string,
-    private readonly trajectory: Trajectory,
+    private trajectory: Trajectory,
     private readonly controller: RuntimeRunController,
   ) {
     this.planFile = planFile;
     this.runId = runId;
     this.storeRoot = storeRoot;
-    this.graphHash = trajectory.hash;
     this.agentPrincipal = {
       id: `pi:${sessionId}`,
       role: 'agent',
@@ -120,8 +118,20 @@ export class PiAgentBridge {
     );
   }
 
+  get graphHash(): string {
+    return this.trajectory.hash;
+  }
+
   revision(): number {
     return this.controller.currentSnapshot().revision;
+  }
+
+  currentTrajectory(): Trajectory {
+    return this.trajectory;
+  }
+
+  currentState() {
+    return structuredClone(this.controller.currentSnapshot().state);
   }
 
   private requestId(): string {
@@ -307,6 +317,46 @@ export class PiAgentBridge {
         limit,
       });
     });
+  }
+
+  humanAmend(
+    human: Omit<RuntimePrincipal, 'role'>,
+    candidate: Trajectory,
+    rationale: string,
+  ): Promise<RuntimeCommandResult> {
+    return this.serialized(async () => {
+      await this.refreshUnlocked();
+      const result = await this.controller.amend(
+        { ...human, role: 'human' },
+        candidate,
+        { rationale, expectedRevision: this.revision() },
+      );
+      this.trajectory = candidate;
+      return result;
+    });
+  }
+
+  externalConfirm(
+    external: Omit<RuntimePrincipal, 'role'>,
+    choiceId: string,
+    rationale: string,
+    evidence: Ref[],
+    idempotencyKey: string,
+    profile: ProjectionProfile = 'work',
+    options: { budget?: RuntimeBudget } = {},
+  ): Promise<RuntimeCommandResult> {
+    return this.write(idempotencyKey, (expectedRevision) => ({
+      protocol: RUNTIME_PROTOCOL_VERSION,
+      id: this.requestId(),
+      op: 'confirm',
+      choiceId,
+      rationale,
+      evidence,
+      expectedRevision,
+      idempotencyKey,
+      profile,
+      budget: options.budget,
+    }), { ...external, role: 'external-human' });
   }
 
   humanChoose(

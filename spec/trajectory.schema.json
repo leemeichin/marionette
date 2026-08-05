@@ -153,11 +153,15 @@
         },
         "human": {
           "type": "boolean",
-          "description": "Human checkpoint (`@human`): an agent must pause and escalate; it may not take this choice autonomously."
+          "description": "Evidenced human checkpoint (`@human`, spec 0.6+): requires a human actor identity and durable evidence. The protocol role is external to agent authority, not necessarily a distinct operator. Spec 0.5 epochs retain legacy human-choice behavior."
         },
         "ask": {
           "type": "boolean",
-          "description": "Elicitation checkpoint (`@ask`): an agent opens a focused question and the edge advances only after a human answer is recorded."
+          "description": "Trusted operator route (`@ask`, spec 0.6+). In archived spec 0.5 trajectories this bit means fixed-target elicitation."
+        },
+        "input": {
+          "type": "boolean",
+          "description": "Fixed-target free-text checkpoint (`@input`, spec 0.6+): the agent asks and the operator supplies context."
         },
         "loop": {
           "type": "boolean",

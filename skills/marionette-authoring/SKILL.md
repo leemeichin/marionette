@@ -35,8 +35,9 @@ Below, `marionette` means whichever form resolved.
 1. **Extract the graph from the notes.** Identify: phases (states of the
    project, not tickets), the decisions that connect them, the conditions
    gating each path, where iteration genuinely happens, and — most
-   importantly — which decisions a human must make and where an agent may
-   need open-ended context through `@ask`. Ask at most one round of
+   importantly — which routes the current operator chooses through `@ask`,
+   which actions need evidenced human confirmation through `@human`, and where an agent needs
+   open-ended context through `@input`. Ask at most one round of
    clarifying questions, and only for decisions that change the graph's
    shape.
 2. **Draft the `.mar` script** (conventions below).
@@ -62,8 +63,8 @@ Below, `marionette` means whichever form resolved.
    call out why exhausting that route cannot strand the traversal.
 5. **Produce the review artifacts:** `marionette compile <plan>.mar` (the
    contract), `render` (Mermaid), and `summarize` (plain language). Present
-   the summary and graph to the user, calling out every `@human` checkpoint,
-   every `@ask` elicitation and any "unverified gate" warnings for manual
+   the summary and graph to the user, calling out every operator `@ask`,
+   evidenced `@human`, free-text `@input`, and any "unverified gate" warnings for manual
    review.
 6. **Only if the user wants to start traversal:**
    `marionette state init <plan>.mar`.
@@ -135,7 +136,7 @@ transcribe tickets into DSL by hand — fetch and scaffold
   Investigate and fix the next bug from the queue.
   # wake: github issues labeled "bug" pushed to acme/shop
   + [Queue has work — bug fixed or rejected] ~loop~ -> triage
-  * [Service retired] @human -> END
+  * [Service retired] @ask -> END
   ```
 
   The loop is unbounded by design; the bound is the evidence claim on the
@@ -160,18 +161,24 @@ transcribe tickets into DSL by hand — fetch and scaffold
   outcomes point to `END`. The compiler hard-errors on dead ends; don't rely on it,
   design exits up front, including failure/contingency paths ("what if this
   doesn't work?" deserves a phase, not a hope).
-- **`@human` marks the autonomy boundary.** Put it on: approvals and
-  go/no-go calls, spending/scope/kill decisions, anything irreversible, and
-  judgment calls the notes assign to a person. Do not put it on steps an
-  agent can verify mechanically (tests green, artifact produced). If a plan
-  has zero `@human` checkpoints, ask the user whether that's intended.
-- **`@ask` marks the ambiguity boundary.** Put it on an agent-owned route
-  which cannot continue without open-ended human context:
-  `* [I'm not sure] @ask -> reconsider`. The agent opens one focused
-  question, the answer is audited, and the fixed edge advances. Do not use it
-  when the human owns the route (`@human`) or when known answers should be
-  ordinary choices. A choice cannot carry both flags. Source uses the
-  searchable ASCII `@ask`; renders use `‽`.
+- **`@ask` asks the current operator to choose an authored route.** Use it
+  for review/accept/rework, scope, kill, and other decisions the person in
+  the trusted host owns. Usually mark every option at that phase, e.g.
+  `* [Approve] @ask -> rollout` and `+ [Request changes] @ask ~loop~ -> rework`.
+  The decision packet must contain enough phase context to choose honestly.
+- **`@human` is only for explicitly high-risk, externally evidenced actions.**
+  Reserve it for production releases, security/legal sign-off, or maintainer
+  approval that already has a durable review or audit URL. Never use it for
+  routine UX review, feature acceptance, rework, scope, or stopping a loop;
+  those are ordinary operator decisions and use `@ask`. Continuing through
+  `@human` requires the confirming person's identity plus durable evidence. In
+  Pi, the identity defaults to the repository Git author and may be the current
+  operator; the agent still cannot confirm it.
+- **`@input` marks missing open-ended context on a fixed route.** Example:
+  `* [Need target platforms] @input -> reconsider`. The agent opens one
+  focused question, the operator's answer is audited, and the fixed edge
+  advances. It is not route approval. A choice cannot combine `@ask`,
+  `@input`, and `@human`; renders use `?`, `‽`, and `✋` respectively.
 - **Choose the loop form that matches the stopping condition.** Fixed retry
   budgets still use a monotonic counter, explicit gates and `~loop~`:
 
@@ -180,7 +187,7 @@ transcribe tickets into DSL by hand — fetch and scaffold
   === iterate ===
   ~ attempts += 1
   + {attempts < 3} [Try again] ~loop~ -> iterate
-  * {attempts >= 3} [Not converging] @human -> rethink
+  * {attempts >= 3} [Not converging] @ask -> rethink
   * [It works] -> next_phase
   ```
 
@@ -210,8 +217,9 @@ transcribe tickets into DSL by hand — fetch and scaffold
   when it cannot prove how an observed condition evolves; surface the warning
   rather than inventing a bound.
 
-  The always-available `@human` escape (`+ [Enough. Decide.] @human -> …`)
-  remains appropriate when a person owns termination.
+  The always-available operator escape (`+ [Enough. Decide.] @ask -> …`)
+  remains appropriate when a person owns termination. Use `@human` only when
+  that exit represents an explicitly high-risk action with external evidence.
 
   **`~loop~` placement:** the compiler accepts a cycle once **any one edge
   on it** carries `~loop~`; put it on the returning edge (the one that
@@ -239,9 +247,12 @@ transcribe tickets into DSL by hand — fetch and scaffold
   paragraphs intact. The plan must not operate in a vacuum: reviewers see
   these first in `summarize`, and executors receive them in the brief as
   `plan.intent`.
-- **Metadata rides on tags.** `# project: <name>` in the preamble;
-  `# github:issue: <n>` on a node to link it to a tracker item. Namespaced
-  keys only for extensions.
+- **Metadata rides on tags.** `# project: <name>` in the preamble; keep the
+  project name to 3–4 useful words because the host uses it for generated
+  worktree names. `# github:issue: <n>` on a node to link it to a tracker item. Namespaced
+  keys only for extensions. When the user requests dependent GitHub review
+  layers, set `# delivery: stacked-prs`; execution keeps those layers together
+  in one stack-enabled worktree rather than creating one worktree per layer.
 - **Naming:** `snake_case` phase ids that read as states (`beta_launch`,
   `pivot_or_kill`); choice labels are short human sentences, since reviewers
   and decision logs read them verbatim.
@@ -281,8 +292,12 @@ Build the importer against the vendor API.
 Fall back to CSV upload: same importer surface, manual ingestion.
 * [Fallback works] -> signoff
 
-=== signoff ===
-Sam reviews the shipped surface.
-* [Sam approves, ship it] @human -> END
-+ [Changes requested] @human ~loop~ -> build_importer
+=== signoff_review ===
+The operator decides whether the importer is ready for Sam's evidenced approval.
+* [Ready for Sam] @ask -> sam_signoff
++ [Changes requested] @ask ~loop~ -> build_importer
+
+=== sam_signoff ===
+Sam approves the shipped surface in the durable review system.
+* [Sam approved with review evidence] @human -> END
 ```

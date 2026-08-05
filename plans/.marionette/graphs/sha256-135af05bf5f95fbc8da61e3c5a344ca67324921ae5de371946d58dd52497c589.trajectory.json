@@ -1,0 +1,344 @@
+{
+  "spec": "0.5.0",
+  "hash": "sha256:135af05bf5f95fbc8da61e3c5a344ca67324921ae5de371946d58dd52497c589",
+  "source": {
+    "file": "plans/marionette.mar"
+  },
+  "variables": {
+    "skill_revisions": {
+      "type": "number",
+      "initial": 0,
+      "line": 6
+    }
+  },
+  "start": "phase1_toolchain",
+  "nodes": [
+    {
+      "id": "phase1_toolchain",
+      "body": "Land the Phase 1 toolchain: DSL compiler, structural validation, gate checking,\nMermaid render, plan summaries, hash-bound state with drift detection, CLI and\ntest suite. (P0.1–P0.4, P0.6–P0.8)",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "phase1_toolchain#0",
+          "label": "PR merged, CI green",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "authoring_skill",
+          "line": 15
+        },
+        {
+          "id": "phase1_toolchain#1",
+          "label": "Review requested changes",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": true,
+          "timeout": null,
+          "target": "phase1_toolchain",
+          "line": 16
+        }
+      ],
+      "next": null,
+      "line": 10,
+      "meta": {
+        "github:pr": "1"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "pr",
+          "id": "leemeichin/marionette#1",
+          "url": "https://github.com/leemeichin/marionette/pull/1"
+        }
+      ]
+    },
+    {
+      "id": "authoring_skill",
+      "body": "Build the NL → draft-script authoring skill (P0.5): project notes in, a\ncompilable .mar out, with compiler errors surfaced for one revision loop.",
+      "actions": [
+        {
+          "var": "skill_revisions",
+          "op": "+=",
+          "value": {
+            "kind": "lit",
+            "value": 1
+          },
+          "source": "1",
+          "line": 22
+        }
+      ],
+      "observations": [],
+      "choices": [
+        {
+          "id": "authoring_skill#0",
+          "label": "First-session compile success at or above 70%",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "dogfood_gate",
+          "line": 23
+        },
+        {
+          "id": "authoring_skill#1",
+          "label": "Below the bar, iterate on prompts",
+          "sticky": true,
+          "gate": {
+            "source": "skill_revisions < 5",
+            "ast": {
+              "kind": "binary",
+              "op": "<",
+              "left": {
+                "kind": "var",
+                "name": "skill_revisions"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 5
+              }
+            }
+          },
+          "human": false,
+          "ask": false,
+          "loop": true,
+          "timeout": null,
+          "target": "authoring_skill",
+          "line": 24
+        },
+        {
+          "id": "authoring_skill#2",
+          "label": "Not converging after five revisions",
+          "sticky": false,
+          "gate": {
+            "source": "skill_revisions >= 5",
+            "ast": {
+              "kind": "binary",
+              "op": ">=",
+              "left": {
+                "kind": "var",
+                "name": "skill_revisions"
+              },
+              "right": {
+                "kind": "lit",
+                "value": 5
+              }
+            }
+          },
+          "human": true,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "rethink_authoring",
+          "line": 25
+        }
+      ],
+      "next": null,
+      "line": 18,
+      "meta": {
+        "github:issue": "2"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#2",
+          "url": "https://github.com/leemeichin/marionette/issues/2"
+        }
+      ]
+    },
+    {
+      "id": "rethink_authoring",
+      "body": "Five skill revisions without hitting the bar means the approach is wrong, not\nthe prompts. Decide a new authoring strategy with fresh constraints.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "rethink_authoring#0",
+          "label": "New approach chosen",
+          "sticky": true,
+          "gate": null,
+          "human": true,
+          "ask": false,
+          "loop": true,
+          "timeout": null,
+          "target": "authoring_skill",
+          "line": 30
+        },
+        {
+          "id": "rethink_authoring#1",
+          "label": "Ship syntax-first, defer the skill",
+          "sticky": true,
+          "gate": null,
+          "human": true,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "dogfood_gate",
+          "line": 31
+        }
+      ],
+      "next": null,
+      "line": 27,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "dogfood_gate",
+      "body": "Phase 1 exit gate (G5): Marionette's own Phase 2 is planned in Marionette, and\na reviewer with no DSL knowledge understands the rendered plan in under five\nminutes.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "dogfood_gate#0",
+          "label": "Phase 1 exit approved",
+          "sticky": false,
+          "gate": null,
+          "human": true,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "phase2_runtime",
+          "line": 37
+        },
+        {
+          "id": "dogfood_gate#1",
+          "label": "Plan not legible enough, revise",
+          "sticky": true,
+          "gate": null,
+          "human": true,
+          "ask": false,
+          "loop": true,
+          "timeout": null,
+          "target": "authoring_skill",
+          "line": 38
+        }
+      ],
+      "next": null,
+      "line": 33,
+      "meta": {},
+      "refs": []
+    },
+    {
+      "id": "phase2_runtime",
+      "body": "Reference runtime (P1): grow the minimal walker in src/state.ts into a full\ngraph walker and gate evaluator consuming trajectory JSON, with a decision log\nrecording actor, timestamp and rationale for every branch.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "phase2_runtime#0",
+          "label": "Walker passes conformance tests",
+          "sticky": false,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "escalation_protocol",
+          "line": 45
+        }
+      ],
+      "next": null,
+      "line": 40,
+      "meta": {
+        "github:issue": "3"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#3",
+          "url": "https://github.com/leemeichin/marionette/issues/3"
+        }
+      ]
+    },
+    {
+      "id": "escalation_protocol",
+      "body": "Resolve OQ2 — the @human escalation protocol (channel, payload, timeout and\nfallback semantics) — then wire the pi agent proving ground to ingest and\ntraverse compiled trajectories.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "escalation_protocol#0",
+          "label": "Protocol decided and implemented",
+          "sticky": false,
+          "gate": null,
+          "human": true,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "phase2_gate",
+          "line": 52
+        }
+      ],
+      "next": null,
+      "line": 47,
+      "meta": {
+        "github:issue": "4"
+      },
+      "refs": [
+        {
+          "provider": "github",
+          "kind": "issue",
+          "id": "leemeichin/marionette#4",
+          "url": "https://github.com/leemeichin/marionette/issues/4"
+        }
+      ]
+    },
+    {
+      "id": "phase2_gate",
+      "body": "Phase 2 exit gate (G2): the pi agent completes a trajectory of fifteen or more\nnodes with at least one loop and one @human escalation, zero out-of-graph\nactions, and rationale logged on every taken branch.",
+      "actions": [],
+      "observations": [],
+      "choices": [
+        {
+          "id": "phase2_gate#0",
+          "label": "G2 met",
+          "sticky": false,
+          "gate": null,
+          "human": true,
+          "ask": false,
+          "loop": false,
+          "timeout": null,
+          "target": "END",
+          "line": 58
+        },
+        {
+          "id": "phase2_gate#1",
+          "label": "Runtime gaps found",
+          "sticky": true,
+          "gate": null,
+          "human": false,
+          "ask": false,
+          "loop": true,
+          "timeout": null,
+          "target": "phase2_runtime",
+          "line": 59
+        }
+      ],
+      "next": null,
+      "line": 54,
+      "meta": {},
+      "refs": []
+    }
+  ],
+  "meta": {
+    "project": "marionette",
+    "github:repo": "leemeichin/marionette"
+  },
+  "refs": [
+    {
+      "provider": "github",
+      "kind": "repo",
+      "id": "leemeichin/marionette",
+      "url": "https://github.com/leemeichin/marionette"
+    }
+  ]
+}
