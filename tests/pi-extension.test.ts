@@ -427,6 +427,7 @@ test('standalone approval binds a validated draft for active-checkout execution'
     )) as { systemPrompt: string };
     assert.match(runtimePrompt.systemPrompt, /call marionette_amend/);
     assert.match(runtimePrompt.systemPrompt, /do not wait for a separate rebind/);
+    assert.match(runtimePrompt.systemPrompt, /insert it as a prerequisite to the remaining future/);
     const approval = fake.messages.find((message) =>
       (message as { customType?: string }).customType === 'marionette-approved') as { content: string };
     assert.match(approval.content, /Call work_packet/);

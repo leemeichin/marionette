@@ -29,7 +29,11 @@ a restart and safe when a phase id is revisited by a loop.
 3. **Never-completed phases are future.** They may be changed or removed, and
    new phases may be added, provided the compiled trajectory is valid and the
    active current phase still exists. Outgoing routes from the editable current
-   phase may therefore admit newly discovered work.
+   phase may therefore admit newly discovered work. If an owner reverses a
+   descope recorded in a completed phase, that history remains unchanged: the
+   first editable phase becomes the newly required prerequisite and its old
+   contract moves unchanged to a fresh successor id. This inserts work before
+   the remaining plan without pretending the earlier decision never happened.
 4. **Variables used by frozen nodes are frozen declarations.** Their name,
    type, and initializer cannot change or disappear. Other declarations may be
    added, changed, or removed; migration preserves compatible live values and
@@ -60,6 +64,8 @@ variable rules above.
 
 - allow adding a phase after the editable current phase;
 - allow editing or deleting a never-completed future phase;
+- allow an overruled descope to insert a prerequisite before remaining work by
+  displacing the first editable phase to a fresh successor id;
 - reject any semantic change to a completed phase or its choices;
 - reject deleting the current phase;
 - reject changing a variable referenced by a completed phase;

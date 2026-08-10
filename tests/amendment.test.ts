@@ -48,6 +48,47 @@ Gamma, updated before execution.
   assert.ok(report.changes.some((change) => change.kind === 'variable-added' && change.subject === 'retries'));
 });
 
+test('overruled descope inserts remediation before remaining work without rewriting history', async () => {
+  const previous = await compiled(`
+=== assessment ===
+Known issues were reviewed and descoped.
+* [Proceed with known issues out of scope] -> delivery
+=== delivery ===
+Build the agreed scope.
+-> release
+=== release ===
+Release the result.
+-> END
+`);
+  let state = await initState(previous, 'system', AT);
+  state = await takeChoice(previous, state, 'assessment#0', {
+    actor: 'agent', rationale: 'issues were initially descoped', at: AT,
+  });
+  const candidate = await compiled(`
+=== assessment ===
+Known issues were reviewed and descoped.
+* [Proceed with known issues out of scope] -> delivery
+=== delivery ===
+Resolve the known issues now restored to scope.
+-> delivery_after_remediation
+=== delivery_after_remediation ===
+Build the agreed scope.
+-> release
+=== release ===
+Release the result.
+-> END
+`);
+
+  const report = analyzeAmendment(previous, candidate, state);
+  assert.equal(report.allowed, true);
+  assert.deepEqual(report.frozenPhases, ['assessment']);
+  assert.ok(report.changes.some((change) =>
+    change.kind === 'phase-updated' && change.subject === 'delivery'));
+  assert.ok(report.changes.some((change) =>
+    change.kind === 'phase-added' && change.subject === 'delivery_after_remediation'));
+  assert.equal(report.violations.some((violation) => violation.subject === 'assessment'), false);
+});
+
 test('amendment rejects completed phase and frozen variable changes', async () => {
   const previous = await compiled(`
 VAR approved = true

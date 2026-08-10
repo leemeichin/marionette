@@ -144,7 +144,11 @@ of forcing the change into a rationale or repeatedly reporting a stale packet:
 
 1. Read the bound `.mar` source and preserve every completed phase id exactly,
    including ids completed before a loop revisit. Keep the current phase and
-   change only unfinished work.
+   change only unfinished work. If the owner reverses an earlier descope or
+   restores a known issue after its discovery phase completed, do not rewrite
+   that phase or its recorded choice. Insert remediation as a prerequisite to
+   the remaining future: reuse the first editable phase for the prerequisite
+   and move that phase's original contract unchanged to a fresh successor id.
 2. In a bound Pi session call `marionette_amend` with the complete revised
    source and a concise rationale. It compiler-checks the candidate, enforces
    the future-only boundary, writes review artifacts, atomically updates the

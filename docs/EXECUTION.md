@@ -266,8 +266,11 @@ and targets must remain semantically identical. Variables used by such a phase
 also keep their declarations. The current phase and every never-completed
 phase may be updated, removed, rerouted, or extended, except that the current
 phase itself must survive. A phase id revisited through a loop remains frozen;
-introduce a new successor id when the new activation needs different work. An
-open `@input` choice must retain its exact id, marker, and target.
+introduce a new successor id when the new activation needs different work. If
+an owner restores issues that a completed phase descoped, preserve that phase
+and decision: use the first editable phase for remediation and move its prior
+contract to a fresh successor id, placing remediation before the remaining
+future. An open `@input` choice must retain its exact id, marker, and target.
 
 State-file workflow:
 
