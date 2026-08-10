@@ -266,9 +266,9 @@ and bound traversal. Trusted hosts open native dialogs automatically for
 operator `@ask`, free-text `@input`, and explicitly high-risk evidenced
 `@human` checkpoints; compatibility slash commands remain available. Bound
 agents use the generic `work_packet` surface with named outcomes rather than
-engine commands or internal choice ids. Bound agents can propose future-only
-source through `marionette_amend`; only `/marionette-approve-amendment` or the
-trusted host API can append the graph-epoch `plan.rebound` event and apply it.
+engine commands or internal choice ids. Bound agents apply compiler-checked,
+future-only source changes through `marionette_amend`; it atomically updates
+the live graph and appends an attributed graph-epoch `plan.rebound` event.
 ADR-0004 is implemented and awaits the dogfood
 plan's formal human approval (issue #4).
 Tracker integration landed connection-free: `marionette import` ingests a

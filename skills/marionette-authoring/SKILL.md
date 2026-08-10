@@ -37,9 +37,12 @@ Below, `marionette` means whichever form resolved.
    gating each path, where iteration genuinely happens, and — most
    importantly — which routes the current operator chooses through `@ask`,
    which actions need evidenced human confirmation through `@human`, and where an agent needs
-   open-ended context through `@input`. Ask at most one round of
-   clarifying questions, and only for decisions that change the graph's
-   shape.
+   open-ended context through `@input`. Ask only for decisions that change
+   the graph's shape and have more than one viable answer. Use one focused
+   question for one decision; use multi-question elicitation only for two or
+   more independent decisions. Keep option labels short, put at most one
+   sentence of consequence in their descriptions, and never repeat the request
+   or draft plan inside an option.
 2. **Draft the `.mar` script** (conventions below).
 3. **Compile-check:** `marionette validate <plan>.mar --strict`. If it
    fails, fix every diagnostic — each error carries a line number and a
@@ -163,7 +166,9 @@ transcribe tickets into DSL by hand — fetch and scaffold
   doesn't work?" deserves a phase, not a hope).
 - **`@ask` asks the current operator to choose an authored route.** Use it
   for review/accept/rework, scope, kill, and other decisions the person in
-  the trusted host owns. Usually mark every option at that phase, e.g.
+  the trusted host owns. An `@ask` phase needs at least two available routes;
+  one route is not a decision, so make it automatic or author the missing
+  reject/rework route. Usually mark every option at that phase, e.g.
   `* [Approve] @ask -> rollout` and `+ [Request changes] @ask ~loop~ -> rework`.
   The decision packet must contain enough phase context to choose honestly.
 - **`@human` is only for explicitly high-risk, externally evidenced actions.**
@@ -254,8 +259,8 @@ transcribe tickets into DSL by hand — fetch and scaffold
   layers, set `# delivery: stacked-prs`; execution keeps those layers together
   in one stack-enabled worktree rather than creating one worktree per layer.
 - **Naming:** `snake_case` phase ids that read as states (`beta_launch`,
-  `pivot_or_kill`); choice labels are short human sentences, since reviewers
-  and decision logs read them verbatim.
+  `pivot_or_kill`); choice labels are short human sentences, not summaries of
+  the phase or plan, since reviewers and decision logs read them verbatim.
 
 ## Fixing compiler diagnostics
 

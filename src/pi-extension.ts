@@ -46,6 +46,7 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   type ProjectionProfile,
   type RuntimeBudget,
+  type RuntimePrincipal,
   type RuntimeProjection,
 } from './runtime-protocol.ts';
 import type { RuntimeCommandResult } from './runtime.ts';
@@ -780,28 +781,18 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     }
   };
 
-  const approveAmendment = async (
-    approval: MarionettePiAmendmentApproval,
+  const applyAmendment = async (
+    stored: StoredAmendment,
+    principal: RuntimePrincipal,
+    rationale: string,
     cause: MarionettePiEvent['cause'],
+    operation: 'amend' | 'humanAmend',
+    triggerTurn: boolean,
   ): Promise<MarionettePiEvent> => {
     if (!bridge) {
-      return failure(cause, new PiIntegrationError('No Marionette run is bound.', 'not-bound'), 'humanAmend');
-    }
-    if (!pendingAmendment || pendingAmendment.status !== 'pending' ||
-        pendingAmendment.proposal.id !== approval.proposalId) {
-      return failure(cause, new PiIntegrationError(
-        `No pending amendment "${approval.proposalId}" exists on this session branch.`,
-        'invalid-request',
-      ), 'humanAmend');
-    }
-    if (!approval.rationale.trim()) {
-      return failure(cause, new PiIntegrationError(
-        'Human approval requires a rationale.',
-        'invalid-request',
-      ), 'humanAmend');
+      return failure(cause, new PiIntegrationError('No Marionette run is bound.', 'not-bound'), operation);
     }
     try {
-      const stored = pendingAmendment;
       await bridge.refresh();
       const compiled = await compile(stored.source, { file: bridge.planFile });
       if (!compiled.ok || !compiled.trajectory || compiled.trajectory.hash !== stored.proposal.candidateHash) {
@@ -823,7 +814,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       await withFileMutationQueue(bridge.planFile, async () => {
         const staged = await stagePlan(bridge!.planFile, stored.source);
         try {
-          result = await bridge!.humanAmend(approval.human, compiled.trajectory!, approval.rationale);
+          result = await bridge!.amend(principal, compiled.trajectory!, rationale);
           await rename(staged, bridge!.planFile);
         } catch (error) {
           await unlink(staged).catch(() => undefined);
@@ -839,13 +830,40 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         graphHash: bridge.graphHash,
         runtimeProtocol: RUNTIME_PROTOCOL_VERSION,
       } satisfies StoredBinding);
-      const event = acceptResult('humanAmend', result!, cause, 'plan.rebound', stored.proposal);
+      const event = acceptResult(operation, result!, cause, 'plan.rebound', stored.proposal);
       if (activeContext) updateUi(event.projection ?? null, activeContext);
-      publishProjection(event, approval.triggerTurn ?? true);
+      if (triggerTurn) publishProjection(event, true);
       return event;
     } catch (error) {
-      return failure(cause, error, 'humanAmend');
+      return failure(cause, error, operation);
     }
+  };
+
+  const approveAmendment = async (
+    approval: MarionettePiAmendmentApproval,
+    cause: MarionettePiEvent['cause'],
+  ): Promise<MarionettePiEvent> => {
+    if (!pendingAmendment || pendingAmendment.status !== 'pending' ||
+        pendingAmendment.proposal.id !== approval.proposalId) {
+      return failure(cause, new PiIntegrationError(
+        `No pending amendment "${approval.proposalId}" exists on this session branch.`,
+        'invalid-request',
+      ), 'humanAmend');
+    }
+    if (!approval.rationale.trim()) {
+      return failure(cause, new PiIntegrationError(
+        'Human approval requires a rationale.',
+        'invalid-request',
+      ), 'humanAmend');
+    }
+    return applyAmendment(
+      pendingAmendment,
+      { ...approval.human, role: 'human' },
+      approval.rationale,
+      cause,
+      'humanAmend',
+      approval.triggerTurn ?? true,
+    );
   };
 
   const open = async (
@@ -1313,46 +1331,61 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
 
   pi.registerTool({
     name: 'marionette_amend',
-    label: 'Marionette amendment proposal',
+    label: 'Marionette amendment',
     description:
-      'Compile and propose a future-only amendment to the bound run without changing its live plan. Completed phases are immutable; a human must approve through /marionette-approve-amendment or the trusted host API.',
+      'Compile and atomically apply a future-only amendment to the bound run. Completed phases remain immutable; accepted changes update the live source and runtime graph with an attributed plan.rebound event.',
     parameters: Type.Object({
       source: Type.String({ description: 'Complete candidate Marionette DSL source' }),
       rationale: Type.String({ description: 'Why the current executable future needs to change' }),
     }, { additionalProperties: false }),
     async execute(toolCallId, params, _signal, _onUpdate, ctx) {
       activeContext = ctx;
-      const event = await proposeAmendment(params, {
-        source: 'tool',
+      const cause = {
+        source: 'tool' as const,
         name: 'marionette_amend',
         id: toolCallId,
-      });
+      };
+      const proposed = await proposeAmendment(params, cause);
+      if (proposed.error || !proposed.amendment || !pendingAmendment || !bridge) {
+        return {
+          content: [{ type: 'text', text: proposed.error?.message ?? 'Amendment proposal failed.' }],
+          details: proposed,
+          isError: true,
+        };
+      }
+      const event = await applyAmendment(
+        pendingAmendment,
+        bridge.agentPrincipal,
+        params.rationale,
+        cause,
+        'amend',
+        false,
+      );
       if (event.error || !event.amendment) {
         return {
-          content: [{ type: 'text', text: event.error?.message ?? 'Amendment proposal failed.' }],
+          content: [{ type: 'text', text: event.error?.message ?? 'Amendment application failed.' }],
           details: event,
           isError: true,
         };
       }
-      const proposal = event.amendment;
-      const changes = proposal.report.changes.map((change) =>
+      const amendment = event.amendment;
+      const changes = amendment.report.changes.map((change) =>
         `- ${change.kind}: ${change.subject}${change.fields.length ? ` (${change.fields.join(', ')})` : ''}`,
       ).join('\n');
       return {
         content: [{
           type: 'text',
           text: [
-            `Amendment ${proposal.id} is validated and awaiting trusted human approval.`,
-            `Live plan unchanged: ${proposal.planFile}`,
+            `Amendment ${amendment.id} was validated and applied.`,
+            `Live plan updated: ${amendment.planFile}`,
             '',
             changes || '- no semantic changes',
             '',
-            proposal.compact,
+            amendment.compact,
             '',
-            `Candidate: ${proposal.candidateFile}`,
-            `Mermaid: ${proposal.mermaidFile}`,
-            `SVG: ${proposal.svgFile}`,
-            'Use /marionette-approve-amendment to apply it.',
+            `Candidate: ${amendment.candidateFile}`,
+            `Mermaid: ${amendment.mermaidFile}`,
+            `SVG: ${amendment.svgFile}`,
           ].join('\n'),
         }],
         details: event,

@@ -129,9 +129,9 @@ New future phase.
   assert.equal(reopened.state.log.at(-1)?.actor, 'lee');
 }));
 
-test('runtime amendments reject agents and stale revisions without journal writes', () => withStore(async (root) => {
+test('runtime amendments accept agents and reject stale revisions without extra journal writes', () => withStore(async (root) => {
   const before = await initializeRuntimeStore(root, trajectory, {
-    runId: 'run-amend-refused', at: AT, principal: AGENT,
+    runId: 'run-amend-agent', at: AT, principal: AGENT,
   });
   const candidate = (await compile(`
 === a ===
@@ -142,19 +142,17 @@ Beta.
 -> END
 `)).trajectory!;
   const controller = new RuntimeRunController(trajectory, before, root);
-  await assert.rejects(
-    () => controller.amend(AGENT, candidate, {
-      rationale: 'agent attempted approval', expectedRevision: 0, at: AT,
-    }),
-    (error: unknown) => (error as { code?: string }).code === 'forbidden',
-  );
+  const amended = await controller.amend(AGENT, candidate, {
+    rationale: 'user changed the executable future', expectedRevision: 0, at: AT,
+  });
+  assert.equal(amended.events[0]?.principal?.role, 'agent');
   await assert.rejects(
     () => controller.amend({ id: 'lee', role: 'human' }, candidate, {
-      rationale: 'stale approval', expectedRevision: 2, at: AT,
+      rationale: 'stale approval', expectedRevision: 0, at: AT,
     }),
     (error: unknown) => (error as { code?: string }).code === 'stale-revision',
   );
-  assert.equal(readRuntimeEvents(runtimePaths(root, 'run-amend-refused', trajectory.hash).events).length, 2);
+  assert.equal(readRuntimeEvents(runtimePaths(root, 'run-amend-agent', candidate.hash).events).length, 3);
 }));
 
 test('concurrent runtime amendment writers leave the first accepted graph active', () => withStore(async (root) => {

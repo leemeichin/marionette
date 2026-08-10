@@ -29,8 +29,9 @@ unavailable and forces ordinary local decisions through the more ambiguous
 1. **`@ask` is an interactive operator decision.** It marks authored routes
    that Marionette presents to the person currently operating the trusted
    host. The operator selects exactly one available `@ask` choice and supplies
-   a rationale. The agent cannot select it. A phase may expose two or more
-   `@ask` choices; that is the normal review/accept/rework shape.
+   a rationale. The agent cannot select it. New plans use `@ask` only when at
+   least two routes are available; a single route is automatic continuation,
+   or the author must add the real reject/rework route.
 2. **`@human` is an evidenced human confirmation.** It means execution is
    waiting for a person—not the agent—to attest that something was approved or
    performed. The host records the actor's identity, rationale, and evidence
@@ -78,9 +79,12 @@ packet, not a half-sentence. The packet includes:
 - the expected revision and exact trusted response operation;
 - graph-authored fallback timing, or an explicit statement that none exists.
 
-Pi widgets show this packet in a compact but multi-line form and provide the
-full packet in event/tool details. Amendment approval additionally shows the
-semantic diff, proposal rationale, and candidate/Mermaid/SVG artifact paths.
+Pi keeps the complete packet in event/tool details but shows concise,
+phase-local context in the intervention UI. Choice labels stay short and never
+repeat the phase body, original request, or whole plan. One focused planning
+question uses a single-question dialog; the richer multi-question elicitation
+surface is reserved for two or more independent decisions. Amendment results
+show the semantic diff, rationale, and candidate/Mermaid/SVG artifact paths.
 
 ## Compatibility
 

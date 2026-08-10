@@ -397,12 +397,6 @@ export async function amendRuntimeSnapshot(
   principal: RuntimePrincipal,
   options: RuntimeAmendOptions,
 ): Promise<RuntimeCommandResult & { report: MigrationReport }> {
-  if (principal.role === 'agent') {
-    throw new ProtocolError(
-      'plan amendments require a trusted human or system principal',
-      'forbidden',
-    );
-  }
   checkRevision(input, options.expectedRevision, 'amend');
   const at = options.at ?? new Date().toISOString();
   const snapshot = clone(input);

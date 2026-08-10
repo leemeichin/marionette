@@ -256,7 +256,7 @@ export function registerMarionettePlanning(
       name !== 'marionette_draft' && name !== 'marionette_walk' &&
       name !== 'marionette_amend' && name !== 'work_packet');
     if (planning) active.push('marionette_draft');
-    else if (binding) active.push('work_packet');
+    else if (binding) active.push('work_packet', 'marionette_amend');
     pi.setActiveTools([...new Set(active)]);
   };
 
@@ -476,13 +476,13 @@ export function registerMarionettePlanning(
     if (options.getBinding()) {
       setRuntimeTools();
       return {
-        systemPrompt: `${event.systemPrompt}\n\nA managed work packet is active. Call work_packet(status) for the current task. When that task is done, call work_packet(complete) exactly once with its human-readable outcome and an evidence-based summary. The host owns routing and all human intervention. Execute file changes under ${execution?.executionRoot ?? ctx.cwd}; delegated agents receive only the current task and return evidence.${execution?.branching === 'github-stack' ? ' Keep dependent GitHub review layers in this worktree and use gh stack for stack operations.' : ''}`,
+        systemPrompt: `${event.systemPrompt}\n\nA managed work packet is active. Call work_packet(status) for the current task. When that task is done, call work_packet(complete) exactly once with its human-readable outcome and an evidence-based summary. If the user changes scope or the executable future is wrong, read the bound .mar source and call marionette_amend with the complete revised source and rationale; it applies only a valid future-only change, so do not wait for a separate rebind or continue against stale instructions. The host owns routing and human checkpoints. Execute file changes under ${execution?.executionRoot ?? ctx.cwd}; delegated agents receive only the current task and return evidence.${execution?.branching === 'github-stack' ? ' Keep dependent GitHub review layers in this worktree and use gh stack for stack operations.' : ''}`,
       };
     }
     if (!planning) return;
     if (!draftPath) draftPath = localPlanPath(ctx, event.prompt);
     return {
-      systemPrompt: `${event.systemPrompt}\n\nMARIONETTE DRAFT MODE IS ACTIVE. Do not mutate project files. Follow the loaded marionette-authoring skill, ask at most one round of graph-shape questions when genuinely needed, and call marionette_draft with a complete validated plan at ${draftPath}. Preserve the user's original wording in # prompt metadata. Do not bind or execute the plan; approval is a separate human step.`,
+      systemPrompt: `${event.systemPrompt}\n\nMARIONETTE DRAFT MODE IS ACTIVE. Do not mutate project files. Follow the loaded marionette-authoring skill and ask only graph-shape questions with more than one viable answer. Use the focused question tool for one question and elicit_plan_questions only for two or more; keep option labels short and never repeat the request or draft in an option. Call marionette_draft with a complete validated plan at ${draftPath}. Preserve the user's original wording in # prompt metadata. Do not bind or execute the plan; approval is a separate human step.`,
     };
   });
 

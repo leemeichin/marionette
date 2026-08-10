@@ -261,6 +261,8 @@ test('standalone Pi extension owns read-only draft mode and /plan', async () => 
       fake.ctx,
     )) as { systemPrompt: string };
     assert.match(before.systemPrompt, /MARIONETTE DRAFT MODE IS ACTIVE/);
+    assert.match(before.systemPrompt, /focused question tool for one question/);
+    assert.match(before.systemPrompt, /elicit_plan_questions only for two or more/);
     const planningToolHandler = (fake.handlers.get('tool_call') ?? [])[0]!;
     const allowed = await planningToolHandler(
       { toolName: 'custom_inspector', input: {} },
@@ -418,7 +420,13 @@ test('standalone approval binds a validated draft for active-checkout execution'
     });
     assert.ok(fake.activeTools().includes('work_packet'));
     assert.equal(fake.activeTools().includes('marionette_walk'), false);
-    assert.equal(fake.activeTools().includes('marionette_amend'), false);
+    assert.ok(fake.activeTools().includes('marionette_amend'));
+    const runtimePrompt = (await (fake.handlers.get('before_agent_start') ?? [])[0]?.(
+      { systemPrompt: 'base', prompt: 'task' },
+      fake.ctx,
+    )) as { systemPrompt: string };
+    assert.match(runtimePrompt.systemPrompt, /call marionette_amend/);
+    assert.match(runtimePrompt.systemPrompt, /do not wait for a separate rebind/);
     const approval = fake.messages.find((message) =>
       (message as { customType?: string }).customType === 'marionette-approved') as { content: string };
     assert.match(approval.content, /Call work_packet/);
@@ -533,7 +541,7 @@ test('worktree approval automatically enables GitHub stacked PR branching', asyn
   }
 });
 
-test('Pi extension persists future-only proposals and applies them only through trusted approval', async () => {
+test('Pi extension applies safe future-only amendments from the active agent tool', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-amend-'));
   try {
     const planFile = join(root, 'plan.mar');
@@ -581,41 +589,22 @@ test('Pi extension persists future-only proposals and applies them only through 
       '-> END',
       '',
     ].join('\n');
-    const proposed = await fake.tools.get('marionette_amend').execute(
+    const amended = await fake.tools.get('marionette_amend').execute(
       'tool-amend',
       { source: candidate, rationale: 'new work was discovered' },
       undefined,
       undefined,
       fake.ctx,
     );
-    assert.equal(proposed.isError, undefined);
-    assert.equal(readFileSync(planFile, 'utf8'), original, 'proposal does not mutate the live source');
-    assert.equal(proposed.details.kind, 'plan.amendment-proposed');
-    assert.equal(proposed.details.amendment.report.allowed, true);
-    assert.ok(existsSync(proposed.details.amendment.candidateFile));
-    assert.ok(existsSync(proposed.details.amendment.mermaidFile));
-    assert.ok(existsSync(proposed.details.amendment.svgFile));
-    assert.match(readFileSync(proposed.details.amendment.svgFile, 'utf8'), /<svg/);
-    const amendmentPacket = fake.widgets.get('marionette-amendment') as string[];
-    assert.match(amendmentPacket.join('\n'), /Why: new work was discovered/);
-    assert.match(amendmentPacket.join('\n'), /phase-added: c/);
-    assert.match(amendmentPacket.join('\n'), /SVG:/);
-
-    const proposalBranch = fake.branch();
-    fake.useBranch([]);
-    await fake.fire('session_tree', { type: 'session_tree' });
-    fake.useBranch(proposalBranch);
-    await fake.fire('session_tree', { type: 'session_tree' });
-
-    const approved = await api.approveAmendment({
-      human: { id: 'lee', uri: 'pi://human/lee' },
-      proposalId: proposed.details.amendment.id,
-      rationale: 'reviewed the semantic diff and artifacts',
-      triggerTurn: false,
-    });
-    assert.equal(approved.kind, 'plan.rebound');
-    assert.equal(approved.events?.[0].kind, 'plan.rebound');
-    assert.equal(approved.events?.[0].principal?.role, 'human');
+    assert.equal(amended.isError, undefined);
+    assert.equal(amended.details.kind, 'plan.rebound');
+    assert.equal(amended.details.amendment.report.allowed, true);
+    assert.equal(amended.details.events[0].principal.role, 'agent');
+    assert.match(amended.content[0].text, /validated and applied/);
+    assert.ok(existsSync(amended.details.amendment.candidateFile));
+    assert.ok(existsSync(amended.details.amendment.mermaidFile));
+    assert.ok(existsSync(amended.details.amendment.svgFile));
+    assert.match(readFileSync(amended.details.amendment.svgFile, 'utf8'), /<svg/);
     assert.equal(readFileSync(planFile, 'utf8'), candidate);
     assert.notEqual(api.getBinding()?.graphHash, oldHash);
 

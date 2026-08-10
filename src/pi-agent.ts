@@ -319,15 +319,15 @@ export class PiAgentBridge {
     });
   }
 
-  humanAmend(
-    human: Omit<RuntimePrincipal, 'role'>,
+  amend(
+    principal: RuntimePrincipal,
     candidate: Trajectory,
     rationale: string,
   ): Promise<RuntimeCommandResult> {
     return this.serialized(async () => {
       await this.refreshUnlocked();
       const result = await this.controller.amend(
-        { ...human, role: 'human' },
+        principal,
         candidate,
         { rationale, expectedRevision: this.revision() },
       );

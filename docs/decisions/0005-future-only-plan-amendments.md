@@ -41,12 +41,12 @@ a restart and safe when a phase id is revisited by a loop.
    original graph hash. Applying an amendment archives the new trajectory and
    appends one attributed `plan.rebound` event linking old and new hashes; no
    prior event or archived graph is rewritten.
-7. **Approval is a trust-boundary operation.** Agents may compile and propose a
-   candidate. A local CLI user or trusted host may inspect the complete
-   decision packet—semantic diff, proposal rationale, and graph artifacts—and
-   apply it with an actor and rationale. This is an operator `@ask`-class
-   decision, not evidence for an `@human` action. The model-facing
-   traversal tool cannot approve an amendment.
+7. **Amendment is an attributed writer operation, not a human checkpoint.**
+   An agent, local CLI user, or trusted host may validate and apply a
+   future-only candidate with its own principal and rationale. Pi exposes this
+   through the model-facing amendment tool so a conversational change request
+   can update the live future without a second approval round. Hosts may still
+   offer proposal/review UI as policy, but the engine does not require it.
 8. **Validation is pure and application is atomic.** Comparison produces a
    structured allowed-change/violation report without mutating state. A
    refusal leaves the source, state, snapshot, journal, and active graph
@@ -66,6 +66,8 @@ variable rules above.
 - preserve an open `@input` edge exactly (and replay legacy spec-0.5 `@ask` inputs);
 - freeze a phase id after one loop activation has completed it;
 - preserve old graph references through amendment, replay, and restart;
+- allow an agent principal to apply a valid future-only amendment and record
+  that principal on `plan.rebound`;
 - reject stale or concurrent amendment writes without partial persistence.
 
 ## Consequences

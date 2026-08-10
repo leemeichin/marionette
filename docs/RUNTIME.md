@@ -152,7 +152,7 @@ chooses a target nor confirms an evidenced `@human` action.
 
 A durable run is not tied to one graph forever. It is tied to an append-only
 sequence of graph epochs. Ordinary decisions retain the trajectory hash that
-was current when they were recorded. A trusted future-only amendment:
+was current when they were recorded. An attributed future-only amendment:
 
 1. compares the archived current trajectory with the compiled candidate;
 2. refuses changes to every completed phase id and variable declaration used
@@ -168,11 +168,12 @@ rewritten to the new hash. Revisions and the single-writer snapshot check apply
 to amendments just as they do to decisions; a stale concurrent amendment
 leaves the accepted epoch active.
 
-Amendment approval is intentionally not an agent runtime request. A trusted
-host uses `RuntimeRunController.amend` (the Pi host API wraps it), while the
-model-facing command plane remains `next|choose|ask|answer|advance|observe|record|events`;
-trusted hosts additionally expose external `confirm`.
-This keeps graph authority at the same trust boundary as human checkpoints.
+Amendment is an ordinary authenticated writer operation, separate from route
+selection and human checkpoints. `RuntimeRunController.amend` accepts agent,
+human, or system principals, enforces the same revision and atomicity checks,
+and records that principal on `plan.rebound`. The Racket process protocol will
+expose the equivalent `amend` operation; until that cutover, the Pi adapter
+calls the in-process controller.
 
 ## Pi proving-ground integration
 
@@ -189,8 +190,9 @@ pi \
 Trusted decisions default to the author identity that `git var GIT_AUTHOR_IDENT`
 resolves in the current repository. `--marionette-human lee` remains an
 explicit override. The same fallback applies to `/marionette-decide`,
-`/marionette-answer`, `/marionette-confirm-human`, and amendment approval;
-Marionette does not compare it with the author of an earlier commit.
+`/marionette-answer`, `/marionette-confirm-human`, and optional host-side
+amendment review; Marionette does not compare it with the author of an earlier
+commit.
 
 The package manifest points directly at `src/pi-extension.ts`; Pi loads that
 TypeScript source through its extension loader. The compiled `dist/` tree is
@@ -224,11 +226,11 @@ keeps the normal worktree. The persisted execution metadata records
 that one worktree.
 
 For a bound run, `marionette_amend` validates complete candidate source against
-completed history, leaves the live source untouched, and returns a semantic
-diff plus compact output and candidate/Mermaid/SVG artifact paths. The pending
-proposal survives restart and `/tree` navigation. A trusted user applies it
-with `/marionette-approve-amendment`; hosts use `proposeAmendment()` and
-`approveAmendment()` on the typed API.
+completed history, writes semantic-diff and candidate/Mermaid/SVG review
+artifacts, then atomically updates the live source and runtime graph with the
+agent principal and rationale. A refusal changes neither. Trusted hosts may
+still use `proposeAmendment()` and `approveAmendment()` when their own policy
+requires a separate review.
 
 The model gets one agent-bound traversal tool, `marionette_walk`. It mirrors
 the runtime command surface:
@@ -273,8 +275,9 @@ The extension publishes a versioned notification envelope
 Every envelope identifies its cause and current binding and may carry the
 projection, emitted runtime events, revision/event-sequence receipt, replay
 state, operation result, a structured error, a validated draft, or an
-amendment artifact. Successful proposals emit `plan.amendment-proposed`;
-trusted application emits `plan.rebound`. Runtime traversal continues to emit
+amendment artifact. Successful host-side proposals emit
+`plan.amendment-proposed`; application emits `plan.rebound`. Runtime traversal
+continues to emit
 binding and runtime events. A host therefore never needs to parse rendered
 prose, widgets, or the runtime store.
 
@@ -288,7 +291,7 @@ either:
 The API exposes draft/execution state through `getDraft()` and `getExecution()`,
 lets a thin host router call `startDraft()`, and retains `getBinding()`,
 `bind()`, `unbind()`, every agent-bound runtime operation through `execute()`,
-future-only proposal/review through `proposeAmendment()` and trusted
+optional future-only proposal/review through `proposeAmendment()` and
 `approveAmendment()`, plus separate `humanChoose()`, `externalConfirm()`, and
 `humanAnswer()` methods accepting host-authenticated principals.
 `resolveHumanIdentity()` lets a trusted host reuse the package's configured
@@ -300,9 +303,10 @@ names, envelope types and the host interface are exported from the package. The 
 notification plane; the host API or the runtime protocol remains the
 request/response command plane.
 
-When managed work is bound, Pi activates the generic `work_packet` tool. The
-model receives task prose and named outcomes; engine names and internal choice
-ids stay out of model-facing output. The legacy `marionette brief` /
+When managed work is bound, Pi activates `work_packet` and
+`marionette_amend`. The model receives task prose and named outcomes; engine
+names and internal choice ids stay out of traversal output, while an explicit
+scope change can replace the executable future in one validated operation. The legacy `marionette brief` /
 `marionette state ...` flow
 uses a separate `<plan>.state.json` store and must not be mixed into the same
 run.

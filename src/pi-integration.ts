@@ -120,7 +120,7 @@ export interface MarionettePiEvent {
     id?: string;
   };
   binding: MarionettePiBinding | null;
-  operation?: MarionettePiAgentCommand['operation'] | 'humanChoose' | 'externalConfirm' | 'humanAnswer' | 'humanAmend';
+  operation?: MarionettePiAgentCommand['operation'] | 'amend' | 'humanChoose' | 'externalConfirm' | 'humanAnswer' | 'humanAmend';
   projection?: RuntimeProjection;
   events?: RuntimeEvent[];
   receipt?: MarionettePiReceipt;

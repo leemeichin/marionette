@@ -257,7 +257,7 @@ for the underlying host-mediated escalation principles.
 ## Editing a live plan: immutable past, editable future
 
 Plans change mid-flight. Any semantic edit changes the content hash, but an
-approved amendment may now update the executable future without rewriting
+attributed amendment may now update the executable future without rewriting
 recorded work.
 
 A phase id becomes immutable as soon as a recorded choice or automatic advance
@@ -267,7 +267,7 @@ also keep their declarations. The current phase and every never-completed
 phase may be updated, removed, rerouted, or extended, except that the current
 phase itself must survive. A phase id revisited through a loop remains frozen;
 introduce a new successor id when the new activation needs different work. An
-open `@ask` choice must retain its exact id, marker, and target.
+open `@input` choice must retain its exact id, marker, and target.
 
 State-file workflow:
 
@@ -292,17 +292,16 @@ has already drifted without an archive, restore the source matching its state
 hash, run `state baseline`, then edit again; use `state init --force` only when
 discarding history is intentional.
 
-An executor proposes rather than applies. In a bound Pi run it calls
-`marionette_amend` with complete candidate source and a rationale. The tool
-compiler-checks it, enforces the same future-only policy, leaves the live plan
-unchanged, and writes compact, Mermaid, and SVG review artifacts. Only a
-trusted human can apply it through `/marionette-approve-amendment` or the host
-API. `marionette_walk` has no amendment approval operation. Runtime approval
-archives the new graph and appends `plan.rebound`; all earlier events retain
-their original graph hashes and replay under those graph epochs.
+In a bound Pi run the executor calls `marionette_amend` with complete revised
+source and a rationale. The tool compiler-checks it, enforces the same
+future-only policy, writes compact, Mermaid, and SVG review artifacts, then
+atomically updates the live source and runtime graph. `plan.rebound` records
+the agent principal; all earlier events retain their original graph hashes and
+replay under those graph epochs. Hosts may retain a separate proposal/approval
+UI as optional policy, not an engine requirement.
 
-The `marionette-execution` skill carries the full proposal protocol, including
-the park-don't-spin rule for standing service phases (`# wake:`, see DSL.md).
+The `marionette-execution` skill carries the amendment protocol, including the
+park-don't-spin rule for standing service phases (`# wake:`, see DSL.md).
 
 ## Conformance
 

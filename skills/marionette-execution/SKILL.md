@@ -27,6 +27,9 @@ session. Treat the engine as an implementation detail:
   human-readable outcome label when choices exist, and an evidence summary;
 - use `work_packet(request_input)` for an authored free-text route;
 - record requested observations with `work_packet(observe)`;
+- when the user changes the executable future, call `marionette_amend` with
+  the complete revised source and rationale; do not keep following a stale
+  packet or ask the user to run a rebind command;
 - stop whenever human input is pending—the host opens native intervention UI
   automatically. Never ask the user to type command syntax or internal ids.
 
@@ -133,30 +136,27 @@ the plan changed underneath the state: stop and surface the drift message;
 - **Honest rationales beat optimistic ones.** If the evidence for a choice
   is thin, that is what loops, operator `@ask`, and evidenced `@human` gates are for.
 
-## Proposing plan amendments
+## Amending the plan
 
-The plan is not frozen — it is gated. When traversal surfaces novel work no
-phase covers and no queue absorbs, do not force it into the nearest
-rationale and do not edit the plan yourself. Propose an amendment:
+The plan is not frozen: completed history is. When the user changes scope or
+traversal discovers work the executable future cannot absorb, amend it instead
+of forcing the change into a rationale or repeatedly reporting a stale packet:
 
-1. **Draft and prove it without changing the live source.** Completed phase
-   ids are immutable, including a phase revisited through a loop. Preserve
-   them exactly, keep the current phase, and add or update only unfinished
-   phases. Validate the complete candidate with
-   `marionette validate draft.mar --strict`.
-2. **Escalate in-band** as an informed operator decision: show the semantic
-   diff, the novel work it admits, and why the current graph cannot absorb it.
-   In a bound Pi session call `marionette_amend` with the complete candidate
-   and rationale; it compiler-checks the candidate, enforces the future-only
-   boundary, writes review artifacts, and leaves the live plan untouched.
-3. **Only trusted approval applies it.** For state-file traversal the owner
-   runs `marionette state rebind plan.mar --dry-run --json`, then applies with
-   their `--actor` and `--rationale`. In a bound Pi session stop and direct the
-   owner to the trusted amendment-approval UI; the model-facing work packet
-   cannot approve or apply amendments.
-4. **Silence, ambiguity, or a refused policy report is not approval**: the
-   un-amended plan and runtime graph stay in force and the novel work stays
-   unstarted.
+1. Read the bound `.mar` source and preserve every completed phase id exactly,
+   including ids completed before a loop revisit. Keep the current phase and
+   change only unfinished work.
+2. In a bound Pi session call `marionette_amend` with the complete revised
+   source and a concise rationale. It compiler-checks the candidate, enforces
+   the future-only boundary, writes review artifacts, atomically updates the
+   source and runtime graph, and records the agent principal in `plan.rebound`.
+   No separate rebind or approval command follows.
+3. If policy validation refuses the amendment, report the exact frozen-history
+   conflict and leave both source and runtime untouched. Do not start novel
+   work against the old graph.
+
+For unbound state-file traversal, edit the `.mar` source and use
+`marionette state rebind <plan> --dry-run --json` before applying the rebind
+with an actor and rationale.
 
 Mechanical ref edits have their own doors and need no proposal:
 `marionette sync link` / `sync bind` recompile-check, rebind automatically,
@@ -251,9 +251,10 @@ carries a `# tracker:` tag — the manifest tells you exactly what to do
 
 ## Hard rules
 
-- Never edit the `.mar`, the trajectory JSON, or the state file by hand;
-  state changes go through `state observe|choose|ask|answer|advance|rebind`
-  only.
+- Amend `.mar` source only through `marionette_amend` while bound or the
+  validated `state rebind` path while unbound. Never hand-edit trajectory JSON
+  or state files; traversal changes go through
+  `state observe|choose|ask|answer|advance|rebind` only.
 - Never pass `--actor` other than `agent` for your own steps. Human decisions
   and confirmations must use the trusted host/CLI surface; Pi resolves the
   configured identity or current repository Git author. A paraphrase of intent

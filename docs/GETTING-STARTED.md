@@ -137,11 +137,11 @@ with `/marionette-start plan.mar first-run`. In a GitHub repository, worktree
 approval automatically initializes the branch with the official `gh stack`
 flow when it is available; failed setup leaves an ordinary worktree.
 
-For a mid-run scope change, the agent proposes complete candidate source with
-`marionette_amend`; review its semantic diff and graph artifacts, then apply it
-through `/marionette-approve-amendment` with a human rationale. Completed
-phases stay bound to their archived graph and the proposal cannot be approved
-through `marionette_walk`. At `@ask`, Pi displays a complete decision packet for
+For a mid-run scope change, the agent sends complete revised source and a
+rationale through `marionette_amend`. It validates, writes semantic-diff and
+graph artifacts, and atomically applies only future changes; completed phases
+stay bound to their archived graphs. No separate rebind or approval command is
+needed. At `@ask`, Pi displays a complete decision packet for
 `/marionette-decide`; at `@human`, it parks until
 `/marionette-confirm-human` records an evidenced human confirmation. Trusted
 human commands use the current repository's configured Git author unless the
