@@ -176,20 +176,9 @@ async function enableGitHubStack(pi: ExtensionAPI, worktree: Worktree): Promise<
     throw new Error('GitHub stacked PRs require GitHub CLI 2.90 or newer.');
   }
 
-  let stackHelp = await pi.exec('gh', ['stack', '--help'], { cwd: worktree.path, timeout: 10_000 });
+  const stackHelp = await pi.exec('gh', ['stack', '--help'], { cwd: worktree.path, timeout: 10_000 });
   if (stackHelp.code !== 0) {
-    const installed = await pi.exec(
-      'gh',
-      ['extension', 'install', 'github/gh-stack'],
-      { cwd: worktree.path, timeout: 60_000 },
-    );
-    if (installed.code !== 0 && !/already exists|already installed/i.test(installed.stderr)) {
-      throw new Error(installed.stderr || installed.stdout || 'Could not install github/gh-stack.');
-    }
-    stackHelp = await pi.exec('gh', ['stack', '--help'], { cwd: worktree.path, timeout: 10_000 });
-    if (stackHelp.code !== 0) {
-      throw new Error(stackHelp.stderr || stackHelp.stdout || 'The gh stack extension is unavailable.');
-    }
+    throw new Error(stackHelp.stderr || stackHelp.stdout || 'The gh stack extension is unavailable.');
   }
 
   const current = await pi.exec('gh', ['stack', 'view', '--json'], {
@@ -254,7 +243,6 @@ export function registerMarionettePlanning(
   let pendingDraft: MarionettePiDraft | null = null;
   let execution: MarionettePiExecution | null = null;
   let approvalPrompted = '';
-  let githubStackPreference: boolean | null = null;
 
   const setRuntimeTools = (): void => {
     const binding = options.getBinding();
@@ -375,22 +363,14 @@ export function registerMarionettePlanning(
       }
 
       if (await isGitHubWorktree(pi, worktree)) {
-        if (githubStackPreference === null) {
-          githubStackPreference = ctx.hasUI && await ctx.ui.confirm(
-            'GitHub stacked PRs',
-            'Enable GitHub stacked PRs inside this worktree? This may install the official github/gh-stack extension.',
+        try {
+          await enableGitHubStack(pi, worktree);
+          branching = 'github-stack';
+        } catch (error) {
+          ctx.ui.notify(
+            `GitHub stack setup failed; continuing with a normal worktree: ${(error as Error).message}`,
+            'warning',
           );
-        }
-        if (githubStackPreference) {
-          try {
-            await enableGitHubStack(pi, worktree);
-            branching = 'github-stack';
-          } catch (error) {
-            ctx.ui.notify(
-              `GitHub stack setup failed; continuing with a normal worktree: ${(error as Error).message}`,
-              'warning',
-            );
-          }
         }
       }
     }

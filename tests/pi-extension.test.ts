@@ -463,17 +463,11 @@ test('managed work packets use outcome labels without exposing internal ids', as
   }
 });
 
-test('worktree approval can enable GitHub stacked PR branching once per session', async () => {
+test('worktree approval automatically enables GitHub stacked PR branching', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-stack-'));
   const calls: string[] = [];
-  let confirmations = 0;
   try {
     const fake = createFakePi(root, {
-      hasUI: true,
-      confirm: async () => {
-        confirmations += 1;
-        return true;
-      },
       exec: async (command, args) => {
         calls.push([command, ...args].join(' '));
         const joined = args.join(' ');
@@ -524,7 +518,6 @@ test('worktree approval can enable GitHub stacked PR branching once per session'
     );
 
     await fake.commands.get('approve-plan')!.handler('worktree stack-work', fake.ctx);
-    assert.equal(confirmations, 1);
     assert.deepEqual(fake.discover().getExecution(), {
       planFile: join(root, 'plans', 'stack.mar'),
       graphHash: fake.discover().getBinding()?.graphHash,

@@ -216,13 +216,12 @@ also writes sibling `.mmd` and `.svg` files and returns their paths and `file:`
 URIs for out-of-band viewers. Overwriting
 is opt-in for explicit refinement.
 
-Worktree approval asks once per Pi session whether to enable GitHub's official
-`gh stack` public-preview flow when the repository is hosted on GitHub. Opting
-in requires GitHub CLI 2.90+, installs `github/gh-stack` only when needed, and
-initializes the worktree branch against the repository trunk. Declining or a
-setup failure keeps the normal worktree. The persisted execution metadata
-records `branching: "standard" | "github-stack"`; stack layers stay together
-inside that one worktree.
+Worktree approval automatically initializes GitHub's official `gh stack`
+public-preview flow when the repository is hosted on GitHub. This requires
+GitHub CLI 2.90+ and an available `github/gh-stack` extension; a setup failure
+keeps the normal worktree. The persisted execution metadata records
+`branching: "standard" | "github-stack"`; stack layers stay together inside
+that one worktree.
 
 For a bound run, `marionette_amend` validates complete candidate source against
 completed history, leaves the live source untouched, and returns a semantic
