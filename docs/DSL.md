@@ -103,7 +103,7 @@ Use `@ask` when the current trusted operator owns a route decision:
 
 ```
 * [Approve release] @ask -> rollout
-+ [Request changes] @ask ~loop~ -> rework
++ [Return for changes] @ask ~loop~ -> rework
 ```
 
 The agent cannot choose either edge. Status becomes `awaiting-operator`; the

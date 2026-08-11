@@ -132,10 +132,12 @@ $ pi \
 Start from natural language with `/plan <task>`; a validated draft appears in
 the transcript with compact terminal and plain-language views, while sibling
 `.mmd` and `.svg` artifacts are available for out-of-band viewers. Approve it
-with `/approve-plan` (isolated worktree by default), or bind an existing plan
-with `/marionette-start plan.mar first-run`. In a GitHub repository, worktree
-approval automatically initializes the branch with the official `gh stack`
-flow when it is available; failed setup leaves an ordinary worktree.
+with `/approve-plan` (isolated worktree by default), use `/approve-plan fresh`
+to start that worktree run in a linked session containing only approved plan
+metadata, or bind an existing plan with `/marionette-start plan.mar first-run`.
+In a GitHub repository, worktree approval automatically initializes the branch
+with the official `gh stack` flow when it is available; failed setup leaves an
+ordinary worktree.
 
 For a mid-run scope change, the agent sends complete revised source and a
 rationale through `marionette_amend`. It validates, writes semantic-diff and
@@ -147,8 +149,10 @@ creates a fresh run, and binds it without reopening the completed history. If
 an additional work request uses neither tool, Marionette starts one
 parent-linked replacement Pi session and forwards the request plus the minimum
 completed plan/run context into `/plan`; acknowledgements and informational
-follow-ups remain in the completed session. At `@ask`, Pi displays a complete
-decision packet for `/marionette-decide`; at `@human`, it parks until
+follow-ups remain in the completed session. At `@ask`, Pi asks one concise
+phase-local question whose options state their route consequences; the complete
+packet remains available to `/marionette-decide` and host integrations. At
+`@human`, it parks until
 `/marionette-confirm-human` records an evidenced human confirmation. Trusted
 human commands use the current repository's configured Git author unless the
 host or `--marionette-human` supplies an override. Answer `@input` with

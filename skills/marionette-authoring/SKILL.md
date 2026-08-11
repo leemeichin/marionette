@@ -169,7 +169,9 @@ transcribe tickets into DSL by hand — fetch and scaffold
   the trusted host owns. An `@ask` phase needs at least two available routes;
   one route is not a decision, so make it automatic or author the missing
   reject/rework route. Usually mark every option at that phase, e.g.
-  `* [Approve] @ask -> rollout` and `+ [Request changes] @ask ~loop~ -> rework`.
+  `* [Approve] @ask -> rollout` and `+ [Return for changes] @ask ~loop~ -> rework`.
+  Labels state what selecting them does; avoid opaque request-shaped wording
+  such as “Request verified changes,” which sounds like a prompt for feedback.
   The decision packet must contain enough phase context to choose honestly.
 - **`@human` is only for explicitly high-risk, externally evidenced actions.**
   Reserve it for production releases, security/legal sign-off, or maintainer

@@ -202,8 +202,10 @@ prerequisite for loading the Pi extension. Source imports name the real
 emitting `dist/`.
 
 You can author and approve a plan entirely in this standalone package with
-`/plan <task>`, `/refine-plan`, and `/approve-plan [active|worktree <name>]`,
-or bind an existing plan with `/marionette-start <plan.mar> [run-id]`. Draft
+`/plan <task>`, `/refine-plan`, and `/approve-plan [fresh|active|worktree <name>]`,
+or bind an existing plan with `/marionette-start <plan.mar> [run-id]`. `fresh`
+creates the normal isolated worktree, then starts it in a linked replacement
+session seeded only with the approved draft and execution metadata. Draft
 mode is read-only: Pi preserves the session's inspection and planning tools,
 adds `marionette_draft`, and blocks built-in project writes, traversal, and
 mutating shell commands.
@@ -211,11 +213,10 @@ mutating shell commands.
 `marionette_draft` compiler-checks complete DSL source before atomically
 writing a `.mar` file. Invalid drafts never touch disk. Successful drafts are
 shown immediately as a durable review card and include a minimal terminal
-graph plus plain-language summary. The approval dialog repeats a bounded plan
-overview and walkthrough preview beside its choices, so it stays within a
-normal terminal viewport without relying on transcript backscroll. The tool
-also writes sibling `.mmd` and `.svg` files and returns their paths and `file:`
-URIs for out-of-band viewers. Overwriting
+graph plus plain-language summary. The approval dialog asks one direct question,
+keeps only the plan intent, shape, and review path beside it, and names the
+consequence of every option. The tool also writes sibling `.mmd` and `.svg`
+files and returns their paths and `file:` URIs for out-of-band viewers. Overwriting
 is opt-in for explicit refinement.
 
 Worktree approval automatically initializes GitHub's official `gh stack`
