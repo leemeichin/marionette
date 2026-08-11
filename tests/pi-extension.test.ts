@@ -378,12 +378,14 @@ test('Pi extension draft tool validates before atomically writing and emits an e
 test('automatic plan approval bounds the review shown beside the choices', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-review-'));
   const prompts: string[] = [];
+  const choices: string[][] = [];
   try {
     const fake = createFakePi(root, {
       hasUI: true,
-      select: async (title) => {
+      select: async (title, options) => {
         prompts.push(title);
-        return 'Keep for later';
+        choices.push(options);
+        return 'Decide later — keep the validated draft';
       },
     });
     await fake.fire('session_start', { reason: 'startup' });
@@ -415,13 +417,102 @@ test('automatic plan approval bounds the review shown beside the choices', async
 
     await fake.fire('agent_settled', {});
 
+    assert.match(prompts[0]!, /^How should this plan continue\?/);
     assert.match(prompts[0]!, /Plan: review-plan/);
-    assert.match(prompts[0]!, /Ship a reviewed slice/);
-    assert.match(prompts[0]!, /High-level walkthrough:/);
-    assert.match(prompts[0]!, /● start/);
-    assert.match(prompts[0]!, /… 2 more lines/);
-    assert.doesNotMatch(prompts[0]!, /deliberately verbose original request|● deliver/);
-    assert.match(prompts[0]!, /Plan source: .*review\.mar/);
+    assert.match(prompts[0]!, /Intent: Ship a reviewed slice\./);
+    assert.match(prompts[0]!, /Starts at/);
+    assert.doesNotMatch(prompts[0]!, /High-level walkthrough|deliberately verbose original request|● start|● deliver/);
+    assert.match(prompts[0]!, /Full review: .*review\.mar/);
+    assert.deepEqual(choices[0], [
+      'Start fresh — new session and isolated worktree',
+      'Continue here — isolated worktree',
+      'Use this checkout — no worktree isolation',
+      'Revise plan — enter feedback',
+      'Decide later — keep the validated draft',
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('fresh approval hands the validated plan to a linked replacement session', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-fresh-'));
+  const setupEntries: Array<{ customType: string; data: unknown }> = [];
+  let parentSession: string | undefined;
+  let kickoff = '';
+  let cancel = false;
+  try {
+    const fake = createFakePi(root, {
+      exec: async (command, args) => {
+        const joined = args.join(' ');
+        if (command === 'git' && joined.includes('rev-parse --show-toplevel')) {
+          return { stdout: `${root}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('worktree list --porcelain')) {
+          return { stdout: '', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('worktree add')) {
+          return { stdout: '', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('remote get-url origin')) {
+          return { stdout: 'file:///repo\n', stderr: '', code: 0, killed: false };
+        }
+        return { stdout: '', stderr: 'unexpected command', code: 1, killed: false };
+      },
+    });
+    (fake.ctx.sessionManager as any).getSessionFile = () => '/sessions/planning.jsonl';
+    (fake.ctx as any).newSession = async (options: any) => {
+      if (cancel) return { cancelled: true };
+      parentSession = options.parentSession;
+      await options.setup({
+        appendCustomEntry(customType: string, data: unknown) {
+          setupEntries.push({ customType, data });
+        },
+      });
+      await options.withSession({
+        async sendUserMessage(message: string) {
+          kickoff = message;
+        },
+      });
+      return { cancelled: false };
+    };
+
+    await fake.fire('session_start', { reason: 'startup' });
+    await fake.commands.get('plan')!.handler('fresh execution', fake.ctx);
+    await fake.tools.get('marionette_draft').execute(
+      'draft-fresh',
+      {
+        path: 'plans/fresh.mar',
+        source: '# project: fresh-plan\n=== start ===\nDo fresh work.\n-> END\n',
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+
+    await fake.commands.get('approve-plan')!.handler('fresh', fake.ctx);
+
+    assert.equal(parentSession, '/sessions/planning.jsonl');
+    assert.deepEqual(setupEntries.map((entry) => entry.customType), [
+      'marionette-plan-review',
+      'marionette-execution',
+    ]);
+    assert.deepEqual(setupEntries[1]!.data, {
+      planFile: join(root, 'plans', 'fresh.mar'),
+      graphHash: fake.discover().getDraft()?.graphHash,
+      executionRoot: join(root, '.pi', 'wt', 'fresh-plan'),
+      target: 'worktree',
+      branching: 'standard',
+    });
+    assert.equal(kickoff, `/marionette-start ${JSON.stringify(join(root, 'plans', 'fresh.mar'))}`);
+    assert.equal(fake.discover().getBinding(), null);
+    assert.equal(fake.discover().getExecution(), null);
+
+    cancel = true;
+    await fake.commands.get('approve-plan')!.handler('fresh', fake.ctx);
+    assert.equal(fake.discover().getBinding(), null);
+    assert.ok(fake.discover().getDraft());
+    assert.match(fake.notifications.at(-1)?.message ?? '', /cancelled.*still available/i);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -934,10 +1025,10 @@ Wait for a maintainer to confirm approval of PR #12.
     await fake.commands.get('marionette-start')!.handler('external.mar run-external', fake.ctx);
     const api = fake.discover();
     const packet = fake.widgets.get('marionette-escalation') as string[];
-    assert.match(packet.join('\n'), /Human confirmation required/);
+    assert.match(packet.join('\n'), /Human confirmation needed/);
     assert.match(packet.join('\n'), /Merge a reviewed pull request/);
     assert.match(packet.join('\n'), /Wait for a maintainer to confirm approval/);
-    assert.match(packet.join('\n'), /high-risk checkpoint requires durable evidence/);
+    assert.match(packet.join('\n'), /provide the existing evidence URL/);
     assert.doesNotMatch(packet.join('\n'), /approval#0|marionette-confirm-human/);
 
     const noEvidence = await api.externalConfirm({
@@ -981,9 +1072,9 @@ Human approval required.
     );
     const api = fake.discover();
     const packet = fake.widgets.get('marionette-escalation') as string[];
-    assert.match(packet.join('\n'), /Operator decision required/);
+    assert.match(packet.join('\n'), /Workflow decision needed/);
     assert.match(packet.join('\n'), /Human approval required\./);
-    assert.match(packet.join('\n'), /Approve/);
+    assert.match(packet.join('\n'), /Full details: \/marionette-show/);
     assert.doesNotMatch(packet.join('\n'), /approval#0|marionette-decide/);
 
     const forbidden = await fake.tool.execute(

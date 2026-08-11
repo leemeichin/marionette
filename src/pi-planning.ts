@@ -4,6 +4,7 @@ import {
   CONFIG_DIR_NAME,
   getMarkdownTheme,
   type ExtensionAPI,
+  type ExtensionCommandContext,
   type ExtensionContext,
 } from '@earendil-works/pi-coding-agent';
 import { Markdown } from '@earendil-works/pi-tui';
@@ -20,6 +21,13 @@ const EXECUTION_ENTRY = 'marionette-execution';
 const LEGACY_EXECUTION_ENTRY = 'pibarm-marionette-execution';
 const CONTINUATION_ENTRY = 'marionette-continuation';
 const CONTINUATION_COMMAND = 'marionette-continue-session';
+const APPROVAL_CHOICES = {
+  fresh: 'Start fresh — new session and isolated worktree',
+  worktree: 'Continue here — isolated worktree',
+  active: 'Use this checkout — no worktree isolation',
+  refine: 'Revise plan — enter feedback',
+  later: 'Decide later — keep the validated draft',
+} as const;
 
 const PLANNING_DISABLED_TOOLS = new Set([
   'edit',
@@ -148,20 +156,13 @@ function reviewMarkdown(draft: MarionettePiDraft): string {
 function approvalPrompt(draft: MarionettePiDraft): string {
   const intent = /^\*\*Intent:\*\*\s*(.+)$/m.exec(draft.summary)?.[1];
   const shape = /^Starts at .+$/m.exec(draft.summary)?.[0];
-  const compact = draft.compact?.split('\n') ?? [];
-  const walkthrough = compact.slice(0, 4).map((line) =>
-    line.length > 160 ? `${line.slice(0, 159)}…` : line);
-  if (compact.length > walkthrough.length) {
-    walkthrough.push(`… ${compact.length - walkthrough.length} more lines in the review above`);
-  }
   return [
+    'How should this plan continue?',
     `Plan: ${draft.name ?? basename(draft.planFile, '.mar')}`,
     intent ? `Intent: ${intent.length > 200 ? `${intent.slice(0, 199)}…` : intent}` : '',
     shape ?? '',
-    walkthrough.length ? `High-level walkthrough:\n${walkthrough.join('\n')}` : '',
-    `Plan source: ${draft.planFile}`,
-    'Choose what happens next:',
-  ].filter(Boolean).join('\n\n');
+    `Full review: ${draft.planFile}`,
+  ].filter(Boolean).join('\n');
 }
 
 async function gitRoot(pi: ExtensionAPI, cwd: string): Promise<string> {
@@ -399,14 +400,16 @@ export function registerMarionettePlanning(
       ctx.ui.notify('No validated Marionette plan is awaiting approval.', 'warning');
       return;
     }
+    const draft = pendingDraft;
     const target = requestedTarget.trim() || 'worktree';
+    const fresh = target === 'fresh';
     let executionRoot = ctx.cwd;
     let branching: MarionettePiExecution['branching'] = 'standard';
     if (target !== 'active') {
       const requestedName = summarizedWorktreeName(
-        target.replace(/^worktree\s*/i, '').trim() ||
-          pendingDraft.name ||
-          basename(pendingDraft.planFile, '.mar'),
+        (fresh ? '' : target.replace(/^worktree\s*/i, '').trim()) ||
+          draft.name ||
+          basename(draft.planFile, '.mar'),
       );
       let worktree: Worktree;
       try {
@@ -429,16 +432,48 @@ export function registerMarionettePlanning(
         }
       }
     }
-    execution = {
-      planFile: pendingDraft.planFile,
-      graphHash: pendingDraft.graphHash,
+    const preparedExecution: MarionettePiExecution = {
+      planFile: draft.planFile,
+      graphHash: draft.graphHash,
       executionRoot,
       target: target === 'active' ? 'active' : 'worktree',
       branching,
     };
+
+    if (fresh) {
+      const commandContext = ctx as ExtensionCommandContext;
+      if (typeof commandContext.newSession !== 'function') {
+        ctx.ui.notify('Fresh-context approval must run through /approve-plan fresh.', 'error');
+        return;
+      }
+      const parentSession = ctx.sessionManager.getSessionFile();
+      try {
+        const result = await commandContext.newSession({
+          ...(parentSession ? { parentSession } : {}),
+          async setup(session) {
+            session.appendCustomEntry(DRAFT_REVIEW_ENTRY, draft);
+            session.appendCustomEntry(EXECUTION_ENTRY, preparedExecution);
+          },
+          withSession: async (next) => {
+            await next.sendUserMessage(`/marionette-start ${JSON.stringify(draft.planFile)}`);
+          },
+        });
+        if (result.cancelled) {
+          ctx.ui.notify('Fresh-context handoff cancelled; the validated draft is still available here.', 'info');
+        }
+      } catch (error) {
+        ctx.ui.notify(
+          `Fresh-context handoff failed; the validated draft is still available here: ${(error as Error).message}`,
+          'error',
+        );
+      }
+      return;
+    }
+
+    execution = preparedExecution;
     pi.appendEntry(EXECUTION_ENTRY, execution);
     const event = await options.bind({
-      planFile: pendingDraft.planFile,
+      planFile: draft.planFile,
       runId: `pi-${ctx.sessionManager.getSessionId()}`,
       triggerTurn: false,
     });
@@ -638,15 +673,11 @@ export function registerMarionettePlanning(
     }
     if (!planning || !pendingDraft || !ctx.hasUI || approvalPrompted === pendingDraft.graphHash) return;
     approvalPrompted = pendingDraft.graphHash;
-    const choice = await ctx.ui.select(approvalPrompt(pendingDraft), [
-      'Approve and execute in a worktree',
-      'Approve and execute in the active checkout',
-      'Refine before approval',
-      'Keep for later',
-    ]);
-    if (choice === 'Approve and execute in a worktree') await approve(ctx, 'worktree');
-    else if (choice === 'Approve and execute in the active checkout') await approve(ctx, 'active');
-    else if (choice === 'Refine before approval') {
+    const choice = await ctx.ui.select(approvalPrompt(pendingDraft), Object.values(APPROVAL_CHOICES));
+    if (choice === APPROVAL_CHOICES.fresh) pi.sendUserMessage('/approve-plan fresh');
+    else if (choice === APPROVAL_CHOICES.worktree) await approve(ctx, 'worktree');
+    else if (choice === APPROVAL_CHOICES.active) await approve(ctx, 'active');
+    else if (choice === APPROVAL_CHOICES.refine) {
       const feedback = await ctx.ui.editor('Refine the Marionette plan', '') ?? '';
       await refine(ctx, feedback);
     } else disablePlanning(ctx);

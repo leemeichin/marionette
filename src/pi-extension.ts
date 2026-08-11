@@ -98,6 +98,11 @@ const splitArgs = (input: string): string[] =>
 const safeRunId = (value: string): string =>
   value.replace(/[^A-Za-z0-9._-]/g, '-');
 
+const shortLine = (value: string, limit = 180): string => {
+  const line = value.replace(/\s+/g, ' ').trim();
+  return line.length > limit ? `${line.slice(0, limit - 1)}…` : line;
+};
+
 interface HumanIdentity {
   id: string;
   uri?: string;
@@ -394,35 +399,29 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     ctx.ui.setStatus('marionette', `${phase} · r${projection.revision}`);
     if (projection.elicitation) {
       ctx.ui.setWidget('marionette-escalation', [
-        'Workflow needs input',
-        projection.plan?.intent.summary ? `Plan: ${projection.plan.intent.summary}` : '',
-        projection.node ? projection.node.body ?? projection.node.title : '',
-        `Question: ${projection.elicitation.question}`,
-        'Respond in the intervention dialog.',
+        'Workflow input needed',
+        `Question: ${shortLine(projection.elicitation.question)}`,
+        projection.node ? `Phase: ${shortLine(projection.node.title)}` : '',
+        projection.plan?.intent.summary ? `Plan: ${shortLine(projection.plan.intent.summary)}` : '',
+        'Answer in the intervention dialog.',
       ].filter(Boolean));
     } else if (projection.escalation) {
       const packet = projection.escalation;
       const heading = packet.kind === 'operator'
-        ? 'Operator decision required'
+        ? 'Workflow decision needed'
         : packet.kind === 'external'
-          ? 'Human confirmation required'
-          : 'Legacy human decision required';
+          ? 'Human confirmation needed'
+          : 'Legacy human decision needed';
+      const latest = packet.context.recentRecords.at(-1);
       const lines = [
         heading,
-        packet.context.planSummary ? `Plan: ${packet.context.planSummary}` : '',
-        `Progress: ${packet.context.progress?.nodesVisited ?? 0}/${packet.context.progress?.nodesTotal ?? 0} phases visited`,
-        ...packet.context.phaseBody.split('\n').map((line) => `  ${line}`),
-        'Available outcomes:',
-        ...packet.choices.map((choice) =>
-          `  ${choice.label}${choice.targetTitle ? ` — ${choice.targetTitle}` : ''}` +
-          `${choice.gate ? ` {${choice.gate}}` : ''}`),
-        ...packet.context.refs.map((ref) => `  context: ${ref.url ?? `${ref.provider}:${ref.id}`}`),
-        ...packet.context.recentRecords.map((record) =>
-          `  record (${record.kind}, ${record.at}): ${record.summary}` +
-          `${record.refs.length ? ` — ${record.refs.map((ref) => ref.url ?? ref.id).join(', ')}` : ''}`),
+        projection.node ? `Phase: ${shortLine(projection.node.title)}` : '',
+        packet.context.planSummary ? `Plan: ${shortLine(packet.context.planSummary)}` : '',
+        `Progress: ${packet.context.progress?.nodesVisited ?? 0}/${packet.context.progress?.nodesTotal ?? 0}`,
+        latest ? `Latest evidence: ${shortLine(latest.summary)}` : '',
         packet.kind === 'external'
-          ? 'This explicitly high-risk checkpoint requires durable evidence in the intervention dialog.'
-          : 'Choose in the intervention dialog.',
+          ? 'Choose in the dialog and provide the existing evidence URL.'
+          : 'Choose in the dialog. Full details: /marionette-show',
       ].filter(Boolean);
       ctx.ui.setWidget('marionette-escalation', lines);
     } else {
