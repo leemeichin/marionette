@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isReadOnlyPlanningCommand, summarizedWorktreeName } from '../src/pi-planning.ts';
+import {
+  isContinuationWorkRequest,
+  isReadOnlyPlanningCommand,
+  summarizedWorktreeName,
+} from '../src/pi-planning.ts';
 
 test('generated worktree names are capped at four useful words', () => {
   assert.equal(
@@ -21,6 +25,25 @@ test('Pi planning shell policy allows only bounded inspection commands', () => {
     'cat notes.md | grep plan | wc -l',
   ]) {
     assert.equal(isReadOnlyPlanningCommand(command), true, command);
+  }
+});
+
+test('completed-session continuation routing distinguishes work from conversation', () => {
+  for (const prompt of [
+    'Add retry handling to the integration.',
+    'Please implement the follow-up task.',
+    'Continue with the migration.',
+    'Review the remaining API surface.',
+  ]) {
+    assert.equal(isContinuationWorkRequest(prompt), true, prompt);
+  }
+  for (const prompt of [
+    'Thanks!',
+    'Looks good.',
+    'What did you change?',
+    'Why was that approach chosen?',
+  ]) {
+    assert.equal(isContinuationWorkRequest(prompt), false, prompt);
   }
 });
 

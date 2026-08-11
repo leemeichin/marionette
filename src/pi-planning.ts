@@ -18,8 +18,18 @@ import {
 const DRAFT_REVIEW_ENTRY = 'marionette-plan-review';
 const EXECUTION_ENTRY = 'marionette-execution';
 const LEGACY_EXECUTION_ENTRY = 'pibarm-marionette-execution';
+const CONTINUATION_ENTRY = 'marionette-continuation';
+const CONTINUATION_COMMAND = 'marionette-continue-session';
 
-const PLANNING_DISABLED_TOOLS = new Set(['edit', 'write', 'marionette_amend', 'marionette_walk', 'work_packet']);
+const PLANNING_DISABLED_TOOLS = new Set([
+  'edit',
+  'write',
+  'marionette_amend',
+  'marionette_rebind',
+  'marionette_extend',
+  'marionette_walk',
+  'work_packet',
+]);
 
 const SIMPLE_READ_SEGMENT = /^(pwd|ls|rg|grep|cat|head|tail|wc)(?:\s|$)/;
 const READ_ONLY_GIT_SEGMENT =
@@ -63,6 +73,44 @@ export function summarizedWorktreeName(value: string): string {
 
 function planName(prompt: string): string {
   return summarizedWorktreeName(prompt);
+}
+
+export function isContinuationWorkRequest(prompt: string): boolean {
+  const text = prompt.trim();
+  if (!text || /^(?:thanks|thank you|ok(?:ay)?|great|nice|done|looks good)[.!]*$/i.test(text)) {
+    return false;
+  }
+  if (/^(?:what|why|how|when|where|who|which|did|does|is|are|was|were)\b.*\?$/i.test(text)) {
+    return false;
+  }
+  // ponytail: conservative verb routing; replace with a host intent signal if false positives matter.
+  return /\b(?:add|apply|build|change|check|clean|configure|continue|create|debug|delete|deploy|design|document|extend|find|fix|help|implement|investigate|make|migrate|move|open|optimize|patch|publish|rebind|refactor|release|remove|rename|resolve|review|run|set|ship|simplify|test|update|upgrade|verify|write)\b/i.test(text);
+}
+
+interface PendingContinuation {
+  prompt: string;
+  parentSession?: string;
+  planFile: string;
+  runId: string;
+  executionRoot: string;
+  handled: boolean;
+  queued: boolean;
+}
+
+function continuationPrompt(pending: PendingContinuation): string {
+  return [
+    'Continue this additional work after a completed Marionette run.',
+    '',
+    '## Additional request',
+    pending.prompt,
+    '',
+    '## Completed context',
+    `- Plan: ${pending.planFile}`,
+    `- Run: ${pending.runId} (completed; preserve its history)`,
+    `- Execution root: ${pending.executionRoot}`,
+    '',
+    'Author a successor workflow for only the additional request; do not rewrite the completed run.',
+  ].join('\n');
 }
 
 function latestEntry<T>(ctx: ExtensionContext, customTypes: string[]): T | undefined {
@@ -216,6 +264,7 @@ async function enableGitHubStack(pi: ExtensionAPI, worktree: Worktree): Promise<
 
 interface PlanningOptions {
   getBinding(): { planFile: string; runId: string } | null;
+  isCompleted(): boolean;
   bind(request: MarionettePiBindRequest): Promise<MarionettePiEvent>;
   execute(command: Record<string, unknown>): Promise<MarionettePiEvent>;
   onEvent(event: MarionettePiEvent): void;
@@ -243,6 +292,7 @@ export function registerMarionettePlanning(
   let pendingDraft: MarionettePiDraft | null = null;
   let execution: MarionettePiExecution | null = null;
   let approvalPrompted = '';
+  let pendingContinuation: PendingContinuation | null = null;
 
   const setRuntimeTools = (): void => {
     const binding = options.getBinding();
@@ -254,9 +304,14 @@ export function registerMarionettePlanning(
     }
     const active = pi.getActiveTools().filter((name) =>
       name !== 'marionette_draft' && name !== 'marionette_walk' &&
-      name !== 'marionette_amend' && name !== 'work_packet');
+      name !== 'marionette_amend' && name !== 'marionette_rebind' &&
+      name !== 'marionette_extend' && name !== 'work_packet');
     if (planning) active.push('marionette_draft');
-    else if (binding) active.push('work_packet', 'marionette_amend');
+    else if (binding && options.isCompleted()) {
+      active.push('marionette_rebind', 'marionette_extend');
+    } else if (binding) {
+      active.push('work_packet', 'marionette_amend');
+    }
     pi.setActiveTools([...new Set(active)]);
   };
 
@@ -471,10 +526,54 @@ export function registerMarionettePlanning(
     },
   });
 
+  pi.registerCommand(CONTINUATION_COMMAND, {
+    description: 'Move a queued post-completion request into a replacement managed session',
+    handler: async (_args, ctx) => {
+      const pending = pendingContinuation;
+      if (!pending || !pending.queued || pending.handled) {
+        ctx.ui.notify('No post-completion continuation is queued.', 'warning');
+        return;
+      }
+      try {
+        const result = await ctx.newSession({
+          ...(pending.parentSession ? { parentSession: pending.parentSession } : {}),
+          withSession: async (replacementCtx) => {
+            await replacementCtx.sendUserMessage(`/plan ${continuationPrompt(pending)}`);
+          },
+        });
+        if (result.cancelled) {
+          pending.queued = false;
+          ctx.ui.notify('Continuation session replacement was cancelled; this session is unchanged.', 'info');
+        }
+      } catch (error) {
+        pending.queued = false;
+        ctx.ui.notify(`Continuation session replacement failed: ${(error as Error).message}`, 'error');
+      }
+    },
+  });
+
   pi.on('before_agent_start', (event, ctx) => {
     context = ctx;
     if (options.getBinding()) {
       setRuntimeTools();
+      if (options.isCompleted()) {
+        const binding = options.getBinding()!;
+        pendingContinuation = isContinuationWorkRequest(event.prompt)
+          ? {
+              prompt: event.prompt,
+              parentSession: ctx.sessionManager.getSessionFile(),
+              planFile: binding.planFile,
+              runId: binding.runId,
+              executionRoot: execution?.executionRoot ?? ctx.cwd,
+              handled: false,
+              queued: false,
+            }
+          : null;
+        return {
+          systemPrompt: `${event.systemPrompt}\n\nThe bound Marionette run is complete. For a new work request, call marionette_rebind when an existing validated plan/run should take over, or author a complete successor .mar source and call marionette_extend to keep the additional work managed without rewriting completed history. Do not use marionette_amend after END. For ordinary questions or conversation about the completed work, answer normally without using either continuation tool. If neither continuation tool handles a new work request, the host will move that request into a replacement session after this turn. Execute project changes only under ${execution?.executionRoot ?? ctx.cwd}.`,
+        };
+      }
+      pendingContinuation = null;
       return {
         systemPrompt: `${event.systemPrompt}\n\nA managed work packet is active. Call work_packet(status) for the current task. When that task is done, call work_packet(complete) exactly once with its human-readable outcome and an evidence-based summary. If the user changes scope or the executable future is wrong, read the bound .mar source and call marionette_amend with the complete revised source and rationale; it applies only a valid future-only change, so do not wait for a separate rebind or continue against stale instructions. When the user restores work the agent previously descoped, insert it as a prerequisite to the remaining future instead of rewriting the completed discovery or decision phase. The host owns routing and human checkpoints. Execute file changes under ${execution?.executionRoot ?? ctx.cwd}; delegated agents receive only the current task and return evidence.${execution?.branching === 'github-stack' ? ' Keep dependent GitHub review layers in this worktree and use gh stack for stack operations.' : ''}`,
       };
@@ -487,6 +586,25 @@ export function registerMarionettePlanning(
   });
 
   pi.on('tool_call', (event) => {
+    if (pendingContinuation &&
+        (event.toolName === 'marionette_rebind' || event.toolName === 'marionette_extend')) {
+      pendingContinuation.handled = true;
+    }
+    if (pendingContinuation && !pendingContinuation.handled) {
+      if (['edit', 'write', 'marionette_amend', 'marionette_walk', 'work_packet'].includes(event.toolName)) {
+        return {
+          block: true,
+          reason: 'The prior run is complete; rebind, extend, or let Marionette hand this work to a replacement session.',
+        };
+      }
+      if (event.toolName === 'bash' &&
+          !isReadOnlyPlanningCommand(String((event.input as { command?: unknown }).command ?? ''))) {
+        return {
+          block: true,
+          reason: 'The prior run is complete; mutating shell work requires a managed continuation.',
+        };
+      }
+    }
     if (!planning) return;
     if (PLANNING_DISABLED_TOOLS.has(event.toolName)) {
       return {
@@ -501,6 +619,23 @@ export function registerMarionettePlanning(
   });
 
   pi.on('agent_settled', async (_event, ctx) => {
+    if (pendingContinuation) {
+      if (pendingContinuation.handled || !options.getBinding() || !options.isCompleted()) {
+        pendingContinuation = null;
+      } else if (!pendingContinuation.queued) {
+        pendingContinuation.queued = true;
+        pi.appendEntry(CONTINUATION_ENTRY, {
+          prompt: pendingContinuation.prompt,
+          parentSession: pendingContinuation.parentSession,
+          planFile: pendingContinuation.planFile,
+          runId: pendingContinuation.runId,
+          executionRoot: pendingContinuation.executionRoot,
+          status: 'queued',
+        });
+        pi.sendUserMessage(`/${CONTINUATION_COMMAND}`, { deliverAs: 'followUp' });
+        return;
+      }
+    }
     if (!planning || !pendingDraft || !ctx.hasUI || approvalPrompted === pendingDraft.graphHash) return;
     approvalPrompted = pendingDraft.graphHash;
     const choice = await ctx.ui.select(approvalPrompt(pendingDraft), [
@@ -549,6 +684,7 @@ export function registerMarionettePlanning(
       context = null;
       planning = false;
       toolsBeforePlanning = null;
+      pendingContinuation = null;
     },
   };
 }

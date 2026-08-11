@@ -17,7 +17,7 @@ import type {
 import type { AmendmentReport } from './amendment.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.6.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.7.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -36,6 +36,12 @@ export interface MarionettePiReceipt {
   revision?: number;
   eventSeqs: number[];
   replayed: boolean;
+}
+
+export interface MarionettePiContinuation {
+  kind: 'rebind' | 'extend';
+  previous: MarionettePiBinding;
+  rationale: string;
 }
 
 export interface MarionettePiError {
@@ -120,7 +126,8 @@ export interface MarionettePiEvent {
     id?: string;
   };
   binding: MarionettePiBinding | null;
-  operation?: MarionettePiAgentCommand['operation'] | 'amend' | 'humanChoose' | 'externalConfirm' | 'humanAnswer' | 'humanAmend';
+  operation?: MarionettePiAgentCommand['operation'] | 'amend' | 'rebind' | 'extend' | 'humanChoose' | 'externalConfirm' | 'humanAnswer' | 'humanAmend';
+  continuation?: MarionettePiContinuation;
   projection?: RuntimeProjection;
   events?: RuntimeEvent[];
   receipt?: MarionettePiReceipt;

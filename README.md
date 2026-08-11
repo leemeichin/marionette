@@ -269,6 +269,11 @@ agents use the generic `work_packet` surface with named outcomes rather than
 engine commands or internal choice ids. Bound agents apply compiler-checked,
 future-only source changes through `marionette_amend`; it atomically updates
 the live graph and appends an attributed graph-epoch `plan.rebound` event.
+After a run reaches `END`, Pi replaces amendment with `marionette_rebind` for
+an existing run and `marionette_extend` for a validated fresh successor. If a
+new work request uses neither, Marionette moves it into one parent-linked
+replacement session and starts successor planning there; completed history is
+never reopened.
 ADR-0004 is implemented and awaits the dogfood
 plan's formal human approval (issue #4).
 Tracker integration landed connection-free: `marionette import` ingests a

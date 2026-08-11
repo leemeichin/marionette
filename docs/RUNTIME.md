@@ -225,15 +225,29 @@ keeps the normal worktree. The persisted execution metadata records
 `branching: "standard" | "github-stack"`; stack layers stay together inside
 that one worktree.
 
-For a bound run, `marionette_amend` validates complete candidate source against
-completed history, writes semantic-diff and candidate/Mermaid/SVG review
-artifacts, then atomically updates the live source and runtime graph with the
-agent principal and rationale. A refusal changes neither. Trusted hosts may
-still use `proposeAmendment()` and `approveAmendment()` when their own policy
-requires a separate review.
+For an active bound run, `marionette_amend` validates complete candidate source
+against completed history, writes semantic-diff and candidate/Mermaid/SVG
+review artifacts, then atomically updates the live source and runtime graph
+with the agent principal and rationale. A refusal changes neither. Trusted
+hosts may still use `proposeAmendment()` and `approveAmendment()` when their
+own policy requires a separate review.
 
-The model gets one agent-bound traversal tool, `marionette_walk`. It mirrors
-the runtime command surface:
+At `completed`, Pi deactivates traversal/amendment tools and activates two
+continuation tools. `marionette_rebind` requires an existing validated plan and
+run id; it resumes that run and persists an attributed binding transition.
+`marionette_extend` compiler-validates and atomically writes a new successor
+`.mar`, creates a fresh run id, and binds it. Neither changes the completed
+source, snapshot, journal, or archived graph. If a post-completion work prompt
+settles without either tool, Marionette blocks unmanaged mutations, queues one
+internal continuation command, and calls Pi's `ctx.newSession` with the old
+session as parent. Only the replacement context is then used to send a
+self-contained `/plan` request containing the original prompt and minimum
+plan/run/execution-root context. Informational questions and acknowledgements
+do not hand off; cancellation or replacement failure leaves the old completed
+session usable.
+
+The model gets the compact `work_packet` traversal tool; legacy
+`marionette_walk` mirrors the lower-level runtime command surface:
 
 - `capabilities`, `next`, `choose`, `ask`, `advance`, `observe`, `record`, `events`
 - `signal`, `work`, and `debug` projection profiles
@@ -265,7 +279,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.6.0`) with the same shape in four places:
+(`marionette.pi` / `1.7.0`) with the same shape in four places:
 
 1. `work_packet` (and legacy `marionette_walk`) tool-result `details`;
 2. `marionette-projection` custom-message `details`;
@@ -274,8 +288,9 @@ The extension publishes a versioned notification envelope
 
 Every envelope identifies its cause and current binding and may carry the
 projection, emitted runtime events, revision/event-sequence receipt, replay
-state, operation result, a structured error, a validated draft, or an
-amendment artifact. Successful host-side proposals emit
+state, operation result, a structured error, a validated draft, an amendment
+artifact, or a typed `continuation` transition (`rebind`/`extend`, previous
+binding, rationale). Successful host-side proposals emit
 `plan.amendment-proposed`; application emits `plan.rebound`. Runtime traversal
 continues to emit
 binding and runtime events. A host therefore never needs to parse rendered
@@ -303,11 +318,12 @@ names, envelope types and the host interface are exported from the package. The 
 notification plane; the host API or the runtime protocol remains the
 request/response command plane.
 
-When managed work is bound, Pi activates `work_packet` and
-`marionette_amend`. The model receives task prose and named outcomes; engine
-names and internal choice ids stay out of traversal output, while an explicit
-scope change can replace the executable future in one validated operation. The legacy `marionette brief` /
-`marionette state ...` flow
+While managed work is active, Pi activates `work_packet` and
+`marionette_amend`; after completion it activates `marionette_rebind` and
+`marionette_extend` instead. The model receives task prose and named outcomes;
+engine names and internal choice ids stay out of traversal output, while an
+explicit scope change can replace the executable future in one validated
+operation. The legacy `marionette brief` / `marionette state ...` flow
 uses a separate `<plan>.state.json` store and must not be mixed into the same
 run.
 

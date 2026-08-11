@@ -27,6 +27,7 @@ import {
   type MarionettePiAmendmentRequest,
   type MarionettePiBindRequest,
   type MarionettePiBinding,
+  type MarionettePiContinuation,
   type MarionettePiDiscoveryRequest,
   type MarionettePiError,
   type MarionettePiEvent,
@@ -483,6 +484,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
       lastProjection = projection;
       lastCursor = projection.cursor;
       if (activeContext) updateUi(projection, activeContext);
+      planning.refreshTools();
     } else if (Number.isSafeInteger(result.result['cursor'])) {
       lastCursor = result.result['cursor'] as number;
     }
@@ -871,12 +873,15 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     ctx: ExtensionContext,
     cause: MarionettePiEvent['cause'],
     persistBinding: boolean,
+    runMode: 'open-or-create' | 'open' | 'create' = 'open-or-create',
+    continuation?: MarionettePiContinuation,
   ): Promise<MarionettePiEvent> => {
     const candidate = await PiAgentBridge.open({
       planFile: binding.planFile,
       runId: binding.runId,
       sessionId: ctx.sessionManager.getSessionId(),
       cwd: ctx.cwd,
+      runMode,
     });
     const result = await candidate.next();
     const projection = projectionOf(result);
@@ -905,7 +910,23 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
         eventSeqs: [],
         replayed: false,
       },
+      operation: continuation?.kind,
+      continuation,
     });
+  };
+
+  const requireCompletedBinding = async (): Promise<MarionettePiBinding> => {
+    if (!bridge) {
+      throw new PiIntegrationError('No Marionette run is bound.', 'not-bound');
+    }
+    await bridge.refresh();
+    if (bridge.currentState().status !== 'completed') {
+      throw new PiIntegrationError(
+        'Rebind and extend are available only after the bound run completes.',
+        'invalid-request',
+      );
+    }
+    return currentBinding()!;
   };
 
   const configuredBinding = (ctx: ExtensionContext): StoredBinding | null => {
@@ -986,6 +1007,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
   let hostApi: MarionettePiHostApi;
   const planning = registerMarionettePlanning(pi, {
     getBinding: currentBinding,
+    isCompleted: () => lastProjection?.status === 'completed',
     bind: (request) => hostApi.bind(request),
     execute: (command) => hostApi.execute(command as MarionettePiAgentCommand),
     onEvent: (event) => {
@@ -1393,6 +1415,133 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     },
     renderCall(_args, theme) {
       return new Text(theme.fg('toolTitle', theme.bold('marionette amend')), 0, 0);
+    },
+  });
+
+  pi.registerTool({
+    name: 'marionette_rebind',
+    label: 'Marionette rebind',
+    description:
+      'After the bound run completes, switch this Pi session to an existing validated Marionette plan and run without changing completed history.',
+    promptSnippet: 'Rebind a completed managed session to an existing Marionette plan/run',
+    promptGuidelines: [
+      'Use marionette_rebind only when post-completion work already has a validated plan and existing run id.',
+    ],
+    parameters: Type.Object({
+      planFile: Type.String({ description: 'Existing .mar plan path, relative to the Pi working directory or absolute' }),
+      runId: Type.String({ description: 'Existing runtime run id to resume' }),
+      rationale: Type.String({ description: 'Why this completed session should switch to that run' }),
+    }, { additionalProperties: false }),
+    async execute(toolCallId, params, _signal, _onUpdate, ctx) {
+      activeContext = ctx;
+      const cause = { source: 'tool' as const, name: 'marionette_rebind', id: toolCallId };
+      try {
+        const previous = await requireCompletedBinding();
+        if (!params.rationale.trim()) {
+          throw new PiIntegrationError('Rebind requires a rationale.', 'invalid-request');
+        }
+        const event = await open(
+          { planFile: params.planFile, runId: params.runId },
+          ctx,
+          cause,
+          true,
+          'open',
+          { kind: 'rebind', previous, rationale: params.rationale },
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: `Rebound to ${event.binding!.planFile} (${event.binding!.runId}).\n${JSON.stringify(agentProjection(event.projection!))}`,
+          }],
+          details: event,
+        };
+      } catch (error) {
+        const event = failure(cause, error);
+        return {
+          content: [{ type: 'text', text: event.error!.message }],
+          details: event,
+          isError: true,
+        };
+      }
+    },
+    renderCall(_args, theme) {
+      return new Text(theme.fg('toolTitle', theme.bold('marionette rebind')), 0, 0);
+    },
+  });
+
+  pi.registerTool({
+    name: 'marionette_extend',
+    label: 'Marionette extend',
+    description:
+      'After the bound run completes, validate and atomically write a successor .mar plan, create a fresh run, and bind this Pi session to the additional managed work.',
+    promptSnippet: 'Extend a completed managed session with a validated successor plan/run',
+    promptGuidelines: [
+      'Use marionette_extend for additional work after completion; provide a complete successor plan and never rewrite the completed plan.',
+    ],
+    parameters: Type.Object({
+      path: Type.String({ description: 'New successor .mar path, relative to the Pi working directory or absolute' }),
+      source: Type.String({ description: 'Complete successor Marionette DSL source for the additional work' }),
+      rationale: Type.String({ description: 'Why this successor work extends the completed session' }),
+      runId: Type.Optional(Type.String({ description: 'Fresh runtime run id; defaults to a tool-call-specific continuation id' })),
+    }, { additionalProperties: false }),
+    async execute(toolCallId, params, _signal, _onUpdate, ctx) {
+      activeContext = ctx;
+      const cause = { source: 'tool' as const, name: 'marionette_extend', id: toolCallId };
+      try {
+        const previous = await requireCompletedBinding();
+        if (!params.rationale.trim()) {
+          throw new PiIntegrationError('Extend requires a rationale.', 'invalid-request');
+        }
+        const planFile = resolve(ctx.cwd, params.path);
+        if (extname(planFile) !== '.mar') {
+          throw new PiIntegrationError('Successor plan path must end in .mar.', 'invalid-request');
+        }
+        const compiled = await compile(params.source, { file: planFile });
+        if (!compiled.ok || !compiled.trajectory) {
+          throw new PiIntegrationError(
+            formatDiagnostics(compiled.diagnostics, planFile, { source: params.source }) ||
+              'Successor plan did not produce a trajectory.',
+            'invalid-request',
+          );
+        }
+        const runId = params.runId?.trim() ||
+          safeRunId(`${previous.runId}-continuation-${toolCallId}`);
+        await withFileMutationQueue(planFile, () => writePlan(planFile, params.source, false));
+        const event = await open(
+          { planFile, runId },
+          ctx,
+          cause,
+          true,
+          'create',
+          { kind: 'extend', previous, rationale: params.rationale },
+        );
+        return {
+          content: [{
+            type: 'text',
+            text: [
+              `Successor plan validated and bound: ${event.binding!.planFile} (${event.binding!.runId}).`,
+              renderCompactGraph(compiled.trajectory),
+              JSON.stringify(agentProjection(event.projection!)),
+            ].join('\n\n'),
+          }],
+          details: event,
+        };
+      } catch (error) {
+        const event = failure(cause, error);
+        return {
+          content: [{ type: 'text', text: event.error!.message }],
+          details: event,
+          isError: true,
+        };
+      }
+    },
+    renderCall(args, theme) {
+      return new Text(
+        theme.fg('toolTitle', theme.bold('marionette extend ')) +
+          theme.fg('muted', args.path),
+        0,
+        0,
+      );
     },
   });
 

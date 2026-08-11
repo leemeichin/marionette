@@ -30,6 +30,8 @@ interface FakePiOptions {
   hasUI?: boolean;
   confirm?: (title: string, message: string) => Promise<boolean>;
   select?: (title: string, choices: string[]) => Promise<string | undefined>;
+  newSessionCancelled?: boolean;
+  newSessionError?: Error;
   exec?: (command: string, args: string[], options?: { cwd?: string }) => Promise<{
     stdout: string;
     stderr: string;
@@ -49,6 +51,11 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
   const notifications: Array<{ message: string; type?: string }> = [];
   const entryRenderers = new Map<string, unknown>();
   const widgets = new Map<string, unknown>();
+  const newSessionCalls: Array<{
+    parentSession?: string;
+    withSession?: (ctx: any) => Promise<void>;
+  }> = [];
+  const replacementMessages: string[] = [];
   let activeTools = [
     'read',
     'bash',
@@ -80,6 +87,7 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
 
   const sessionManager = {
     getSessionId: () => 'session-test',
+    getSessionFile: () => join(cwd, 'session-test.jsonl'),
     getBranch: () => [...activeBranch],
   };
   const ui = {
@@ -101,6 +109,21 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
     hasUI: options.hasUI ?? false,
     ui,
     sessionManager,
+    async newSession(replacement: {
+      parentSession?: string;
+      withSession?: (ctx: any) => Promise<void>;
+    }) {
+      newSessionCalls.push(replacement);
+      if (options.newSessionError) throw options.newSessionError;
+      if (options.newSessionCancelled) return { cancelled: true };
+      await replacement.withSession?.({
+        ...ctx,
+        async sendUserMessage(message: string) {
+          replacementMessages.push(message);
+        },
+      });
+      return { cancelled: false };
+    },
   } as unknown as ExtensionContext;
 
   const pi = {
@@ -165,6 +188,8 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
     activeTools: () => [...activeTools],
     tools,
     widgets,
+    newSessionCalls,
+    replacementMessages,
     get tool() {
       return tools.get('marionette_walk');
     },
@@ -201,6 +226,17 @@ ${title}
   return file;
 };
 
+const completeBoundRun = async (fake: ReturnType<typeof createFakePi>, id = 'complete-run') => {
+  const result = await fake.workPacket.execute(
+    id,
+    { operation: 'complete', outcome: 'Done', summary: 'Managed task completed with evidence.' },
+    undefined,
+    undefined,
+    fake.ctx,
+  );
+  assert.equal(result.details.projection.status, 'completed');
+};
+
 test('Pi extension restores bindings from the active branch and publishes a typed host API', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-'));
   try {
@@ -208,7 +244,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.6.0');
+    assert.equal(api.protocol, '1.7.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -471,6 +507,219 @@ test('managed work packets use outcome labels without exposing internal ids', as
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('completed runs activate continuation tools and can rebind to an existing run', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-rebind-'));
+  try {
+    writePlan(root, 'completed.mar', 'Finish the original work.');
+    writePlan(root, 'existing.mar', 'Resume existing managed work.');
+    const target = createFakePi(root);
+    await target.commands.get('marionette-start')!.handler('existing.mar existing-run', target.ctx);
+
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('completed.mar completed-run', fake.ctx);
+    await completeBoundRun(fake, 'complete-before-rebind');
+    const completedBranch = fake.branch();
+    assert.ok(fake.activeTools().includes('marionette_rebind'));
+    assert.ok(fake.activeTools().includes('marionette_extend'));
+    assert.equal(fake.activeTools().includes('work_packet'), false);
+    assert.equal(fake.activeTools().includes('marionette_amend'), false);
+
+    const before = (await fake.handlers.get('before_agent_start')![0]!(
+      { systemPrompt: 'base', prompt: 'Continue the existing managed run.' },
+      fake.ctx,
+    )) as { systemPrompt: string };
+    assert.match(before.systemPrompt, /bound Marionette run is complete/);
+    assert.match(before.systemPrompt, /marionette_rebind/);
+    await fake.handlers.get('tool_call')![0]!(
+      { toolName: 'marionette_rebind', input: { planFile: 'existing.mar', runId: 'existing-run' } },
+      fake.ctx,
+    );
+    const rebound = await fake.tools.get('marionette_rebind').execute(
+      'rebind-tool',
+      { planFile: 'existing.mar', runId: 'existing-run', rationale: 'Continue the existing workflow.' },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(rebound.isError, undefined);
+    assert.equal(rebound.details.kind, 'binding.bound');
+    assert.equal(rebound.details.cause.name, 'marionette_rebind');
+    assert.equal(rebound.details.operation, 'rebind');
+    assert.equal(rebound.details.continuation.kind, 'rebind');
+    assert.equal(rebound.details.continuation.previous.runId, 'completed-run');
+    assert.equal(rebound.details.binding.runId, 'existing-run');
+    assert.ok(fake.activeTools().includes('work_packet'));
+    assert.ok(fake.activeTools().includes('marionette_amend'));
+    await fake.fire('agent_settled', {});
+    assert.equal(fake.userMessages.some((message) => /marionette-continue-session/.test(message)), false);
+
+    const reboundBranch = fake.branch();
+    fake.useBranch(completedBranch);
+    await fake.fire('session_tree', { type: 'session_tree' });
+    assert.equal(fake.discover().getBinding()?.runId, 'completed-run');
+    assert.ok(fake.activeTools().includes('marionette_rebind'));
+    fake.useBranch(reboundBranch);
+    await fake.fire('session_tree', { type: 'session_tree' });
+    assert.equal(fake.discover().getBinding()?.runId, 'existing-run');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('completed runs can extend into a fresh validated successor without changing history', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-extend-'));
+  try {
+    const originalFile = writePlan(root, 'completed.mar', 'Finish immutable work.');
+    const originalSource = readFileSync(originalFile, 'utf8');
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('completed.mar completed-run', fake.ctx);
+
+    const refused = await fake.tools.get('marionette_extend').execute(
+      'extend-too-early',
+      {
+        path: 'too-early.mar',
+        source: '=== start ===\nToo early.\n-> END\n',
+        rationale: 'Run is still active.',
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(refused.isError, true);
+    assert.match(refused.content[0].text, /only after the bound run completes/);
+    assert.equal(existsSync(join(root, 'too-early.mar')), false);
+
+    await completeBoundRun(fake, 'complete-before-extend');
+    await fake.handlers.get('before_agent_start')![0]!(
+      { systemPrompt: 'base', prompt: 'Add the follow-up implementation.' },
+      fake.ctx,
+    );
+    await fake.handlers.get('tool_call')![0]!(
+      { toolName: 'marionette_extend', input: { path: 'successor.mar' } },
+      fake.ctx,
+    );
+    const successorSource = [
+      '# summary: Implement the requested follow-up.',
+      '=== follow_up ===',
+      'Implement only the additional work.',
+      '-> END',
+      '',
+    ].join('\n');
+    const extended = await fake.tools.get('marionette_extend').execute(
+      'extend-tool',
+      {
+        path: 'successor.mar',
+        source: successorSource,
+        rationale: 'The original run completed before this request arrived.',
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+    assert.equal(extended.isError, undefined);
+    assert.equal(readFileSync(originalFile, 'utf8'), originalSource);
+    assert.equal(readFileSync(join(root, 'successor.mar'), 'utf8'), successorSource);
+    assert.equal(extended.details.kind, 'binding.bound');
+    assert.equal(extended.details.cause.name, 'marionette_extend');
+    assert.equal(extended.details.operation, 'extend');
+    assert.equal(extended.details.continuation.kind, 'extend');
+    assert.equal(extended.details.continuation.previous.runId, 'completed-run');
+    assert.match(extended.details.binding.runId, /completed-run-continuation-extend-tool/);
+    assert.equal(extended.details.projection.status, 'active');
+    assert.ok(fake.activeTools().includes('work_packet'));
+    await fake.fire('agent_settled', {});
+    assert.equal(fake.userMessages.some((message) => /marionette-continue-session/.test(message)), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('omitted continuation tools hand post-completion work to one replacement session', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-handoff-'));
+  try {
+    writePlan(root, 'completed.mar', 'Finish before follow-up work.');
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('completed.mar completed-run', fake.ctx);
+    await completeBoundRun(fake, 'complete-before-handoff');
+    await fake.handlers.get('before_agent_start')![0]!(
+      { systemPrompt: 'base', prompt: 'Add retry handling to the integration.' },
+      fake.ctx,
+    );
+    const blocked = await fake.handlers.get('tool_call')![0]!(
+      { toolName: 'edit', input: {} },
+      fake.ctx,
+    ) as { block: boolean };
+    assert.equal(blocked.block, true);
+
+    await fake.fire('agent_settled', {});
+    await fake.fire('agent_settled', {});
+    assert.equal(fake.userMessages.filter((message) =>
+      message === '/marionette-continue-session').length, 1);
+    const queued = fake.entries.filter((entry) => entry.customType === 'marionette-continuation');
+    assert.equal(queued.length, 1);
+
+    await fake.commands.get('marionette-continue-session')!.handler('', fake.ctx);
+    assert.equal(fake.newSessionCalls.length, 1);
+    assert.equal(fake.newSessionCalls[0]!.parentSession, join(root, 'session-test.jsonl'));
+    assert.equal(fake.replacementMessages.length, 1);
+    assert.match(fake.replacementMessages[0]!, /^\/plan Continue this additional work/);
+    assert.match(fake.replacementMessages[0]!, /Add retry handling to the integration/);
+    assert.match(fake.replacementMessages[0]!, /completed\.mar/);
+    assert.match(fake.replacementMessages[0]!, /completed-run \(completed; preserve its history\)/);
+    assert.match(fake.replacementMessages[0]!, new RegExp(`Execution root: ${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('ordinary completed-run follow-ups do not hand off', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-no-handoff-'));
+  try {
+    writePlan(root, 'completed.mar', 'Finish before discussion.');
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('completed.mar completed-run', fake.ctx);
+    await completeBoundRun(fake, 'complete-before-question');
+    await fake.handlers.get('before_agent_start')![0]!(
+      { systemPrompt: 'base', prompt: 'What did you change?' },
+      fake.ctx,
+    );
+    await fake.fire('agent_settled', {});
+    assert.equal(fake.userMessages.some((message) => /marionette-continue-session/.test(message)), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const [label, replacementOptions] of [
+  ['cancelled', { newSessionCancelled: true }],
+  ['failed', { newSessionError: new Error('replacement unavailable') }],
+] as const) {
+  test(`${label} continuation replacement leaves the completed session usable`, async () => {
+    const root = mkdtempSync(join(tmpdir(), `marionette-pi-extension-handoff-${label}-`));
+    try {
+      writePlan(root, 'completed.mar', 'Finish before another task.');
+      const fake = createFakePi(root, replacementOptions);
+      await fake.commands.get('marionette-start')!.handler('completed.mar completed-run', fake.ctx);
+      await completeBoundRun(fake, `complete-before-${label}`);
+      await fake.handlers.get('before_agent_start')![0]!(
+        { systemPrompt: 'base', prompt: 'Implement another follow-up task.' },
+        fake.ctx,
+      );
+      await fake.fire('agent_settled', {});
+      await fake.commands.get('marionette-continue-session')!.handler('', fake.ctx);
+      assert.equal(fake.newSessionCalls.length, 1);
+      assert.equal(fake.discover().getBinding()?.runId, 'completed-run');
+      assert.ok(fake.activeTools().includes('marionette_rebind'));
+      assert.ok(fake.notifications.some((item) =>
+        label === 'cancelled' ? /cancelled/.test(item.message) : /replacement unavailable/.test(item.message)));
+      await fake.commands.get('marionette-continue-session')!.handler('', fake.ctx);
+      assert.equal(fake.newSessionCalls.length, 1);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
 
 test('worktree approval automatically enables GitHub stacked PR branching', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-stack-'));

@@ -27,9 +27,13 @@ session. Treat the engine as an implementation detail:
   human-readable outcome label when choices exist, and an evidence summary;
 - use `work_packet(request_input)` for an authored free-text route;
 - record requested observations with `work_packet(observe)`;
-- when the user changes the executable future, call `marionette_amend` with
-  the complete revised source and rationale; do not keep following a stale
-  packet or ask the user to run a rebind command;
+- when the user changes an active executable future, call `marionette_amend`
+  with the complete revised source and rationale; do not keep following a
+  stale packet or ask the user to run a rebind command;
+- after completion, use `marionette_rebind` for an existing validated plan/run
+  or `marionette_extend` with a complete successor plan; never amend a run
+  after `END`. If neither tool handles a new work request, the host moves it
+  into a parent-linked replacement session automatically;
 - stop whenever human input is pending—the host opens native intervention UI
   automatically. Never ask the user to type command syntax or internal ids.
 
@@ -82,7 +86,10 @@ Repeat until the brief says otherwise:
    - `stranded` — report which gates are shut and the current variables; the
      plan likely needs editing (author fixes, then `marionette state rebind`).
      Stop.
-   - `completed` — write the final report (see *Reporting*) and stop.
+   - `completed` — write the final report (see *Reporting*) and stop. In a
+     later Pi turn, additional work uses `marionette_rebind` or
+     `marionette_extend`; otherwise the host starts a replacement-session
+     continuation. Ordinary questions about the completed work stay put.
 3. **Re-brief after every recorded step.** Gates move when variables move.
 
 Refusals are protocol, not failures: if a state command refuses
@@ -255,8 +262,10 @@ carries a `# tracker:` tag — the manifest tells you exactly what to do
 
 ## Hard rules
 
-- Amend `.mar` source only through `marionette_amend` while bound or the
-  validated `state rebind` path while unbound. Never hand-edit trajectory JSON
+- Amend `.mar` source only through `marionette_amend` while an active run is
+  bound or the validated `state rebind` path while unbound. A completed bound
+  run continues only through `marionette_rebind`, `marionette_extend`, or the
+  host's replacement-session fallback. Never hand-edit trajectory JSON
   or state files; traversal changes go through
   `state observe|choose|ask|answer|advance|rebind` only.
 - Never pass `--actor` other than `agent` for your own steps. Human decisions

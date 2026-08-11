@@ -72,6 +72,7 @@ export {
   MARIONETTE_PI_HUMAN_CHANNEL,
   type MarionettePiBinding,
   type MarionettePiReceipt,
+  type MarionettePiContinuation,
   type MarionettePiError,
   type MarionettePiEventKind,
   type MarionettePiEvent,

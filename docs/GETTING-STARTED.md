@@ -141,8 +141,14 @@ For a mid-run scope change, the agent sends complete revised source and a
 rationale through `marionette_amend`. It validates, writes semantic-diff and
 graph artifacts, and atomically applies only future changes; completed phases
 stay bound to their archived graphs. No separate rebind or approval command is
-needed. At `@ask`, Pi displays a complete decision packet for
-`/marionette-decide`; at `@human`, it parks until
+needed. Once a run is complete, `marionette_rebind` resumes an existing
+validated plan/run and `marionette_extend` validates a new successor plan,
+creates a fresh run, and binds it without reopening the completed history. If
+an additional work request uses neither tool, Marionette starts one
+parent-linked replacement Pi session and forwards the request plus the minimum
+completed plan/run context into `/plan`; acknowledgements and informational
+follow-ups remain in the completed session. At `@ask`, Pi displays a complete
+decision packet for `/marionette-decide`; at `@human`, it parks until
 `/marionette-confirm-human` records an evidenced human confirmation. Trusted
 human commands use the current repository's configured Git author unless the
 host or `--marionette-human` supplies an override. Answer `@input` with
@@ -150,9 +156,10 @@ host or `--marionette-human` supplies an override. Answer `@input` with
 restart contract. `/marionette-stop` unbinds the session without deleting the
 runtime run.
 
-While a run is bound, `marionette_walk` is its sole traversal interface. Do
-not mix in `marionette brief` or `marionette state ...`; those commands are
-the standalone CLI workflow and persist a different state file.
+While an active run is bound, `work_packet` is its model-facing traversal
+interface (`marionette_walk` remains a compatibility surface). Do not mix in
+`marionette brief` or `marionette state ...`; those commands are the
+standalone CLI workflow and persist a different state file.
 
 ## 6. When something feels wrong
 

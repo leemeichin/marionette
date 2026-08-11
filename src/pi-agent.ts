@@ -32,6 +32,7 @@ export interface PiAgentBridgeOptions {
   /** Base used to resolve a relative planFile. Defaults to process.cwd(). */
   cwd?: string;
   storeRoot?: string;
+  runMode?: 'open-or-create' | 'open' | 'create';
 }
 
 export class PiAgentBridgeError extends Error {
@@ -92,12 +93,20 @@ export class PiAgentBridge {
       );
     }
     const storeRoot = options.storeRoot ?? join(dirname(planFile), '.marionette');
+    const runMode = options.runMode ?? 'open-or-create';
     let snapshot;
     try {
       snapshot = await loadRuntimeStore(storeRoot, options.runId, compiled.trajectory);
+      if (runMode === 'create') {
+        throw new PiAgentBridgeError(`run "${options.runId}" already exists`, 'runtime-store');
+      }
     } catch (error) {
       if (!(error instanceof RuntimeStoreError) || error.code !== 'run-not-found') {
+        if (error instanceof PiAgentBridgeError) throw error;
         throw new PiAgentBridgeError((error as Error).message, 'runtime-store');
+      }
+      if (runMode === 'open') {
+        throw new PiAgentBridgeError(`run "${options.runId}" does not exist`, 'runtime-store');
       }
       snapshot = await initializeRuntimeStore(storeRoot, compiled.trajectory, {
         runId: options.runId,

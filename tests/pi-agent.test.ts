@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PiAgentBridge } from '../src/pi-agent.ts';
+import { PiAgentBridge, PiAgentBridgeError } from '../src/pi-agent.ts';
 import { ProtocolError, type RuntimeProjection } from '../src/runtime-protocol.ts';
 
 const projectionOf = (result: Awaited<ReturnType<PiAgentBridge['next']>>): RuntimeProjection =>
@@ -144,6 +144,45 @@ test('Pi bridge exposes protocol capabilities, records, events, and external ref
       first.choose('phase_3#0', 'phase three complete', 'concurrent-step-3'),
     ]);
     assert.equal(projectionOf(await first.next()).node?.id, 'phase_4');
+  }));
+
+test('Pi bridge run modes distinguish resume from fresh continuation creation', () =>
+  withPlan(async (file, storeRoot) => {
+    await assert.rejects(
+      () => PiAgentBridge.open({
+        planFile: file,
+        runId: 'missing',
+        sessionId: 'session-1',
+        storeRoot,
+        runMode: 'open',
+      }),
+      (error: unknown) => error instanceof PiAgentBridgeError && /does not exist/.test(error.message),
+    );
+
+    await PiAgentBridge.open({
+      planFile: file,
+      runId: 'fresh',
+      sessionId: 'session-1',
+      storeRoot,
+      runMode: 'create',
+    });
+    await PiAgentBridge.open({
+      planFile: file,
+      runId: 'fresh',
+      sessionId: 'session-2',
+      storeRoot,
+      runMode: 'open',
+    });
+    await assert.rejects(
+      () => PiAgentBridge.open({
+        planFile: file,
+        runId: 'fresh',
+        sessionId: 'session-3',
+        storeRoot,
+        runMode: 'create',
+      }),
+      (error: unknown) => error instanceof PiAgentBridgeError && /already exists/.test(error.message),
+    );
   }));
 
 test('Pi bridge opens @ask as agent and answers through the trusted human surface', async () => {

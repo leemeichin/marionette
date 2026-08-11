@@ -44,7 +44,8 @@ surface; it does not change this CLI loop or the DSL.
 │      ├─ status: stranded       → report; plan needs editing │
 │      │     (then `marionette state rebind`)                 │
 │      │                                                      │
-│      └─ status: completed      → final report; done         │
+│      └─ status: completed      → final report; done; in Pi, │
+│            rebind/extend later work or replace the session  │
 └──────────────── repeat until completed ─────────────────────┘
 ```
 
@@ -295,13 +296,22 @@ has already drifted without an archive, restore the source matching its state
 hash, run `state baseline`, then edit again; use `state init --force` only when
 discarding history is intentional.
 
-In a bound Pi run the executor calls `marionette_amend` with complete revised
-source and a rationale. The tool compiler-checks it, enforces the same
+In an active bound Pi run the executor calls `marionette_amend` with complete
+revised source and a rationale. The tool compiler-checks it, enforces the same
 future-only policy, writes compact, Mermaid, and SVG review artifacts, then
 atomically updates the live source and runtime graph. `plan.rebound` records
 the agent principal; all earlier events retain their original graph hashes and
 replay under those graph epochs. Hosts may retain a separate proposal/approval
 UI as optional policy, not an engine requirement.
+
+A completed run has no executable future to amend. For later work, Pi offers
+`marionette_rebind` to resume an existing validated plan/run and
+`marionette_extend` to validate a new successor plan, create a fresh run, and
+bind it while leaving the completed run immutable. If a new work prompt uses
+neither tool, the extension hands it to one parent-linked replacement session
+through `ctx.newSession` and starts successor `/plan` authoring there. Only the
+replacement context is used after the switch; cancellation or failure leaves
+the completed session intact.
 
 The `marionette-execution` skill carries the amendment protocol, including the
 park-don't-spin rule for standing service phases (`# wake:`, see DSL.md).
