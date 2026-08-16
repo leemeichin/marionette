@@ -9,3 +9,4 @@ plans/*.mmd
 plans/*.summary.md
 docs/dogfood/**/plan.mmd
 docs/dogfood/**/summary.txt
+*.tgz

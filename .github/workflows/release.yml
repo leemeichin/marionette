@@ -82,4 +82,11 @@ jobs:
           git tag -a "$tag" -m "Marionette $tag"
           git push origin "$tag"
 
-          gh release create "$tag" --title "Marionette $tag" --generate-notes
+          # Ship a packed tarball, not just a source tag. A git install cannot
+          # be relied on to build dist/: `prepare` skips without TypeScript
+          # present, and bun does not run dependency lifecycle scripts at all,
+          # so a consumer would get a package with no dist/ and no way to make
+          # one. The tarball carries the built output for every client.
+          npm pack --silent
+          gh release create "$tag" "marionette-$VERSION.tgz" \
+            --title "Marionette $tag" --generate-notes
