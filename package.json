@@ -9,7 +9,8 @@
   ],
   "pi": {
     "extensions": [
-      "./src/pi-extension.ts"
+      "./src/pi-extension.ts",
+      "./src/pi-host-extension.ts"
     ],
     "skills": [
       "./skills"

@@ -9,6 +9,7 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { Markdown } from '@earendil-works/pi-tui';
 import {
+  type MarionettePiApproveDraftRequest,
   type MarionettePiBindRequest,
   type MarionettePiDraft,
   type MarionettePiEvent,
@@ -21,12 +22,12 @@ const EXECUTION_ENTRY = 'marionette-execution';
 const LEGACY_EXECUTION_ENTRY = 'pibarm-marionette-execution';
 const CONTINUATION_ENTRY = 'marionette-continuation';
 const CONTINUATION_COMMAND = 'marionette-continue-session';
+const TARGET_SELECTION_COMMAND = 'marionette-select-execution-target';
 const APPROVAL_CHOICES = {
-  fresh: 'Start fresh — new session and isolated worktree',
-  worktree: 'Continue here — isolated worktree',
-  active: 'Use this checkout — no worktree isolation',
-  refine: 'Revise plan — enter feedback',
-  later: 'Decide later — keep the validated draft',
+  worktree: 'Continue in a worktree',
+  active: 'Continue in the active checkout',
+  newSession: 'Continue in a new session',
+  refine: 'Make changes to the plan',
 } as const;
 
 const PLANNING_DISABLED_TOOLS = new Set([
@@ -276,6 +277,9 @@ export interface MarionettePiPlanningController {
   getDraft(): MarionettePiDraft | null;
   getExecution(): MarionettePiExecution | null;
   startDraft(request: MarionettePiStartDraftRequest): Promise<void>;
+  show(ctx: ExtensionCommandContext): Promise<void>;
+  approve(request: MarionettePiApproveDraftRequest, ctx: ExtensionCommandContext): Promise<void>;
+  refine(feedback: string, ctx: ExtensionCommandContext): Promise<void>;
   refreshTools(): void;
   sessionStart(ctx: ExtensionContext): void;
   sessionTree(ctx: ExtensionContext): void;
@@ -285,6 +289,7 @@ export interface MarionettePiPlanningController {
 export function registerMarionettePlanning(
   pi: ExtensionAPI,
   options: PlanningOptions,
+  { genericSurface = true }: { genericSurface?: boolean } = {},
 ): MarionettePiPlanningController {
   let context: ExtensionContext | null = null;
   let planning = false;
@@ -401,13 +406,41 @@ export function registerMarionettePlanning(
       return;
     }
     const draft = pendingDraft;
-    const target = requestedTarget.trim() || 'worktree';
-    const fresh = target === 'fresh';
+    const requested = requestedTarget.trim() || 'worktree';
+    const target = requested === 'fresh' ? 'new-session' : requested;
+    if (target === 'new-session') {
+      const commandContext = ctx as ExtensionCommandContext;
+      if (typeof commandContext.newSession !== 'function') {
+        ctx.ui.notify('New-session approval must run through /approve-plan new-session.', 'error');
+        return;
+      }
+      const parentSession = ctx.sessionManager.getSessionFile();
+      try {
+        const result = await commandContext.newSession({
+          ...(parentSession ? { parentSession } : {}),
+          async setup(session) {
+            session.appendCustomEntry(DRAFT_REVIEW_ENTRY, draft);
+          },
+          withSession: async (next) => {
+            await next.sendUserMessage(`/${TARGET_SELECTION_COMMAND}`);
+          },
+        });
+        if (result.cancelled) {
+          ctx.ui.notify('New-session handoff cancelled; the validated draft is still available here.', 'info');
+        }
+      } catch (error) {
+        ctx.ui.notify(
+          `New-session handoff failed; the validated draft is still available here: ${(error as Error).message}`,
+          'error',
+        );
+      }
+      return;
+    }
     let executionRoot = ctx.cwd;
     let branching: MarionettePiExecution['branching'] = 'standard';
     if (target !== 'active') {
       const requestedName = summarizedWorktreeName(
-        (fresh ? '' : target.replace(/^worktree\s*/i, '').trim()) ||
+        target.replace(/^worktree\s*/i, '').trim() ||
           draft.name ||
           basename(draft.planFile, '.mar'),
       );
@@ -439,36 +472,6 @@ export function registerMarionettePlanning(
       target: target === 'active' ? 'active' : 'worktree',
       branching,
     };
-
-    if (fresh) {
-      const commandContext = ctx as ExtensionCommandContext;
-      if (typeof commandContext.newSession !== 'function') {
-        ctx.ui.notify('Fresh-context approval must run through /approve-plan fresh.', 'error');
-        return;
-      }
-      const parentSession = ctx.sessionManager.getSessionFile();
-      try {
-        const result = await commandContext.newSession({
-          ...(parentSession ? { parentSession } : {}),
-          async setup(session) {
-            session.appendCustomEntry(DRAFT_REVIEW_ENTRY, draft);
-            session.appendCustomEntry(EXECUTION_ENTRY, preparedExecution);
-          },
-          withSession: async (next) => {
-            await next.sendUserMessage(`/marionette-start ${JSON.stringify(draft.planFile)}`);
-          },
-        });
-        if (result.cancelled) {
-          ctx.ui.notify('Fresh-context handoff cancelled; the validated draft is still available here.', 'info');
-        }
-      } catch (error) {
-        ctx.ui.notify(
-          `Fresh-context handoff failed; the validated draft is still available here: ${(error as Error).message}`,
-          'error',
-        );
-      }
-      return;
-    }
 
     execution = preparedExecution;
     pi.appendEntry(EXECUTION_ENTRY, execution);
@@ -506,58 +509,80 @@ export function registerMarionettePlanning(
     return new Markdown(reviewMarkdown(draft), 1, 0, getMarkdownTheme());
   });
 
-  pi.registerCommand('plan', {
-    description: 'Author a validated Marionette workflow; use --project to keep it under plans/',
-    handler: async (args, ctx) => {
-      context = ctx;
-      const project = /^--project\s+/i.test(args);
-      const task = args.replace(/^--project\s+/i, '').trim();
-      if (!task) return ctx.ui.notify('Usage: /plan [--project] <task>', 'warning');
-      const path = project ? join(ctx.cwd, 'plans', `${planName(task)}.mar`) : undefined;
-      try {
-        await startDraft({ prompt: task, path, triggerTurn: true });
-      } catch (error) {
-        ctx.ui.notify((error as Error).message, 'warning');
-      }
-    },
-  });
+  if (genericSurface) {
+    pi.registerCommand('plan', {
+      description: 'Author a validated Marionette workflow; use --project to keep it under plans/',
+      handler: async (args, ctx) => {
+        context = ctx;
+        const project = /^--project\s+/i.test(args);
+        const task = args.replace(/^--project\s+/i, '').trim();
+        if (!task) return ctx.ui.notify('Usage: /plan [--project] <task>', 'warning');
+        const path = project ? join(ctx.cwd, 'plans', `${planName(task)}.mar`) : undefined;
+        try {
+          await startDraft({ prompt: task, path, triggerTurn: true });
+        } catch (error) {
+          ctx.ui.notify((error as Error).message, 'warning');
+        }
+      },
+    });
 
-  pi.registerCommand('simple', {
-    description: 'Bypass external automatic workflow routing for one request',
-    handler: async (args, ctx) => {
-      const task = args.trim();
-      if (!task) return ctx.ui.notify('Usage: /simple <request>', 'warning');
-      pi.sendUserMessage(task, { deliverAs: 'followUp' });
-    },
-  });
+    pi.registerCommand('simple', {
+      description: 'Bypass external automatic workflow routing for one request',
+      handler: async (args, ctx) => {
+        const task = args.trim();
+        if (!task) return ctx.ui.notify('Usage: /simple <request>', 'warning');
+        pi.sendUserMessage(task, { deliverAs: 'followUp' });
+      },
+    });
 
-  pi.registerCommand('plan-mode', {
-    description: 'Toggle Marionette draft mode',
-    handler: async (_args, ctx) => planning ? disablePlanning(ctx) : enablePlanning(ctx),
-  });
+    pi.registerCommand('plan-mode', {
+      description: 'Toggle Marionette draft mode',
+      handler: async (_args, ctx) => planning ? disablePlanning(ctx) : enablePlanning(ctx),
+    });
 
-  for (const name of ['plan-show', 'marionette-show']) {
-    pi.registerCommand(name, {
-      description: name === 'plan-show'
-        ? 'Show the current Marionette draft or run'
-        : 'Show detailed Marionette plan or runtime state',
-      handler: async (_args, ctx) => show(ctx),
+    for (const name of ['plan-show', 'marionette-show']) {
+      pi.registerCommand(name, {
+        description: name === 'plan-show'
+          ? 'Show the current Marionette draft or run'
+          : 'Show detailed Marionette plan or runtime state',
+        handler: async (_args, ctx) => show(ctx),
+      });
+    }
+
+    pi.registerCommand('approve-plan', {
+      description: 'Approve the validated plan; defaults to an isolated worktree',
+      handler: async (args, ctx) => approve(ctx, args.trim() || 'worktree'),
+    });
+    pi.registerCommand('execute-plan', {
+      description: 'Approve and execute the validated Marionette plan',
+      handler: async (args, ctx) => approve(ctx, args.trim() || 'worktree'),
+    });
+    pi.registerCommand('refine-plan', {
+      description: 'Refine the pending validated Marionette plan before approval',
+      handler: async (args, ctx) => {
+        const feedback = args.trim() || await ctx.ui.editor('Refine the Marionette plan', '') || '';
+        await refine(ctx, feedback);
+      },
     });
   }
 
-  pi.registerCommand('approve-plan', {
-    description: 'Approve the validated plan; defaults to an isolated worktree',
-    handler: async (args, ctx) => approve(ctx, args.trim() || 'worktree'),
-  });
-  pi.registerCommand('execute-plan', {
-    description: 'Approve and execute the validated Marionette plan',
-    handler: async (args, ctx) => approve(ctx, args.trim() || 'worktree'),
-  });
-  pi.registerCommand('refine-plan', {
-    description: 'Refine the pending validated Marionette plan before approval',
-    handler: async (args, ctx) => {
-      const feedback = args.trim() || await ctx.ui.editor('Refine the Marionette plan', '') || '';
-      await refine(ctx, feedback);
+  pi.registerCommand(TARGET_SELECTION_COMMAND, {
+    description: 'Choose where an approved plan runs after a new-session handoff',
+    handler: async (_args, ctx) => {
+      if (!pendingDraft) {
+        ctx.ui.notify('No validated Marionette plan is awaiting a target.', 'warning');
+        return;
+      }
+      if (!ctx.hasUI) {
+        ctx.ui.notify('Choose worktree or active checkout in an interactive session.', 'error');
+        return;
+      }
+      const target = await ctx.ui.select('Where should the approved plan run?', [
+        APPROVAL_CHOICES.worktree,
+        APPROVAL_CHOICES.active,
+      ]);
+      if (target === APPROVAL_CHOICES.worktree) await approve(ctx, 'worktree');
+      else if (target === APPROVAL_CHOICES.active) await approve(ctx, 'active');
     },
   });
 
@@ -671,16 +696,17 @@ export function registerMarionettePlanning(
         return;
       }
     }
-    if (!planning || !pendingDraft || !ctx.hasUI || approvalPrompted === pendingDraft.graphHash) return;
+    if (!genericSurface || !planning || !pendingDraft || !ctx.hasUI || approvalPrompted === pendingDraft.graphHash)
+      return;
     approvalPrompted = pendingDraft.graphHash;
     const choice = await ctx.ui.select(approvalPrompt(pendingDraft), Object.values(APPROVAL_CHOICES));
-    if (choice === APPROVAL_CHOICES.fresh) pi.sendUserMessage('/approve-plan fresh');
-    else if (choice === APPROVAL_CHOICES.worktree) await approve(ctx, 'worktree');
+    if (choice === APPROVAL_CHOICES.worktree) await approve(ctx, 'worktree');
     else if (choice === APPROVAL_CHOICES.active) await approve(ctx, 'active');
+    else if (choice === APPROVAL_CHOICES.newSession) pi.sendUserMessage('/approve-plan new-session');
     else if (choice === APPROVAL_CHOICES.refine) {
       const feedback = await ctx.ui.editor('Refine the Marionette plan', '') ?? '';
       await refine(ctx, feedback);
-    } else disablePlanning(ctx);
+    }
   });
 
   return {
@@ -698,6 +724,12 @@ export function registerMarionettePlanning(
     getDraft: () => pendingDraft,
     getExecution: () => execution,
     startDraft,
+    show,
+    approve: (request, ctx) =>
+      approve(ctx, request.target === 'worktree' && request.worktreeName
+        ? `worktree ${request.worktreeName}`
+        : request.target),
+    refine: (feedback, ctx) => refine(ctx, feedback),
     refreshTools: setRuntimeTools,
     sessionStart(ctx) {
       context = ctx;

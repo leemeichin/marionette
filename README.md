@@ -262,7 +262,11 @@ single-writer process speaking compact NDJSON
 (`spec/runtime-protocol.schema.json`) with role-bound connections, revision
 checks, idempotent writes and an append-only journal — the standalone Pi
 integration owns read-only `/plan` mode, immediate compact/Mermaid/SVG review,
-and bound traversal. Trusted hosts open native dialogs automatically for
+and bound traversal. Its approval choices are worktree, active checkout, new
+session (which chooses its target after replacement), or plan changes. Hosts
+that own generic planning commands can load the separate host/core entry and
+use the same draft/show/refine/approve API without duplicate `/plan` commands.
+Trusted hosts open native dialogs automatically for
 operator `@ask`, free-text `@input`, and explicitly high-risk evidenced
 `@human` checkpoints; compatibility slash commands remain available. Bound
 agents use the generic `work_packet` surface with named outcomes rather than

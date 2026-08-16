@@ -7,6 +7,7 @@
  * tool details, custom session entries/messages, and the shared event bus.
  */
 
+import type { ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import type {
   ProjectionProfile,
   RuntimeBudget,
@@ -17,7 +18,7 @@ import type {
 import type { AmendmentReport } from './amendment.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.7.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.8.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
@@ -98,6 +99,15 @@ export interface MarionettePiStartDraftRequest {
   path?: string;
   /** Defaults to true. Hosts set false when the original input is already entering Pi. */
   triggerTurn?: boolean;
+}
+
+export interface MarionettePiApproveDraftRequest {
+  target: 'active' | 'worktree' | 'new-session';
+  worktreeName?: string;
+}
+
+export interface MarionettePiRefineDraftRequest {
+  feedback: string;
 }
 
 export interface MarionettePiAmendment {
@@ -250,6 +260,9 @@ export interface MarionettePiHostApi {
   getDraft(): MarionettePiDraft | null;
   getExecution(): MarionettePiExecution | null;
   startDraft(request: MarionettePiStartDraftRequest): Promise<void>;
+  showDraft(ctx: ExtensionCommandContext): Promise<void>;
+  approveDraft(request: MarionettePiApproveDraftRequest, ctx: ExtensionCommandContext): Promise<void>;
+  refineDraft(request: MarionettePiRefineDraftRequest, ctx: ExtensionCommandContext): Promise<void>;
   bind(request: MarionettePiBindRequest): Promise<MarionettePiEvent>;
   unbind(): Promise<MarionettePiEvent>;
   execute(command: MarionettePiAgentCommand): Promise<MarionettePiEvent>;

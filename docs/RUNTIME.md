@@ -194,21 +194,28 @@ explicit override. The same fallback applies to `/marionette-decide`,
 amendment review; Marionette does not compare it with the author of an earlier
 commit.
 
-The package manifest points directly at `src/pi-extension.ts`; Pi loads that
-TypeScript source through its extension loader. The compiled `dist/` tree is
+The package manifest loads `src/pi-extension.ts` for standalone use and then
+`src/pi-host-extension.ts`, which is a no-op when the standalone surface is
+already present. A host that owns the generic planning commands can filter the
+package to the host entry (`extensions: ["-src/pi-extension.ts",
+"+src/pi-host-extension.ts"]`); it exposes the same compiler/runtime API
+without registering another `/plan` surface. The compiled `dist/` tree is
 still produced for Marionette's library and CLI consumers, but it is not a
-prerequisite for loading the Pi extension. Source imports name the real
+prerequisite for loading the Pi extensions. Source imports name the real
 `.ts` files; TypeScript rewrites those relative specifiers to `.js` only when
 emitting `dist/`.
 
 You can author and approve a plan entirely in this standalone package with
-`/plan <task>`, `/refine-plan`, and `/approve-plan [fresh|active|worktree <name>]`,
-or bind an existing plan with `/marionette-start <plan.mar> [run-id]`. `fresh`
-creates the normal isolated worktree, then starts it in a linked replacement
-session seeded only with the approved draft and execution metadata. Draft
-mode is read-only: Pi preserves the session's inspection and planning tools,
-adds `marionette_draft`, and blocks built-in project writes, traversal, and
-mutating shell commands.
+`/plan <task>`, `/refine-plan`, and
+`/approve-plan [new-session|active|worktree <name>]`, or bind an existing plan
+with `/marionette-start <plan.mar> [run-id]`. `fresh` remains a compatibility
+alias for `new-session`. The approval dialog offers exactly: continue in a
+worktree, continue in the active checkout, continue in a new session, or make
+changes to the plan. New-session approval carries only the validated draft;
+the replacement session chooses worktree or active checkout before execution.
+Cancelling keeps the draft. Draft mode is read-only: Pi preserves the
+session's inspection and planning tools, adds `marionette_draft`, and blocks
+built-in project writes, traversal, and mutating shell commands.
 
 `marionette_draft` compiler-checks complete DSL source before atomically
 writing a `.mar` file. Invalid drafts never touch disk. Successful drafts are
@@ -280,7 +287,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.7.0`) with the same shape in four places:
+(`marionette.pi` / `1.8.0`) with the same shape in four places:
 
 1. `work_packet` (and legacy `marionette_walk`) tool-result `details`;
 2. `marionette-projection` custom-message `details`;
@@ -305,8 +312,9 @@ either:
   independent discovery.
 
 The API exposes draft/execution state through `getDraft()` and `getExecution()`,
-lets a thin host router call `startDraft()`, and retains `getBinding()`,
-`bind()`, `unbind()`, every agent-bound runtime operation through `execute()`,
+lets a thin host router call `startDraft()`, `showDraft()`, `refineDraft()`,
+and `approveDraft()`, and retains `getBinding()`, `bind()`, `unbind()`, every
+agent-bound runtime operation through `execute()`,
 optional future-only proposal/review through `proposeAmendment()` and
 `approveAmendment()`, plus separate `humanChoose()`, `externalConfirm()`, and
 `humanAnswer()` methods accepting host-authenticated principals.
