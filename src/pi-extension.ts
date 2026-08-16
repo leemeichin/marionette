@@ -324,10 +324,36 @@ const stepSummary = (event: MarionettePiEvent): string => {
   ].filter(Boolean).join('\n');
 };
 
+/**
+ * Tracks which Pi instances already carry the extension. Marionette ships two
+ * entries (standalone and host) and a host may load either, so registration has
+ * to be idempotent rather than rely on the entries loading in manifest order.
+ */
+const registered = new WeakMap<ExtensionAPI, { genericPlanning: boolean }>();
+
+/** Whether {@link registerMarionetteExtension} has already run for this instance. */
+export function isMarionetteExtensionRegistered(pi: ExtensionAPI): boolean {
+  return registered.has(pi);
+}
+
 export function registerMarionetteExtension(
   pi: ExtensionAPI,
   { genericPlanning = true }: { genericPlanning?: boolean } = {},
 ): void {
+  const existing = registered.get(pi);
+  if (existing) {
+    // A second entry resolved to the same instance. Registering again would
+    // duplicate every command and leave two handlers contending over
+    // setActiveTools, so keep the first registration and surface the mismatch.
+    if (existing.genericPlanning !== genericPlanning) {
+      console.warn(
+        `[marionette] extension already registered with genericPlanning=${existing.genericPlanning}; ` +
+          `ignoring a later request for genericPlanning=${genericPlanning}.`,
+      );
+    }
+    return;
+  }
+  registered.set(pi, { genericPlanning });
   let bridge: PiAgentBridge | null = null;
   let lastProjection: RuntimeProjection | null = null;
   let lastCursor = 0;

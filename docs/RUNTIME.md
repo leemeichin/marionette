@@ -196,10 +196,20 @@ commit.
 
 The package manifest loads `src/pi-extension.ts` for standalone use and then
 `src/pi-host-extension.ts`, which is a no-op when the standalone surface is
-already present. A host that owns the generic planning commands can load only the host entry
-with `{ "autoload": false, "extensions": ["+src/pi-host-extension.ts"] }`;
-it exposes the same compiler/runtime API without registering another `/plan`
-surface. The compiled `dist/` tree is
+already present. A host that owns the generic planning commands can load only
+the host entry; it exposes the same compiler/runtime API without registering
+another `/plan` surface. Hosts should build that settings entry from the
+exported `MARIONETTE_PI_HOST_EXTENSION` rather than hardcoding a path into this
+source tree:
+
+```jsonc
+{ "autoload": false, "extensions": ["+src/pi-host-extension.ts"] }
+```
+
+Registration is idempotent per Pi instance rather than dependent on manifest
+order: whichever entry runs first wins, and a later one is refused with a
+warning instead of duplicating commands, tool gating, and event handlers.
+The compiled `dist/` tree is
 still produced for Marionette's library and CLI consumers, but it is not a
 prerequisite for loading the Pi extensions. Source imports name the real
 `.ts` files; TypeScript rewrites those relative specifiers to `.js` only when
@@ -207,7 +217,7 @@ emitting `dist/`.
 
 You can author and approve a plan entirely in this standalone package with
 `/plan <task>`, `/refine-plan`, and
-`/approve-plan [new-session|active|worktree <name>]`, or bind an existing plan
+`/approve-plan [new-session|active|worktree <name> [--continue|--stack]]`, or bind an existing plan
 with `/marionette-start <plan.mar> [run-id]`. `fresh` remains a compatibility
 alias for `new-session`. The approval dialog offers exactly: continue in a
 worktree, continue in the active checkout, continue in a new session, or make
@@ -290,7 +300,7 @@ without deleting the durable runtime run.
 ### Pi host integration contract
 
 The extension publishes a versioned notification envelope
-(`marionette.pi` / `1.8.0`) with the same shape in four places:
+(`marionette.pi` / `1.9.0`) with the same shape in four places:
 
 1. `work_packet` (and legacy `marionette_walk`) tool-result `details`;
 2. `marionette-projection` custom-message `details`;
@@ -313,6 +323,20 @@ either:
 - `marionette:ready:v1`, emitted when the extension loads; or
 - `marionette:discover:v1`, with `{ respond(api) { ... } }` for load-order
   independent discovery.
+
+Hosts that only delegate planning depend on `MarionettePiPlanningApi` — the
+planning subset of the host API, carrying no runtime-protocol types — and check
+a discovered object with the exported `isMarionettePlanningApi()` rather than
+re-deriving the compatibility rule. Compatibility is the major protocol line
+(`MARIONETTE_PI_PROTOCOL_MAJOR`) plus the presence of the planning methods; a
+host must not parse `MARIONETTE_PI_INTEGRATION_VERSION` itself.
+
+`approveDraft()` takes `{ target, worktreeName?, worktreeReuse? }`. When
+approval targets a worktree from inside a linked worktree, Marionette never
+nests: `worktreeReuse` picks `continue` or `github-stack`, interactive sessions
+prompt when it is omitted, and headless callers must supply it. Hosts parsing
+their own `/approve-plan` arguments should use the exported
+`parseApproveDraftArgs()` so trailing words cannot silently reroute a request.
 
 The API exposes draft/execution state through `getDraft()` and `getExecution()`,
 lets a thin host router call `startDraft()`, `showDraft()`, `refineDraft()`,

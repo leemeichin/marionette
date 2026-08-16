@@ -18,11 +18,24 @@ import type {
 import type { AmendmentReport } from './amendment.ts';
 import type { Ref, Value } from './types.ts';
 
-export const MARIONETTE_PI_INTEGRATION_VERSION = '1.8.0';
+export const MARIONETTE_PI_INTEGRATION_VERSION = '1.9.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
 export const MARIONETTE_PI_DISCOVER_CHANNEL = 'marionette:discover:v1';
 export const MARIONETTE_PI_HUMAN_CHANNEL = 'marionette:human:v1';
+
+/**
+ * Major protocol line hosts must match. Hosts negotiate on this rather than
+ * parsing {@link MARIONETTE_PI_INTEGRATION_VERSION} themselves.
+ */
+export const MARIONETTE_PI_PROTOCOL_MAJOR = '1';
+
+/**
+ * Extension entry a host loads when it owns the generic planning commands.
+ * Hosts reference this instead of hardcoding a path into Marionette's tree;
+ * the value matches the `pi.extensions` entry in Marionette's package manifest.
+ */
+export const MARIONETTE_PI_HOST_EXTENSION = './src/pi-host-extension.ts';
 
 export interface MarionettePiBinding {
   planFile: string;
@@ -101,9 +114,22 @@ export interface MarionettePiStartDraftRequest {
   triggerTurn?: boolean;
 }
 
+/**
+ * How to proceed when approval targets a worktree but the checkout is already
+ * a linked worktree. Marionette never nests worktrees, so this is the only
+ * choice available at that point.
+ */
+export type MarionettePiWorktreeReuse = 'continue' | 'github-stack';
+
 export interface MarionettePiApproveDraftRequest {
   target: 'active' | 'worktree' | 'new-session';
   worktreeName?: string;
+  /**
+   * Resolves the reuse decision without a prompt. Interactive sessions ask when
+   * this is omitted; headless callers must supply it to approve into a worktree
+   * from inside an existing one.
+   */
+  worktreeReuse?: MarionettePiWorktreeReuse;
 }
 
 export interface MarionettePiRefineDraftRequest {
@@ -250,19 +276,49 @@ export interface MarionettePiBindRequest {
 }
 
 /**
- * A trusted in-process extension can discover this API through the ready or
- * discover channels. Pi extensions already execute with full host authority;
- * callers must not expose humanChoose to the model tool surface.
+ * The planning surface on its own. Hosts that only delegate drafting and
+ * approval depend on this rather than the full host API, so they neither see
+ * nor version against the runtime protocol.
  */
-export interface MarionettePiHostApi {
+export interface MarionettePiPlanningApi {
   readonly protocol: typeof MARIONETTE_PI_INTEGRATION_VERSION;
-  getBinding(): MarionettePiBinding | null;
   getDraft(): MarionettePiDraft | null;
   getExecution(): MarionettePiExecution | null;
   startDraft(request: MarionettePiStartDraftRequest): Promise<void>;
   showDraft(ctx: ExtensionCommandContext): Promise<void>;
   approveDraft(request: MarionettePiApproveDraftRequest, ctx: ExtensionCommandContext): Promise<void>;
   refineDraft(request: MarionettePiRefineDraftRequest, ctx: ExtensionCommandContext): Promise<void>;
+}
+
+const PLANNING_METHODS = [
+  'getDraft',
+  'getExecution',
+  'startDraft',
+  'showDraft',
+  'approveDraft',
+  'refineDraft',
+] as const satisfies readonly (keyof MarionettePiPlanningApi)[];
+
+/**
+ * Runtime check a host runs against a discovered API before delegating to it.
+ * Compatibility is decided by the major protocol line plus the presence of the
+ * planning methods; hosts must not re-derive either rule themselves.
+ */
+export function isMarionettePlanningApi(value: unknown): value is MarionettePiPlanningApi {
+  if (!value || typeof value !== 'object') return false;
+  const api = value as Partial<MarionettePiPlanningApi>;
+  if (typeof api.protocol !== 'string') return false;
+  if (api.protocol.split('.')[0] !== MARIONETTE_PI_PROTOCOL_MAJOR) return false;
+  return PLANNING_METHODS.every((method) => typeof api[method] === 'function');
+}
+
+/**
+ * A trusted in-process extension can discover this API through the ready or
+ * discover channels. Pi extensions already execute with full host authority;
+ * callers must not expose humanChoose to the model tool surface.
+ */
+export interface MarionettePiHostApi extends MarionettePiPlanningApi {
+  getBinding(): MarionettePiBinding | null;
   bind(request: MarionettePiBindRequest): Promise<MarionettePiEvent>;
   unbind(): Promise<MarionettePiEvent>;
   execute(command: MarionettePiAgentCommand): Promise<MarionettePiEvent>;

@@ -66,10 +66,17 @@ export {
 } from './pi-agent.ts';
 export {
   MARIONETTE_PI_INTEGRATION_VERSION,
+  MARIONETTE_PI_PROTOCOL_MAJOR,
+  MARIONETTE_PI_HOST_EXTENSION,
   MARIONETTE_PI_EVENT_CHANNEL,
   MARIONETTE_PI_READY_CHANNEL,
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_HUMAN_CHANNEL,
+  isMarionettePlanningApi,
+  type MarionettePiPlanningApi,
+  type MarionettePiApproveDraftRequest,
+  type MarionettePiRefineDraftRequest,
+  type MarionettePiWorktreeReuse,
   type MarionettePiBinding,
   type MarionettePiReceipt,
   type MarionettePiContinuation,
@@ -92,7 +99,11 @@ export {
   type MarionettePiDiscoveryRequest,
   type MarionettePiHumanIdentityRequest,
 } from './pi-integration.ts';
-export { isReadOnlyPlanningCommand } from './pi-planning.ts';
+export {
+  isReadOnlyPlanningCommand,
+  parseApproveDraftArgs,
+  APPROVE_PLAN_USAGE,
+} from './pi-planning.ts';
 export {
   RUNTIME_STORE_VERSION, MAX_EVENT_BYTES, RuntimeStoreError, runtimePaths,
   archiveTrajectory, resolveArchivedTrajectory, archiveStateTrajectory,
