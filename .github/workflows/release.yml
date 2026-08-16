@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Only one release may be in flight, or two merges land on the same version.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags and full history: the bump is derived from the commits since
+          # the last tag.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # A release that cannot build is not worth tagging.
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
+
+      - name: Work out the next version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(node scripts/next-version.mjs)"
+          if [[ -z "$version" ]]; then
+            echo "No release-worthy commits since the last tag."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing v$version"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "version=$version" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Tag and release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+
+          # Re-running a workflow must not fail or move a published tag.
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "$tag already exists; nothing to do."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          node scripts/next-version.mjs --write >/dev/null
+          if ! git diff --quiet package.json; then
+            # `chore:` keeps this commit out of the next release's bump. Pushes
+            # made with GITHUB_TOKEN do not start another workflow run, so this
+            # cannot loop, but the prefix means it would be inert even if it did.
+            git add package.json
+            git commit -m "chore: release $tag"
+            # Push the commit before the tag: a tag pointing at an unpushed
+            # commit would leave the release referring to a missing object.
+            git push origin HEAD:main
+          fi
+
+          git tag -a "$tag" -m "Marionette $tag"
+          git push origin "$tag"
+
+          gh release create "$tag" --title "Marionette $tag" --generate-notes
