@@ -73,6 +73,8 @@ export {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_HUMAN_CHANNEL,
   isMarionettePlanningApi,
+  parseApproveDraftArgs,
+  APPROVE_PLAN_USAGE,
   type MarionettePiPlanningApi,
   type MarionettePiApproveDraftRequest,
   type MarionettePiRefineDraftRequest,
@@ -99,11 +101,7 @@ export {
   type MarionettePiDiscoveryRequest,
   type MarionettePiHumanIdentityRequest,
 } from './pi-integration.ts';
-export {
-  isReadOnlyPlanningCommand,
-  parseApproveDraftArgs,
-  APPROVE_PLAN_USAGE,
-} from './pi-planning.ts';
+export { isReadOnlyPlanningCommand } from './pi-planning.ts';
 export {
   RUNTIME_STORE_VERSION, MAX_EVENT_BYTES, RuntimeStoreError, runtimePaths,
   archiveTrajectory, resolveArchivedTrajectory, archiveStateTrajectory,
