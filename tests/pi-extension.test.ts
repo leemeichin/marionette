@@ -868,6 +868,12 @@ test('worktree approval automatically enables GitHub stacked PR branching', asyn
         if (command === 'git' && joined.includes('rev-parse --show-toplevel')) {
           return { stdout: `${root}\n`, stderr: '', code: 0, killed: false };
         }
+        if (command === 'git' && joined.includes('rev-parse --git-dir')) {
+          return { stdout: '.git\n', stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('rev-parse --git-common-dir')) {
+          return { stdout: '.git\n', stderr: '', code: 0, killed: false };
+        }
         if (command === 'git' && joined.includes('worktree list --porcelain')) {
           return { stdout: '', stderr: '', code: 0, killed: false };
         }
@@ -922,6 +928,60 @@ test('worktree approval automatically enables GitHub stacked PR branching', asyn
     assert.ok(calls.some((call) => call.includes(
       'gh stack init work/stack-work --base main',
     )));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('worktree approval reuses a linked worktree only after an explicit current-worktree choice', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-linked-'));
+  const calls: string[] = [];
+  const shown: string[][] = [];
+  try {
+    const fake = createFakePi(root, {
+      hasUI: true,
+      select: async (_title, choices) => {
+        shown.push(choices);
+        return 'Continue in this worktree';
+      },
+      exec: async (command, args) => {
+        const joined = args.join(' ');
+        calls.push([command, ...args].join(' '));
+        if (command === 'git' && joined.includes('rev-parse --show-toplevel')) {
+          return { stdout: `${root}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('rev-parse --git-dir')) {
+          return { stdout: `${join(root, '.git', 'worktrees', 'feature')}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('rev-parse --git-common-dir')) {
+          return { stdout: `${join(root, '.git')}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('branch --show-current')) {
+          return { stdout: 'feature\n', stderr: '', code: 0, killed: false };
+        }
+        return { stdout: '', stderr: 'unexpected command', code: 1, killed: false };
+      },
+    });
+    await fake.fire('session_start', { reason: 'startup' });
+    await fake.commands.get('plan')!.handler('linked execution', fake.ctx);
+    await fake.tools.get('marionette_draft').execute(
+      'draft-linked',
+      {
+        path: 'plans/linked.mar',
+        source: '=== start ===\nDo linked work.\n* [Done] -> END\n',
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+
+    await fake.commands.get('approve-plan')!.handler('worktree', fake.ctx);
+
+    assert.ok(shown.some((choices) => choices.join('|') ===
+      'Continue in this worktree|Use a GitHub stack in this worktree'));
+    assert.equal(fake.discover().getExecution()?.executionRoot, root);
+    assert.equal(fake.discover().getExecution()?.branching, 'standard');
+    assert.ok(!calls.some((call) => call.includes('worktree add')));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

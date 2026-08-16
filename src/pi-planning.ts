@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import {
   CONFIG_DIR_NAME,
   getMarkdownTheme,
@@ -177,6 +177,20 @@ interface Worktree {
   root: string;
   path: string;
   branch: string;
+}
+
+async function currentLinkedWorktree(pi: ExtensionAPI, cwd: string): Promise<Worktree | null> {
+  const root = await gitRoot(pi, cwd);
+  const [gitDirectory, commonDirectory] = await Promise.all([
+    pi.exec('git', ['-C', root, 'rev-parse', '--git-dir'], { timeout: 10_000 }),
+    pi.exec('git', ['-C', root, 'rev-parse', '--git-common-dir'], { timeout: 10_000 }),
+  ]);
+  if (gitDirectory.code !== 0 || commonDirectory.code !== 0) {
+    throw new Error(gitDirectory.stderr || commonDirectory.stderr || 'Could not inspect the current worktree.');
+  }
+  if (resolve(root, gitDirectory.stdout.trim()) === resolve(root, commonDirectory.stdout.trim())) return null;
+  const branch = await pi.exec('git', ['-C', root, 'branch', '--show-current'], { timeout: 10_000 });
+  return { root, path: root, branch: branch.stdout.trim() };
 }
 
 async function createWorktree(pi: ExtensionAPI, cwd: string, requested: string): Promise<Worktree> {
@@ -445,15 +459,34 @@ export function registerMarionettePlanning(
           basename(draft.planFile, '.mar'),
       );
       let worktree: Worktree;
+      let enableStack = true;
       try {
-        worktree = await createWorktree(pi, ctx.cwd, requestedName);
+        const current = await currentLinkedWorktree(pi, ctx.cwd);
+        if (current) {
+          if (!ctx.hasUI) {
+            ctx.ui.notify(
+              'Already in a linked worktree; choose whether to continue here or use a GitHub stack.',
+              'error',
+            );
+            return;
+          }
+          const choice = await ctx.ui.select('This checkout is already a linked worktree', [
+            'Continue in this worktree',
+            'Use a GitHub stack in this worktree',
+          ]);
+          if (!choice) return;
+          worktree = current;
+          enableStack = choice === 'Use a GitHub stack in this worktree';
+        } else {
+          worktree = await createWorktree(pi, ctx.cwd, requestedName);
+        }
         executionRoot = worktree.path;
       } catch (error) {
-        ctx.ui.notify(`Could not create worktree: ${(error as Error).message}`, 'error');
+        ctx.ui.notify(`Could not prepare worktree execution: ${(error as Error).message}`, 'error');
         return;
       }
 
-      if (await isGitHubWorktree(pi, worktree)) {
+      if (enableStack && await isGitHubWorktree(pi, worktree)) {
         try {
           await enableGitHubStack(pi, worktree);
           branching = 'github-stack';
