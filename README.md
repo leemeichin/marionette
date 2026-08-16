@@ -241,6 +241,29 @@ end-to-end usage guides — deployable to Cloudflare with `wrangler deploy`
 - `docs-site/` — the documentation site: terminal-faithful demos, reference, guides
 - `examples/`, `tests/` — worked examples (incl. the Phase 2 baseline), golden files, conformance runner
 
+## Releases
+
+Merging to `main` releases automatically. The workflow reads the commits since
+the newest `vX.Y.Z` tag, takes the highest bump among them, then bumps
+`package.json`, tags, and cuts a GitHub release.
+
+| Commit subject | Bump |
+| --- | --- |
+| `feat: …` | minor |
+| `fix: …`, `perf: …`, `refactor: …` | patch |
+| `feat!: …`, or a `BREAKING CHANGE:` footer | major |
+| `docs: …`, `chore: …`, `ci: …`, `test: …`, `build: …`, `style: …` | none |
+| anything else | patch |
+
+Unprefixed subjects count as a patch on purpose, so ordinary imperative
+messages still release rather than quietly stalling the pipeline. A range
+containing only documentation or housekeeping releases nothing.
+
+The bump is computed from the newest tag rather than `git describe`, because
+this repository rebase-merges and a tag cut on a branch never becomes an
+ancestor of `main`. `node scripts/next-version.mjs` prints what the next
+release would be without changing anything.
+
 ## Status
 
 Phase 1 feature-complete: trajectory JSON schema v0 (P0.1), DSL v0 compiler
