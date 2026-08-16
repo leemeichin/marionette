@@ -15,6 +15,7 @@ import {
   type MarionettePiEvent,
   type MarionettePiExecution,
   type MarionettePiStartDraftRequest,
+  type MarionettePiWorktreeReuse,
 } from './pi-integration.ts';
 
 const DRAFT_REVIEW_ENTRY = 'marionette-plan-review';
@@ -70,6 +71,39 @@ function slug(value: string, limit = 48): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, limit) || 'workflow';
 }
+
+/**
+ * Parses `/approve-plan` arguments into a request.
+ *
+ * Callers must not validate the leading token and then forward the raw string:
+ * the trailing words change the meaning of the request, and dropping them
+ * silently routes `active extra` to a worktree. Returns null when the target is
+ * unrecognized so the caller can show usage.
+ */
+export function parseApproveDraftArgs(raw: string): MarionettePiApproveDraftRequest | null {
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  const head = (tokens.shift() ?? 'worktree').toLowerCase();
+  const target = head === 'fresh' ? 'new-session' : head;
+  if (target !== 'active' && target !== 'worktree' && target !== 'new-session') return null;
+
+  let worktreeReuse: MarionettePiWorktreeReuse | undefined;
+  const rest: string[] = [];
+  for (const token of tokens) {
+    if (token === '--continue') worktreeReuse = 'continue';
+    else if (token === '--stack') worktreeReuse = 'github-stack';
+    else rest.push(token);
+  }
+  if (target !== 'worktree' && (rest.length > 0 || worktreeReuse)) return null;
+
+  return {
+    target,
+    ...(rest.length > 0 ? { worktreeName: rest.join(' ') } : {}),
+    ...(worktreeReuse ? { worktreeReuse } : {}),
+  };
+}
+
+export const APPROVE_PLAN_USAGE =
+  'Usage: /approve-plan [active | worktree [name] [--continue|--stack] | new-session]';
 
 export function summarizedWorktreeName(value: string): string {
   const words = value
@@ -233,7 +267,19 @@ async function isGitHubWorktree(pi: ExtensionAPI, worktree: Worktree): Promise<b
   return remote.code === 0 && /(?:github\.com)[/:]/i.test(remote.stdout.trim());
 }
 
+/** Whether the worktree already sits on an initialized gh stack. */
+async function hasGitHubStack(pi: ExtensionAPI, worktree: Worktree): Promise<boolean> {
+  const stackHelp = await pi.exec('gh', ['stack', '--help'], { cwd: worktree.path, timeout: 10_000 });
+  if (stackHelp.code !== 0) return false;
+  const current = await pi.exec('gh', ['stack', 'view', '--json'], { cwd: worktree.path, timeout: 15_000 });
+  return current.code === 0;
+}
+
 async function enableGitHubStack(pi: ExtensionAPI, worktree: Worktree): Promise<void> {
+  if (!worktree.branch) {
+    // Detached HEAD: `gh stack init ""` fails opaquely, so refuse up front.
+    throw new Error('The worktree has no checked-out branch; gh stack needs a branch to layer onto.');
+  }
   const versionResult = await pi.exec('gh', ['--version'], { timeout: 10_000 });
   const version = githubCliVersion(versionResult.stdout);
   if (versionResult.code !== 0 || !version || !atLeast(version, 2, 90)) {
@@ -410,7 +456,10 @@ export function registerMarionettePlanning(
     ctx.ui.notify('No Marionette draft or bound run.', 'info');
   };
 
-  const approve = async (ctx: ExtensionContext, requestedTarget = 'worktree'): Promise<void> => {
+  const approve = async (
+    ctx: ExtensionContext,
+    request: MarionettePiApproveDraftRequest,
+  ): Promise<void> => {
     if (options.getBinding()) {
       ctx.ui.notify('A Marionette run is already bound.', 'warning');
       return;
@@ -420,12 +469,16 @@ export function registerMarionettePlanning(
       return;
     }
     const draft = pendingDraft;
-    const requested = requestedTarget.trim() || 'worktree';
-    const target = requested === 'fresh' ? 'new-session' : requested;
+    const target = request.target;
     if (target === 'new-session') {
       const commandContext = ctx as ExtensionCommandContext;
       if (typeof commandContext.newSession !== 'function') {
-        ctx.ui.notify('New-session approval must run through /approve-plan new-session.', 'error');
+        // Hosts owning the planning commands reach this through approveDraft(),
+        // where /approve-plan is not registered, so do not point at it.
+        ctx.ui.notify(
+          'New-session approval needs a command context; approve from a command, or choose the active checkout or a worktree.',
+          'error',
+        );
         return;
       }
       const parentSession = ctx.sessionManager.getSessionFile();
@@ -454,29 +507,48 @@ export function registerMarionettePlanning(
     let branching: MarionettePiExecution['branching'] = 'standard';
     if (target !== 'active') {
       const requestedName = summarizedWorktreeName(
-        target.replace(/^worktree\s*/i, '').trim() ||
-          draft.name ||
-          basename(draft.planFile, '.mar'),
+        request.worktreeName?.trim() || draft.name || basename(draft.planFile, '.mar'),
       );
       let worktree: Worktree;
       let enableStack = true;
       try {
         const current = await currentLinkedWorktree(pi, ctx.cwd);
         if (current) {
-          if (!ctx.hasUI) {
-            ctx.ui.notify(
-              'Already in a linked worktree; choose whether to continue here or use a GitHub stack.',
-              'error',
-            );
-            return;
+          // Nesting worktrees is never right, so the only choice here is how to
+          // branch inside the one we are already in.
+          let reuse = request.worktreeReuse;
+          if (!reuse) {
+            if (!ctx.hasUI) {
+              ctx.ui.notify(
+                'Already in a linked worktree. Approve with worktreeReuse "continue" or "github-stack", ' +
+                  'or approve into the active checkout.',
+                'error',
+              );
+              return;
+            }
+            const choice = await ctx.ui.select('This checkout is already a linked worktree', [
+              'Continue in this worktree',
+              'Use a GitHub stack in this worktree',
+            ]);
+            if (!choice) {
+              ctx.ui.notify('Approval cancelled; the validated draft is still available.', 'info');
+              approvalPrompted = '';
+              return;
+            }
+            reuse = choice === 'Use a GitHub stack in this worktree' ? 'github-stack' : 'continue';
           }
-          const choice = await ctx.ui.select('This checkout is already a linked worktree', [
-            'Continue in this worktree',
-            'Use a GitHub stack in this worktree',
-          ]);
-          if (!choice) return;
+          if (request.worktreeName?.trim()) {
+            ctx.ui.notify(
+              `Reusing the current worktree; the requested name "${request.worktreeName.trim()}" was not applied.`,
+              'info',
+            );
+          }
           worktree = current;
-          enableStack = choice === 'Use a GitHub stack in this worktree';
+          enableStack = reuse === 'github-stack';
+          // Continuing in a worktree that already stacks must keep stacking,
+          // otherwise the recorded execution tells the agent to open a PR
+          // outside the stack it is sitting on.
+          if (!enableStack && await hasGitHubStack(pi, worktree)) branching = 'github-stack';
         } else {
           worktree = await createWorktree(pi, ctx.cwd, requestedName);
         }
@@ -582,14 +654,18 @@ export function registerMarionettePlanning(
       });
     }
 
-    pi.registerCommand('approve-plan', {
-      description: 'Approve the validated plan; defaults to an isolated worktree',
-      handler: async (args, ctx) => approve(ctx, args.trim() || 'worktree'),
-    });
-    pi.registerCommand('execute-plan', {
-      description: 'Approve and execute the validated Marionette plan',
-      handler: async (args, ctx) => approve(ctx, args.trim() || 'worktree'),
-    });
+    for (const name of ['approve-plan', 'execute-plan']) {
+      pi.registerCommand(name, {
+        description: name === 'approve-plan'
+          ? 'Approve the validated plan; defaults to an isolated worktree'
+          : 'Approve and execute the validated Marionette plan',
+        handler: async (args, ctx) => {
+          const request = parseApproveDraftArgs(args);
+          if (!request) return ctx.ui.notify(APPROVE_PLAN_USAGE, 'warning');
+          await approve(ctx, request);
+        },
+      });
+    }
     pi.registerCommand('refine-plan', {
       description: 'Refine the pending validated Marionette plan before approval',
       handler: async (args, ctx) => {
@@ -614,8 +690,16 @@ export function registerMarionettePlanning(
         APPROVAL_CHOICES.worktree,
         APPROVAL_CHOICES.active,
       ]);
-      if (target === APPROVAL_CHOICES.worktree) await approve(ctx, 'worktree');
-      else if (target === APPROVAL_CHOICES.active) await approve(ctx, 'active');
+      if (target === APPROVAL_CHOICES.worktree) await approve(ctx, { target: 'worktree' });
+      else if (target === APPROVAL_CHOICES.active) await approve(ctx, { target: 'active' });
+      else {
+        // Dismissed. The handed-off session has a draft and no binding, and
+        // agent_settled will not re-prompt here, so name the way back in.
+        ctx.ui.notify(
+          `No target chosen; the plan is still waiting. Run /${TARGET_SELECTION_COMMAND} to choose again.`,
+          'warning',
+        );
+      }
     },
   });
 
@@ -733,12 +817,19 @@ export function registerMarionettePlanning(
       return;
     approvalPrompted = pendingDraft.graphHash;
     const choice = await ctx.ui.select(approvalPrompt(pendingDraft), Object.values(APPROVAL_CHOICES));
-    if (choice === APPROVAL_CHOICES.worktree) await approve(ctx, 'worktree');
-    else if (choice === APPROVAL_CHOICES.active) await approve(ctx, 'active');
+    if (choice === APPROVAL_CHOICES.worktree) await approve(ctx, { target: 'worktree' });
+    else if (choice === APPROVAL_CHOICES.active) await approve(ctx, { target: 'active' });
     else if (choice === APPROVAL_CHOICES.newSession) pi.sendUserMessage('/approve-plan new-session');
     else if (choice === APPROVAL_CHOICES.refine) {
       const feedback = await ctx.ui.editor('Refine the Marionette plan', '') ?? '';
       await refine(ctx, feedback);
+    } else {
+      // Dismissed. Draft mode blocks edits and mutating shell commands, so
+      // leaving it on would strand the session read-only with no further
+      // prompt for this draft. Hand the tools back and let the next settle ask.
+      disablePlanning(ctx);
+      approvalPrompted = '';
+      ctx.ui.notify('Approval dismissed; leaving draft mode. Run /approve-plan when ready.', 'info');
     }
   });
 
@@ -758,10 +849,7 @@ export function registerMarionettePlanning(
     getExecution: () => execution,
     startDraft,
     show,
-    approve: (request, ctx) =>
-      approve(ctx, request.target === 'worktree' && request.worktreeName
-        ? `worktree ${request.worktreeName}`
-        : request.target),
+    approve: (request, ctx) => approve(ctx, request),
     refine: (feedback, ctx) => refine(ctx, feedback),
     refreshTools: setRuntimeTools,
     sessionStart(ctx) {

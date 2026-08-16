@@ -10,6 +10,7 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import marionetteExtension, { registerMarionetteExtension } from '../src/pi-extension.ts';
 import marionetteHostExtension from '../src/pi-host-extension.ts';
+import { parseApproveDraftArgs } from '../src/pi-planning.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_EVENT_CHANNEL,
@@ -251,7 +252,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.8.0');
+    assert.equal(api.protocol, '1.9.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -468,7 +469,61 @@ test('automatic plan approval bounds the review shown beside the choices', async
       'Continue in a new session',
       'Make changes to the plan',
     ]);
-    assert.ok(fake.activeTools().includes('marionette_draft'));
+    // The stub dismisses the prompt, which releases draft mode rather than
+    // stranding the session with edits and mutating shell commands blocked.
+    assert.ok(!fake.activeTools().includes('marionette_draft'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('dismissing the approval prompt restores tools and can be prompted again', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-dismiss-'));
+  try {
+    let answer: string | undefined;
+    const fake = createFakePi(root, {
+      hasUI: true,
+      select: async () => answer,
+    });
+    await fake.fire('session_start', { reason: 'startup' });
+    const before = [...fake.activeTools()];
+    await fake.commands.get('plan')!.handler('Ship the smallest reviewed slice', fake.ctx);
+    await fake.tools.get('marionette_draft').execute(
+      'draft-dismiss',
+      {
+        path: 'plans/dismiss.mar',
+        source: [
+          '# project: dismiss-plan',
+          '# summary: Ship a reviewed slice.',
+          '=== start ===',
+          'Build the slice.',
+          '-> END',
+          '',
+        ].join('\n'),
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+
+    assert.ok(fake.activeTools().includes('marionette_draft'), 'draft mode is active while drafting');
+
+    await fake.fire('agent_settled', {});
+    assert.ok(!fake.activeTools().includes('marionette_draft'), 'dismissal leaves draft mode');
+    assert.deepEqual([...fake.activeTools()].sort(), before.sort(), 'dismissal restores the prior tools');
+
+    // Dismissal is not a nag loop: the next settle stays quiet.
+    await fake.fire('agent_settled', {});
+    assert.ok(!fake.entries.some((entry) => entry.customType === 'marionette-execution'));
+    assert.ok(
+      fake.notifications.some((entry) => /\/approve-plan/.test(entry.message)),
+      'dismissal names the route back',
+    );
+
+    // The draft survives, so the named route still approves it.
+    answer = 'Continue in the active checkout';
+    await fake.commands.get('approve-plan')!.handler('active', fake.ctx);
+    assert.ok(fake.entries.some((entry) => entry.customType === 'marionette-execution'));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -982,6 +1037,102 @@ test('worktree approval reuses a linked worktree only after an explicit current-
     assert.equal(fake.discover().getExecution()?.executionRoot, root);
     assert.equal(fake.discover().getExecution()?.branching, 'standard');
     assert.ok(!calls.some((call) => call.includes('worktree add')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('headless worktree approval resolves reuse from the request instead of failing', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-headless-'));
+  const calls: string[] = [];
+  try {
+    const fake = createFakePi(root, {
+      hasUI: false,
+      exec: async (command, args) => {
+        const joined = args.join(' ');
+        calls.push([command, ...args].join(' '));
+        if (command === 'git' && joined.includes('rev-parse --show-toplevel')) {
+          return { stdout: `${root}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('rev-parse --git-dir')) {
+          return { stdout: `${join(root, '.git', 'worktrees', 'feature')}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('rev-parse --git-common-dir')) {
+          return { stdout: `${join(root, '.git')}\n`, stderr: '', code: 0, killed: false };
+        }
+        if (command === 'git' && joined.includes('branch --show-current')) {
+          return { stdout: 'feature\n', stderr: '', code: 0, killed: false };
+        }
+        return { stdout: '', stderr: 'unexpected command', code: 1, killed: false };
+      },
+    });
+    await fake.fire('session_start', { reason: 'startup' });
+    await fake.commands.get('plan')!.handler('headless execution', fake.ctx);
+    await fake.tools.get('marionette_draft').execute(
+      'draft-headless',
+      {
+        path: 'plans/headless.mar',
+        source: '=== start ===\nDo headless work.\n* [Done] -> END\n',
+      },
+      undefined,
+      undefined,
+      fake.ctx,
+    );
+
+    await fake.discover().approveDraft({ target: 'worktree', worktreeReuse: 'continue' }, fake.ctx as any);
+
+    assert.equal(fake.discover().getExecution()?.executionRoot, root);
+    assert.ok(!calls.some((call) => call.includes('worktree add')), 'never nests a worktree');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('approve-plan arguments keep their trailing words instead of silently rerouting', () => {
+  assert.deepEqual(parseApproveDraftArgs(''), { target: 'worktree' });
+  assert.deepEqual(parseApproveDraftArgs('active'), { target: 'active' });
+  assert.deepEqual(parseApproveDraftArgs('fresh'), { target: 'new-session' });
+  assert.deepEqual(parseApproveDraftArgs('worktree fix thing'), {
+    target: 'worktree',
+    worktreeName: 'fix thing',
+  });
+  assert.deepEqual(parseApproveDraftArgs('worktree --stack'), {
+    target: 'worktree',
+    worktreeReuse: 'github-stack',
+  });
+  // Trailing words on a non-worktree target used to be dropped, turning an
+  // active-checkout approval into a worktree.
+  assert.equal(parseApproveDraftArgs('active now'), null);
+  assert.equal(parseApproveDraftArgs('new-session extra'), null);
+  assert.equal(parseApproveDraftArgs('nonsense'), null);
+});
+
+test('loading both extension entries registers the surface exactly once', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-twice-'));
+  try {
+    const fake = createFakePi(root, { hasUI: true });
+    const before = [...fake.commands.keys()].sort();
+    assert.ok(before.includes('approve-plan'));
+
+    // The host entry resolved separately, e.g. through a second path. It must
+    // detect the standalone surface rather than register a rival one.
+    marionetteHostExtension(fake.pi as unknown as ExtensionAPI);
+
+    assert.deepEqual([...fake.commands.keys()].sort(), before);
+    assert.equal(fake.handlers.get('agent_settled')?.length, 1);
+
+    // The probe only catches this when the standalone listener is already
+    // installed. A direct second registration bypasses it entirely, which is
+    // what a rename or a duplicate module instance produces, so registration
+    // itself has to refuse rather than rely on load order.
+    registerMarionetteExtension(fake.pi as unknown as ExtensionAPI, { genericPlanning: false });
+
+    assert.deepEqual([...fake.commands.keys()].sort(), before);
+    assert.equal(
+      fake.handlers.get('agent_settled')?.length,
+      1,
+      'a second registration would leave two handlers contending over setActiveTools',
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
