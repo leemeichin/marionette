@@ -263,8 +263,10 @@ single-writer process speaking compact NDJSON
 checks, idempotent writes and an append-only journal — the standalone Pi
 integration owns read-only `/plan` mode, immediate compact/Mermaid/SVG review,
 and bound traversal. Its approval choices are worktree, active checkout, new
-session (which chooses its target after replacement), or plan changes. Hosts
-that own generic planning commands can load the separate host/core entry and
+session (which chooses its target after replacement), or plan changes. From an
+existing linked worktree, approval asks whether to continue there or use a
+GitHub stack instead of nesting another checkout. Hosts that own generic
+planning commands can load the separate host/core entry and
 use the same draft/show/refine/approve API without duplicate `/plan` commands.
 Trusted hosts open native dialogs automatically for
 operator `@ask`, free-text `@input`, and explicitly high-risk evidenced

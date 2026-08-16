@@ -196,10 +196,10 @@ commit.
 
 The package manifest loads `src/pi-extension.ts` for standalone use and then
 `src/pi-host-extension.ts`, which is a no-op when the standalone surface is
-already present. A host that owns the generic planning commands can filter the
-package to the host entry (`extensions: ["-src/pi-extension.ts",
-"+src/pi-host-extension.ts"]`); it exposes the same compiler/runtime API
-without registering another `/plan` surface. The compiled `dist/` tree is
+already present. A host that owns the generic planning commands can load only the host entry
+with `{ "autoload": false, "extensions": ["+src/pi-host-extension.ts"] }`;
+it exposes the same compiler/runtime API without registering another `/plan`
+surface. The compiled `dist/` tree is
 still produced for Marionette's library and CLI consumers, but it is not a
 prerequisite for loading the Pi extensions. Source imports name the real
 `.ts` files; TypeScript rewrites those relative specifiers to `.js` only when
@@ -227,9 +227,12 @@ files and returns their paths and `file:` URIs for out-of-band viewers. Overwrit
 is opt-in for explicit refinement.
 
 Worktree approval automatically initializes GitHub's official `gh stack`
-public-preview flow when the repository is hosted on GitHub. This requires
-GitHub CLI 2.90+ and an available `github/gh-stack` extension; a setup failure
-keeps the normal worktree. The persisted execution metadata records
+public-preview flow when a new worktree is created in a GitHub repository.
+This requires GitHub CLI 2.90+ and an available `github/gh-stack` extension; a
+setup failure keeps the normal worktree. When approval starts inside an
+existing linked worktree, Marionette never creates a nested checkout: the user
+chooses whether to continue there or initialize/use a GitHub stack in that
+worktree. The persisted execution metadata records
 `branching: "standard" | "github-stack"`; stack layers stay together inside
 that one worktree.
 

@@ -116,10 +116,10 @@ config, and parks at operator/external checkpoints instead of taking them.
 
 ## 5. Run it in Pi
 
-Marionette is a Pi package: it contributes both skills and a standalone
-planning extension. It provides read-only draft mode, immediate plan review,
-worktree approval, an agent-bound walker tool, and trusted human decision
-commands.
+Marionette is a Pi package: it contributes skills, a standalone planning
+extension, and a host/core entry for applications that own generic planning
+commands. It provides read-only draft mode, immediate plan review, worktree
+approval, an agent-bound walker tool, and trusted human decision commands.
 
 ```console
 $ pi install git:github.com/leemeichin/marionette
@@ -138,9 +138,11 @@ session that then asks whether to use a worktree or the active checkout.
 `/approve-plan fresh` remains an alias. The other approval choices continue in
 the active checkout or reopen the plan for changes; cancelling keeps the draft.
 Bind an existing plan with `/marionette-start plan.mar first-run`.
-In a GitHub repository, worktree approval automatically initializes the branch
-with the official `gh stack` flow when it is available; failed setup leaves an
-ordinary worktree.
+In a GitHub repository, a newly created worktree automatically initializes the
+branch with the official `gh stack` flow when it is available; failed setup
+leaves an ordinary worktree. Approval from an existing linked worktree never
+nests another checkout: it asks whether to continue there or initialize/use a
+GitHub stack in that worktree.
 
 For a mid-run scope change, the agent sends complete revised source and a
 rationale through `marionette_amend`. It validates, writes semantic-diff and
