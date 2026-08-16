@@ -324,7 +324,10 @@ const stepSummary = (event: MarionettePiEvent): string => {
   ].filter(Boolean).join('\n');
 };
 
-export default function marionetteExtension(pi: ExtensionAPI): void {
+export function registerMarionetteExtension(
+  pi: ExtensionAPI,
+  { genericPlanning = true }: { genericPlanning?: boolean } = {},
+): void {
   let bridge: PiAgentBridge | null = null;
   let lastProjection: RuntimeProjection | null = null;
   let lastCursor = 0;
@@ -1012,7 +1015,7 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     onEvent: (event) => {
       if (event.error && activeContext) activeContext.ui.notify(event.error.message, 'error');
     },
-  });
+  }, { genericSurface: genericPlanning });
 
   hostApi = {
     protocol: MARIONETTE_PI_INTEGRATION_VERSION,
@@ -1020,6 +1023,9 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     getDraft: planning.getDraft,
     getExecution: planning.getExecution,
     startDraft: planning.startDraft,
+    showDraft: (ctx) => planning.show(ctx),
+    approveDraft: (request, ctx) => planning.approve(request, ctx),
+    refineDraft: (request, ctx) => planning.refine(request.feedback, ctx),
     bind: async (request: MarionettePiBindRequest) => {
       const cause = { source: 'host' as const, name: 'bind' };
       if (!activeContext) {
@@ -2085,4 +2091,8 @@ export default function marionetteExtension(pi: ExtensionAPI): void {
     lastCursor = 0;
     unsubscribeDiscovery();
   });
+}
+
+export default function marionetteExtension(pi: ExtensionAPI): void {
+  registerMarionetteExtension(pi);
 }

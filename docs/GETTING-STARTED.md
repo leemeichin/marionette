@@ -132,9 +132,12 @@ $ pi \
 Start from natural language with `/plan <task>`; a validated draft appears in
 the transcript with compact terminal and plain-language views, while sibling
 `.mmd` and `.svg` artifacts are available for out-of-band viewers. Approve it
-with `/approve-plan` (isolated worktree by default), use `/approve-plan fresh`
-to start that worktree run in a linked session containing only approved plan
-metadata, or bind an existing plan with `/marionette-start plan.mar first-run`.
+with `/approve-plan` (isolated worktree by default), or use
+`/approve-plan new-session` to carry only the validated draft into a linked
+session that then asks whether to use a worktree or the active checkout.
+`/approve-plan fresh` remains an alias. The other approval choices continue in
+the active checkout or reopen the plan for changes; cancelling keeps the draft.
+Bind an existing plan with `/marionette-start plan.mar first-run`.
 In a GitHub repository, worktree approval automatically initializes the branch
 with the official `gh stack` flow when it is available; failed setup leaves an
 ordinary worktree.

@@ -8,7 +8,8 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from '@earendil-works/pi-coding-agent';
-import marionetteExtension from '../src/pi-extension.ts';
+import marionetteExtension, { registerMarionetteExtension } from '../src/pi-extension.ts';
+import marionetteHostExtension from '../src/pi-host-extension.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_EVENT_CHANNEL,
@@ -28,6 +29,7 @@ interface CustomEntry {
 
 interface FakePiOptions {
   hasUI?: boolean;
+  genericPlanning?: boolean;
   confirm?: (title: string, message: string) => Promise<boolean>;
   select?: (title: string, choices: string[]) => Promise<string | undefined>;
   newSessionCancelled?: boolean;
@@ -172,9 +174,14 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
     },
   };
 
-  marionetteExtension(pi as unknown as ExtensionAPI);
+  if (options.genericPlanning === false) {
+    registerMarionetteExtension(pi as unknown as ExtensionAPI, { genericPlanning: false });
+  } else {
+    marionetteExtension(pi as unknown as ExtensionAPI);
+  }
 
   return {
+    pi,
     commands,
     ctx,
     entries,
@@ -244,7 +251,7 @@ test('Pi extension restores bindings from the active branch and publishes a type
     writePlan(root, 'b.mar', 'Plan B.');
     const fake = createFakePi(root);
     const api = fake.discover();
-    assert.equal(api.protocol, '1.7.0');
+    assert.equal(api.protocol, '1.8.0');
     assert.equal(fake.tool.executionMode, 'sequential');
     assert.match(fake.tool.promptGuidelines.join('\n'), /instead of marionette brief/);
     await fake.fire('session_start', { reason: 'startup' });
@@ -276,6 +283,38 @@ test('Pi extension restores bindings from the active branch and publishes a type
     const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
     assert.ok(events.some((event) => event.kind === 'binding.bound'));
     assert.ok(fake.entries.some((entry) => entry.customType === 'marionette-event'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the default package host entry is a no-op beside standalone planning', () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-package-'));
+  try {
+    const fake = createFakePi(root);
+    const commands = fake.commands.size;
+    marionetteHostExtension(fake.pi as unknown as ExtensionAPI);
+    assert.equal(fake.commands.size, commands);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('host/core Pi extension exposes planning without duplicate generic commands', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-host-'));
+  try {
+    const fake = createFakePi(root, { genericPlanning: false });
+    const api = fake.discover();
+    for (const command of ['plan', 'plan-mode', 'plan-show', 'approve-plan', 'execute-plan', 'refine-plan', 'simple']) {
+      assert.equal(fake.commands.has(command), false, command);
+    }
+    assert.equal(typeof api.showDraft, 'function');
+    assert.equal(typeof api.approveDraft, 'function');
+    assert.equal(typeof api.refineDraft, 'function');
+    await fake.fire('session_start', { reason: 'startup' });
+    await api.startDraft({ prompt: 'hosted workflow', triggerTurn: false });
+    assert.ok(fake.activeTools().includes('marionette_draft'));
+    assert.equal(fake.activeTools().includes('edit'), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -385,7 +424,7 @@ test('automatic plan approval bounds the review shown beside the choices', async
       select: async (title, options) => {
         prompts.push(title);
         choices.push(options);
-        return 'Decide later — keep the validated draft';
+        return undefined;
       },
     });
     await fake.fire('session_start', { reason: 'startup' });
@@ -424,18 +463,18 @@ test('automatic plan approval bounds the review shown beside the choices', async
     assert.doesNotMatch(prompts[0]!, /High-level walkthrough|deliberately verbose original request|● start|● deliver/);
     assert.match(prompts[0]!, /Full review: .*review\.mar/);
     assert.deepEqual(choices[0], [
-      'Start fresh — new session and isolated worktree',
-      'Continue here — isolated worktree',
-      'Use this checkout — no worktree isolation',
-      'Revise plan — enter feedback',
-      'Decide later — keep the validated draft',
+      'Continue in a worktree',
+      'Continue in the active checkout',
+      'Continue in a new session',
+      'Make changes to the plan',
     ]);
+    assert.ok(fake.activeTools().includes('marionette_draft'));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('fresh approval hands the validated plan to a linked replacement session', async () => {
+test('new-session approval defers its execution target to the linked replacement session', async () => {
   const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-fresh-'));
   const setupEntries: Array<{ customType: string; data: unknown }> = [];
   let parentSession: string | undefined;
@@ -493,20 +532,26 @@ test('fresh approval hands the validated plan to a linked replacement session', 
     await fake.commands.get('approve-plan')!.handler('fresh', fake.ctx);
 
     assert.equal(parentSession, '/sessions/planning.jsonl');
-    assert.deepEqual(setupEntries.map((entry) => entry.customType), [
-      'marionette-plan-review',
-      'marionette-execution',
-    ]);
-    assert.deepEqual(setupEntries[1]!.data, {
-      planFile: join(root, 'plans', 'fresh.mar'),
-      graphHash: fake.discover().getDraft()?.graphHash,
-      executionRoot: join(root, '.pi', 'wt', 'fresh-plan'),
-      target: 'worktree',
-      branching: 'standard',
-    });
-    assert.equal(kickoff, `/marionette-start ${JSON.stringify(join(root, 'plans', 'fresh.mar'))}`);
+    assert.deepEqual(setupEntries.map((entry) => entry.customType), ['marionette-plan-review']);
+    assert.equal(kickoff, '/marionette-select-execution-target');
     assert.equal(fake.discover().getBinding(), null);
     assert.equal(fake.discover().getExecution(), null);
+
+    const replacement = createFakePi(root, {
+      hasUI: true,
+      select: async () => 'Continue in the active checkout',
+    });
+    replacement.useBranch([{
+      type: 'custom',
+      id: 'handoff-draft',
+      parentId: null,
+      timestamp: new Date().toISOString(),
+      ...setupEntries[0]!,
+    }]);
+    await replacement.fire('session_start', { reason: 'new' });
+    await replacement.commands.get('marionette-select-execution-target')!.handler('', replacement.ctx);
+    assert.equal(replacement.discover().getExecution()?.target, 'active');
+    assert.equal(replacement.discover().getExecution()?.executionRoot, root);
 
     cancel = true;
     await fake.commands.get('approve-plan')!.handler('fresh', fake.ctx);
