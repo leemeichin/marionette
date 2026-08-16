@@ -9,6 +9,8 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { Markdown } from '@earendil-works/pi-tui';
 import {
+  APPROVE_PLAN_USAGE,
+  parseApproveDraftArgs,
   type MarionettePiApproveDraftRequest,
   type MarionettePiBindRequest,
   type MarionettePiDraft,
@@ -71,39 +73,6 @@ function slug(value: string, limit = 48): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, limit) || 'workflow';
 }
-
-/**
- * Parses `/approve-plan` arguments into a request.
- *
- * Callers must not validate the leading token and then forward the raw string:
- * the trailing words change the meaning of the request, and dropping them
- * silently routes `active extra` to a worktree. Returns null when the target is
- * unrecognized so the caller can show usage.
- */
-export function parseApproveDraftArgs(raw: string): MarionettePiApproveDraftRequest | null {
-  const tokens = raw.trim().split(/\s+/).filter(Boolean);
-  const head = (tokens.shift() ?? 'worktree').toLowerCase();
-  const target = head === 'fresh' ? 'new-session' : head;
-  if (target !== 'active' && target !== 'worktree' && target !== 'new-session') return null;
-
-  let worktreeReuse: MarionettePiWorktreeReuse | undefined;
-  const rest: string[] = [];
-  for (const token of tokens) {
-    if (token === '--continue') worktreeReuse = 'continue';
-    else if (token === '--stack') worktreeReuse = 'github-stack';
-    else rest.push(token);
-  }
-  if (target !== 'worktree' && (rest.length > 0 || worktreeReuse)) return null;
-
-  return {
-    target,
-    ...(rest.length > 0 ? { worktreeName: rest.join(' ') } : {}),
-    ...(worktreeReuse ? { worktreeReuse } : {}),
-  };
-}
-
-export const APPROVE_PLAN_USAGE =
-  'Usage: /approve-plan [active | worktree [name] [--continue|--stack] | new-session]';
 
 export function summarizedWorktreeName(value: string): string {
   const words = value

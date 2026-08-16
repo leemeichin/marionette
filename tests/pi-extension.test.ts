@@ -10,7 +10,7 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import marionetteExtension, { registerMarionetteExtension } from '../src/pi-extension.ts';
 import marionetteHostExtension from '../src/pi-host-extension.ts';
-import { parseApproveDraftArgs } from '../src/pi-planning.ts';
+import { parseApproveDraftArgs } from '../src/pi-integration.ts';
 import {
   MARIONETTE_PI_DISCOVER_CHANNEL,
   MARIONETTE_PI_EVENT_CHANNEL,

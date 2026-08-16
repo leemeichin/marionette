@@ -21,6 +21,17 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./pi-contract": {
+      "types": "./dist/pi-integration.d.ts",
+      "default": "./dist/pi-integration.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "bin",
     "dist",

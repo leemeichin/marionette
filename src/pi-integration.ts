@@ -18,6 +18,13 @@ import type {
 import type { AmendmentReport } from './amendment.ts';
 import type { Ref, Value } from './types.ts';
 
+/**
+ * Re-exported so a host can type the payloads it receives without importing the
+ * package barrel, which would pull the compiler and runtime in behind it. These
+ * are type-only and erase completely.
+ */
+export type { RuntimeEvent, RuntimeProjection, RuntimePrincipal } from './runtime-protocol.ts';
+
 export const MARIONETTE_PI_INTEGRATION_VERSION = '1.9.0';
 export const MARIONETTE_PI_EVENT_CHANNEL = 'marionette:event:v1';
 export const MARIONETTE_PI_READY_CHANNEL = 'marionette:ready:v1';
@@ -274,6 +281,39 @@ export interface MarionettePiBindRequest {
   /** Defaults to false; hosts decide when binding should start an agent turn. */
   triggerTurn?: boolean;
 }
+
+/**
+ * Parses `/approve-plan` arguments into a request.
+ *
+ * Callers must not validate the leading token and then forward the raw string:
+ * the trailing words change the meaning of the request, and dropping them
+ * silently routes `active extra` to a worktree. Returns null when the target is
+ * unrecognized so the caller can show usage.
+ */
+export function parseApproveDraftArgs(raw: string): MarionettePiApproveDraftRequest | null {
+  const tokens = raw.trim().split(/\s+/).filter(Boolean);
+  const head = (tokens.shift() ?? 'worktree').toLowerCase();
+  const target = head === 'fresh' ? 'new-session' : head;
+  if (target !== 'active' && target !== 'worktree' && target !== 'new-session') return null;
+
+  let worktreeReuse: MarionettePiWorktreeReuse | undefined;
+  const rest: string[] = [];
+  for (const token of tokens) {
+    if (token === '--continue') worktreeReuse = 'continue';
+    else if (token === '--stack') worktreeReuse = 'github-stack';
+    else rest.push(token);
+  }
+  if (target !== 'worktree' && (rest.length > 0 || worktreeReuse)) return null;
+
+  return {
+    target,
+    ...(rest.length > 0 ? { worktreeName: rest.join(' ') } : {}),
+    ...(worktreeReuse ? { worktreeReuse } : {}),
+  };
+}
+
+export const APPROVE_PLAN_USAGE =
+  'Usage: /approve-plan [active | worktree [name] [--continue|--stack] | new-session]';
 
 /**
  * The planning surface on its own. Hosts that only delegate drafting and
