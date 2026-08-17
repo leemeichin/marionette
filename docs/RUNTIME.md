@@ -280,22 +280,24 @@ variables, progress, timeout deadlines, blockers and escalation data. A
 caller can deliberately bound it; `truncated`/`omitted` then tell the caller
 to fetch `next` again with a larger budget.
 
-At an escalation the agent must stop. The user answers through
-`/marionette-decide`, which selects a choice, resolves the user's configured or repository Git
-identity, captures the rationale, records the human-bound write, and injects
-the resulting projection
-so the agent can resume. A trusted embedding can instead provide an
-authenticated human principal through the host API described below.
-At an elicitation the trusted Pi host opens a native text editor, records the
-answer, and resumes the agent. Operator choices likewise open as named native
-choices without internal ids. Projection JSON stays in model context and
-structured result details, while the transcript shows only phase, status,
-progress, and outcomes. Only explicitly high-risk `@human` actions ask for a
-durable evidence URL. Slash commands remain compatibility fallbacks.
+At an escalation the agent must stop. The Pi extension opens the intervention
+itself: `@ask` presents named route consequences without internal ids, `@input`
+opens a native text editor, and explicitly high-risk `@human` actions request a
+durable evidence URL. Interactive session text can also answer a pending
+`@ask` or `@input`; hosted and extension-injected text never gains human
+authority. The extension resolves the configured or repository Git identity,
+records the human-bound write, and injects the resulting projection so the
+agent resumes. A trusted embedding can instead provide an authenticated human
+principal through the host API described below. Projection JSON stays in model
+context and structured result details, while the transcript shows only phase,
+status, progress, and outcomes. Slash commands remain compatibility fallbacks.
 
 The binding is stored on the active Pi session branch and restored after
-restart or `/tree` navigation. `/marionette-stop` appends an unbound tombstone
-without deleting the durable runtime run.
+restart or `/tree` navigation. The extension owns one intervention dialog and
+one authored-timeout timer; projection changes replace them, due timeouts
+refresh and resume the agent, and session shutdown clears both.
+`/marionette-stop` appends an unbound tombstone without deleting the durable
+runtime run.
 
 ### Pi host integration contract
 

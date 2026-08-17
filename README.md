@@ -291,9 +291,10 @@ existing linked worktree, approval asks whether to continue there or use a
 GitHub stack instead of nesting another checkout. Hosts that own generic
 planning commands can load the separate host/core entry and
 use the same draft/show/refine/approve API without duplicate `/plan` commands.
-Trusted hosts open native dialogs automatically for
-operator `@ask`, free-text `@input`, and explicitly high-risk evidenced
-`@human` checkpoints; compatibility slash commands remain available. Bound
+The Pi extension opens native dialogs automatically for operator `@ask`,
+free-text `@input`, and explicitly high-risk evidenced `@human` checkpoints,
+and resumes authored timeouts when they become due; compatibility slash
+commands remain available. Bound
 agents use the generic `work_packet` surface with named outcomes rather than
 engine commands or internal choice ids. Bound agents apply compiler-checked,
 future-only source changes through `marionette_amend`; it atomically updates

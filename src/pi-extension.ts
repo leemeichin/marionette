@@ -108,6 +108,8 @@ interface HumanIdentity {
   uri?: string;
 }
 
+type InterventionChoice = NonNullable<RuntimeProjection['escalation']>['choices'][number];
+
 /** Resolve the identity Git would put on a commit in this repository. */
 const gitAuthorIdentity = (cwd: string): HumanIdentity | null => {
   try {
@@ -359,6 +361,9 @@ export function registerMarionetteExtension(
   let lastCursor = 0;
   let activeContext: ExtensionContext | null = null;
   let pendingAmendment: StoredAmendment | null = null;
+  let interventionTimer: ReturnType<typeof setTimeout> | undefined;
+  let interventionAbort: AbortController | undefined;
+  let openInterventionId = '';
 
   pi.registerFlag('marionette-plan', {
     description: 'Bind this Pi session to a Marionette .mar plan',
@@ -419,6 +424,7 @@ export function registerMarionetteExtension(
 
   const updateUi = (projection: RuntimeProjection | null, ctx: ExtensionContext): void => {
     if (!projection) {
+      clearInterventionState();
       ctx.ui.setStatus('marionette', undefined);
       ctx.ui.setWidget('marionette-escalation', undefined);
       ctx.ui.setWidget('marionette-amendment', undefined);
@@ -511,7 +517,10 @@ export function registerMarionetteExtension(
     if (projection) {
       lastProjection = projection;
       lastCursor = projection.cursor;
-      if (activeContext) updateUi(projection, activeContext);
+      if (activeContext) {
+        updateUi(projection, activeContext);
+        syncIntervention(projection, activeContext);
+      }
       planning.refreshTools();
     } else if (Number.isSafeInteger(result.result['cursor'])) {
       lastCursor = result.result['cursor'] as number;
@@ -732,6 +741,247 @@ export function registerMarionetteExtension(
     }
   };
 
+  function clearInterventionDialog(): void {
+    interventionAbort?.abort();
+    interventionAbort = undefined;
+    openInterventionId = '';
+  }
+
+  function clearInterventionState(): void {
+    if (interventionTimer) clearTimeout(interventionTimer);
+    interventionTimer = undefined;
+    clearInterventionDialog();
+  }
+
+  function choiceDisplay(choice: InterventionChoice): string {
+    const label = /^request (?:verified )?changes[.!]?$/i.test(choice.label.trim())
+      ? 'Return for changes'
+      : choice.label;
+    const target = choice.targetTitle ?? choice.target?.replace(/_/g, ' ');
+    const consequence = choice.target === 'END' ? 'finish the workflow' : target ? `continue to ${target}` : '';
+    return `${label}${consequence ? ` — ${consequence}` : ''}`;
+  }
+
+  function choiceFromAnswer(projection: RuntimeProjection, answer: string): InterventionChoice | undefined {
+    const choices = projection.escalation?.choices ?? [];
+    const normalized = answer.trim().toLocaleLowerCase();
+    if (/^[1-9]\d*$/.test(normalized)) return choices[Number(normalized) - 1];
+    return choices.find((choice) =>
+      [choice.label, choiceDisplay(choice)].some((candidate) => candidate.toLocaleLowerCase() === normalized)
+    );
+  }
+
+  function interventionPrompt(projection: RuntimeProjection, question: string): string {
+    const context = projection.escalation?.context;
+    const progress = context?.progress ?? projection.progress;
+    const body = context?.phaseBody ?? projection.node?.body;
+    const latest = context?.recentRecords.at(-1);
+    return [
+      question,
+      projection.node
+        ? `Phase: ${shortLine(projection.node.title)}${progress ? ` (${progress.nodesVisited}/${progress.nodesTotal})` : ''}`
+        : '',
+      context?.planSummary
+        ? `Plan: ${shortLine(context.planSummary)}`
+        : context?.planPrompt
+          ? `Request: ${shortLine(context.planPrompt)}`
+          : '',
+      body && body !== projection.node?.title ? `Context: ${shortLine(body)}` : '',
+      latest ? `Latest evidence: ${shortLine(latest.summary)}` : '',
+    ].filter(Boolean).join('\n');
+  }
+
+  async function trustedHuman(ctx: ExtensionContext): Promise<HumanIdentity | null> {
+    const human = await resolveHumanIdentity(ctx, 'recorded as the workflow participant');
+    if (!human) {
+      ctx.ui.notify('Configure a Git author or set --marionette-human <name> for trusted decisions.', 'error');
+    }
+    return human;
+  }
+
+  async function applyInteractiveResponse(
+    projection: RuntimeProjection,
+    answer: string,
+    interactionId: string,
+    ctx: ExtensionContext,
+  ): Promise<'applied' | 'unmatched' | 'ignored'> {
+    if (!bridge || !answer.trim()) return 'ignored';
+    if (projection.status === 'awaiting-elicitation' && projection.elicitation) {
+      const human = await trustedHuman(ctx);
+      if (!human) return 'applied';
+      const event = await executeHumanAnswer({
+        human,
+        answer: answer.trim(),
+        idempotencyKey: `interaction:${interactionId}:answer`,
+        triggerTurn: true,
+      }, { source: 'host', name: 'intervention:answer' });
+      if (event.error) ctx.ui.notify(event.error.message, 'error');
+      return 'applied';
+    }
+    if (['awaiting-operator', 'awaiting-human'].includes(projection.status) && projection.escalation) {
+      const choice = choiceFromAnswer(projection, answer);
+      if (!choice) return 'unmatched';
+      const human = await trustedHuman(ctx);
+      if (!human) return 'applied';
+      const event = await executeHuman({
+        human,
+        choiceId: choice.id,
+        rationale: `Selected “${choice.label}” through Pi's interactive workflow UI.`,
+        idempotencyKey: `interaction:${interactionId}:${choice.id}`,
+        triggerTurn: true,
+      }, { source: 'host', name: 'intervention:choose' });
+      if (event.error) ctx.ui.notify(event.error.message, 'error');
+      return 'applied';
+    }
+    return 'ignored';
+  }
+
+  async function leaveWorkflow(projection: RuntimeProjection, ctx: ExtensionContext): Promise<void> {
+    const confirmed = await ctx.ui.confirm(
+      'Leave managed workflow?',
+      `${projection.node?.title ?? projection.node?.id ?? 'This workflow'} will stop controlling this session. Its recorded progress is kept and can be resumed later.`,
+    );
+    if (!confirmed) return;
+    const event = await hostApi.unbind();
+    if (event.error) ctx.ui.notify(event.error.message, 'error');
+  }
+
+  async function openIntervention(projection: RuntimeProjection, ctx: ExtensionContext): Promise<void> {
+    if (!ctx.hasUI || !bridge) return;
+    const id = projection.escalation?.id ?? projection.elicitation?.id ??
+      (projection.status === 'stranded' ? `stranded:${projection.runId}:${projection.revision}` : undefined);
+    if (!id || openInterventionId === id) return;
+    clearInterventionDialog();
+    openInterventionId = id;
+    const controller = new AbortController();
+    interventionAbort = controller;
+    const leave = 'Leave managed workflow…';
+    try {
+      if (projection.status === 'stranded') {
+        const repair = 'Repair workflow future…';
+        const selected = await ctx.ui.select(
+          interventionPrompt(
+            projection,
+            'No graph route is available. Repair the unfinished future, keep the run bound, or leave managed execution.',
+          ),
+          [repair, 'Keep workflow bound', leave],
+          { signal: controller.signal },
+        );
+        if (selected === repair) {
+          pi.sendUserMessage(
+            'The bound Marionette workflow is stranded. Inspect its .mar source and call marionette_amend with a complete compiler-checked correction to the unfinished future and a concise rationale. Preserve completed phase ids and history; do not wait for a separate approval or rebind.',
+            { deliverAs: 'followUp' },
+          );
+        } else if (selected === leave) {
+          await leaveWorkflow(projection, ctx);
+        }
+        return;
+      }
+      if (projection.status === 'awaiting-elicitation' && projection.elicitation) {
+        const answer = (await ctx.ui.editor(
+          interventionPrompt(projection, projection.elicitation.question),
+          '',
+        ))?.trim();
+        if (answer) await applyInteractiveResponse(projection, answer, `dialog:${id}`, ctx);
+        return;
+      }
+      const escalation = projection.escalation;
+      if (!escalation) return;
+      const displays = escalation.choices.map(choiceDisplay);
+      const question = projection.status === 'awaiting-external'
+        ? 'Which completed action are you confirming?'
+        : 'What should happen next?';
+      const selected = await ctx.ui.select(
+        interventionPrompt(projection, question),
+        [...displays, leave],
+        { signal: controller.signal },
+      );
+      if (selected === leave) {
+        await leaveWorkflow(projection, ctx);
+        return;
+      }
+      const choice = escalation.choices[displays.indexOf(selected ?? '')];
+      if (!choice) return;
+      const human = await trustedHuman(ctx);
+      if (!human) return;
+      if (projection.status === 'awaiting-external') {
+        const evidenceUrl = (await ctx.ui.input(
+          `Evidence URL for “${choice.label}”`,
+          'https://…',
+          { signal: controller.signal },
+        ))?.trim();
+        if (!evidenceUrl || !/^https?:\/\//.test(evidenceUrl)) {
+          if (evidenceUrl) ctx.ui.notify('A high-risk confirmation needs an HTTP(S) evidence URL.', 'error');
+          return;
+        }
+        const event = await executeExternal({
+          external: human,
+          choiceId: choice.id,
+          rationale: `Confirmed “${choice.label}” through Pi's interactive workflow UI.`,
+          evidence: [{ provider: 'url', kind: 'evidence', id: evidenceUrl, url: evidenceUrl }],
+          idempotencyKey: `dialog:${id}:${choice.id}:${evidenceUrl}`,
+          triggerTurn: true,
+        }, { source: 'host', name: 'intervention:confirm' });
+        if (event.error) ctx.ui.notify(event.error.message, 'error');
+      } else {
+        const event = await executeHuman({
+          human,
+          choiceId: choice.id,
+          rationale: `Selected “${choice.label}” through Pi's interactive workflow UI.`,
+          idempotencyKey: `dialog:${id}:${choice.id}`,
+          triggerTurn: true,
+        }, { source: 'host', name: 'intervention:choose' });
+        if (event.error) ctx.ui.notify(event.error.message, 'error');
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) ctx.ui.notify(`Workflow intervention failed: ${(error as Error).message}`, 'error');
+    } finally {
+      if (interventionAbort === controller) {
+        interventionAbort = undefined;
+        openInterventionId = '';
+      }
+    }
+  }
+
+  function syncIntervention(projection: RuntimeProjection, ctx: ExtensionContext): void {
+    if (!genericPlanning) {
+      clearInterventionState();
+      return;
+    }
+    if (interventionTimer) clearTimeout(interventionTimer);
+    interventionTimer = undefined;
+    if (projection.status === 'waiting-timeout') {
+      const dueAt = [
+        ...projection.choices.map((choice) => choice.dueAt),
+        ...(projection.escalation?.fallbacks.map((fallback) => fallback.dueAt) ?? []),
+      ].filter((value): value is string => Boolean(value)).sort()[0];
+      if (dueAt) {
+        const delay = Math.min(Math.max(0, new Date(dueAt).getTime() - Date.now()), 2_147_000_000);
+        interventionTimer = setTimeout(() => {
+          interventionTimer = undefined;
+          ctx.ui.notify('Marionette timeout is due; resuming the workflow.', 'info');
+          void executeAgent(
+            { operation: 'next' },
+            { source: 'session', name: `timeout:${dueAt}` },
+          ).then((event) => {
+            if (event.error) ctx.ui.notify(event.error.message, 'error');
+            else publishProjection(event, true);
+          });
+        }, delay);
+        interventionTimer.unref();
+      }
+    }
+    if (
+      projection.status === 'awaiting-operator' || projection.status === 'awaiting-external' ||
+      projection.status === 'awaiting-human' || projection.status === 'awaiting-elicitation' ||
+      projection.status === 'stranded'
+    ) {
+      void openIntervention(projection, ctx);
+    } else {
+      clearInterventionDialog();
+    }
+  }
+
   const proposeAmendment = async (
     request: MarionettePiAmendmentRequest,
     cause: MarionettePiEvent['cause'],
@@ -918,6 +1168,7 @@ export function registerMarionetteExtension(
     lastProjection = projection;
     lastCursor = projection.cursor;
     updateUi(projection, ctx);
+    syncIntervention(projection, ctx);
     planning.refreshTools();
     if (persistBinding) {
       const entry: BindingEntryData = {
@@ -2085,6 +2336,24 @@ export function registerMarionetteExtension(
     },
   });
 
+  pi.on('input', async (event, ctx) => {
+    if (!genericPlanning || event.source !== 'interactive' || event.text.startsWith('/') || !lastProjection) return;
+    const result = await applyInteractiveResponse(
+      lastProjection,
+      event.text,
+      `session:${ctx.sessionManager.getSessionId()}:${lastProjection.revision}`,
+      ctx,
+    );
+    if (result === 'unmatched') {
+      ctx.ui.notify(
+        `Choose one of: ${lastProjection.escalation?.choices.map((choice) => choice.label).join(', ') ?? 'the available outcomes'}.`,
+        'warning',
+      );
+    }
+    if (result !== 'ignored') return { action: 'handled' as const };
+    return undefined;
+  });
+
   pi.on('session_start', async (event, ctx) => {
     await restore(ctx, {
       source: 'session',
@@ -2111,6 +2380,7 @@ export function registerMarionetteExtension(
       } satisfies MarionettePiEvent);
     }
     planning.shutdown();
+    clearInterventionState();
     activeContext = null;
     bridge = null;
     lastProjection = null;
