@@ -1,6 +1,6 @@
 {
   "name": "marionette",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A compiled, plain-text project trajectory language — authored by humans, validated by a compiler, traversed by AI agents.",
   "type": "module",
   "license": "MIT",
