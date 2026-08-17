@@ -154,16 +154,16 @@ creates a fresh run, and binds it without reopening the completed history. If
 an additional work request uses neither tool, Marionette starts one
 parent-linked replacement Pi session and forwards the request plus the minimum
 completed plan/run context into `/plan`; acknowledgements and informational
-follow-ups remain in the completed session. At `@ask`, Pi asks one concise
-phase-local question whose options state their route consequences; the complete
-packet remains available to `/marionette-decide` and host integrations. At
-`@human`, it parks until
-`/marionette-confirm-human` records an evidenced human confirmation. Trusted
-human commands use the current repository's configured Git author unless the
-host or `--marionette-human` supplies an override. Answer `@input` with
-`/marionette-answer`. See [`RUNTIME.md`](RUNTIME.md) for the wire and
-restart contract. `/marionette-stop` unbinds the session without deleting the
-runtime run.
+follow-ups remain in the completed session. At `@ask`, Pi opens one concise
+phase-local question whose options state their route consequences. At `@input`, it opens a text editor. At `@human`, it asks
+for the existing evidence URL before recording the confirmation. Interactive
+session text can also answer a pending `@ask` or `@input`; the compatibility
+commands `/marionette-decide`, `/marionette-answer`, and
+`/marionette-confirm-human` remain available. Authored timeouts resume the run
+when due. Trusted human actions use the current repository's configured Git
+author unless a host or `--marionette-human` supplies an override. See
+[`RUNTIME.md`](RUNTIME.md) for the wire and restart contract.
+`/marionette-stop` unbinds the session without deleting the runtime run.
 
 While an active run is bound, `work_packet` is its model-facing traversal
 interface (`marionette_walk` remains a compatibility surface). Do not mix in

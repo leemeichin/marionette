@@ -33,6 +33,9 @@ interface FakePiOptions {
   genericPlanning?: boolean;
   confirm?: (title: string, message: string) => Promise<boolean>;
   select?: (title: string, choices: string[]) => Promise<string | undefined>;
+  input?: (title: string, placeholder: string) => Promise<string | undefined>;
+  editor?: (title: string, initial: string) => Promise<string | undefined>;
+  human?: string;
   newSessionCancelled?: boolean;
   newSessionError?: Error;
   exec?: (command: string, args: string[], options?: { cwd?: string }) => Promise<{
@@ -104,8 +107,8 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
     },
     select: options.select ?? (async () => undefined),
     confirm: options.confirm ?? (async () => false),
-    input: async () => undefined,
-    editor: async () => undefined,
+    input: options.input ?? (async () => undefined),
+    editor: options.editor ?? (async () => undefined),
   };
   const ctx = {
     cwd,
@@ -132,7 +135,7 @@ const createFakePi = (cwd: string, options: FakePiOptions = {}) => {
   const pi = {
     events,
     registerFlag() {},
-    getFlag: () => undefined,
+    getFlag: (name: string) => name === 'marionette-human' ? options.human : undefined,
     registerCommand(name: string, definition: any) {
       commands.set(name, definition);
     },
@@ -232,6 +235,14 @@ ${title}
 * [Done] -> END
 `, 'utf8');
   return file;
+};
+
+const waitFor = async (predicate: () => boolean, timeout = 2_000): Promise<void> => {
+  const deadline = Date.now() + timeout;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error('timed out waiting for asynchronous Pi integration work');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 };
 
 const completeBoundRun = async (fake: ReturnType<typeof createFakePi>, id = 'complete-run') => {
@@ -1308,6 +1319,157 @@ Wait for a maintainer to confirm approval of PR #12.
     assert.equal(confirmation?.external?.uri, 'mailto:reviewer@example.com');
     const completed = await fake.discover().execute({ operation: 'next' });
     assert.equal(completed.projection?.status, 'completed');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Pi opens operator decisions with phase context and route consequences', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-dialog-'));
+  const prompts: string[] = [];
+  const choices: string[][] = [];
+  try {
+    writeFileSync(join(root, 'approval.mar'), `
+# summary: Ship the reviewed change.
+
+=== approval ===
+Review the diff and checks before release.
+* [Approve] @ask -> END
+* [Request verified changes] @ask -> rework
+
+=== rework ===
+Apply the requested changes.
+* [Done] -> END
+`, 'utf8');
+    const fake = createFakePi(root, {
+      hasUI: true,
+      human: 'operator',
+      select: async (title, options) => {
+        prompts.push(title);
+        choices.push(options);
+        return options[0];
+      },
+    });
+
+    await fake.commands.get('marionette-start')!.handler('approval.mar dialog-run', fake.ctx);
+    await waitFor(() => fake.entries.some((entry) => entry.customType === 'marionette-human-decision'));
+
+    assert.match(prompts[0] ?? '', /What should happen next\?/);
+    assert.match(prompts[0] ?? '', /Phase: Review the diff and checks before release\./);
+    assert.deepEqual(choices[0], [
+      'Approve — finish the workflow',
+      'Return for changes — continue to Apply the requested changes.',
+      'Leave managed workflow…',
+    ]);
+    assert.doesNotMatch(`${prompts[0]} ${choices[0]?.join(' ')}`, /approval#0/);
+    assert.ok(fake.entries.some((entry) => entry.customType === 'marionette-human-decision'));
+    const completed = await fake.discover().execute({ operation: 'next' });
+    assert.equal(completed.projection?.status, 'completed');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Pi collects free-text and evidenced human interventions without a host adapter', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-interventions-'));
+  try {
+    writeFileSync(join(root, 'input.mar'), `
+=== context ===
+Choose supported platforms.
+* [Continue] @input -> END
+`, 'utf8');
+    const input = createFakePi(root, {
+      hasUI: true,
+      human: 'operator',
+      editor: async () => 'Linux and macOS',
+    });
+    await input.commands.get('marionette-start')!.handler('input.mar input-run', input.ctx);
+    await input.workPacket.execute(
+      'request-input',
+      {
+        operation: 'request_input',
+        outcome: 'Continue',
+        question: 'Which platforms?',
+        summary: 'Need the supported platform list.',
+      },
+      undefined,
+      undefined,
+      input.ctx,
+    );
+    await waitFor(() => input.entries.some((entry) => entry.customType === 'marionette-human-answer'));
+    const answer = input.entries.find((entry) => entry.customType === 'marionette-human-answer')?.data as
+      | { answer?: string }
+      | undefined;
+    assert.equal(answer?.answer, 'Linux and macOS');
+
+    const sessionInput = createFakePi(root, { human: 'operator' });
+    await sessionInput.commands.get('marionette-start')!.handler('input.mar session-input-run', sessionInput.ctx);
+    await sessionInput.workPacket.execute(
+      'request-session-input',
+      {
+        operation: 'request_input',
+        outcome: 'Continue',
+        question: 'Which platforms?',
+        summary: 'Need the supported platform list.',
+      },
+      undefined,
+      undefined,
+      sessionInput.ctx,
+    );
+    const handled = await sessionInput.handlers.get('input')![0]!({
+      source: 'interactive',
+      text: 'Windows',
+    }, sessionInput.ctx);
+    assert.deepEqual(handled, { action: 'handled' });
+    assert.equal(
+      (sessionInput.entries.find((entry) => entry.customType === 'marionette-human-answer')?.data as
+        | { answer?: string }
+        | undefined)?.answer,
+      'Windows',
+    );
+
+    writeFileSync(join(root, 'external.mar'), `
+=== release ===
+Confirm the production release.
+* [Release approved] @human -> END
+`, 'utf8');
+    const external = createFakePi(root, {
+      hasUI: true,
+      human: 'operator',
+      select: async (_title, options) => options[0],
+      input: async () => 'https://example.com/review/12',
+    });
+    await external.commands.get('marionette-start')!.handler('external.mar external-run', external.ctx);
+    await waitFor(() => external.entries.some((entry) => entry.customType === 'marionette-external-confirmation'));
+    const confirmation = external.entries.find(
+      (entry) => entry.customType === 'marionette-external-confirmation',
+    )?.data as { evidence?: Array<{ url?: string }> } | undefined;
+    assert.equal(confirmation?.evidence?.[0]?.url, 'https://example.com/review/12');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('Pi resumes a parked workflow when its authored timeout becomes due', async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'marionette-pi-extension-timeout-'));
+  try {
+    t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() });
+    writeFileSync(join(root, 'timeout.mar'), `
+=== wait ===
+Wait for the authored delay.
+timeout 1m -> END
+`, 'utf8');
+    const fake = createFakePi(root);
+    await fake.commands.get('marionette-start')!.handler('timeout.mar timeout-run', fake.ctx);
+    t.mock.timers.tick(60_000);
+    const events = fake.emitted.get(MARIONETTE_PI_EVENT_CHANNEL) as MarionettePiEvent[];
+    for (let attempt = 0; attempt < 1_000 && events.at(-1)?.projection?.status === 'waiting-timeout'; attempt++) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.equal(events.at(-1)?.projection?.status, 'active');
+    assert.ok(fake.notifications.some((item) => /timeout is due/.test(item.message)));
+    assert.ok(fake.messages.some((message) =>
+      (message as { customType?: string }).customType === 'marionette-projection'));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
